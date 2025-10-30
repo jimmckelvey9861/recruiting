@@ -1,73 +1,90 @@
-# React + TypeScript + Vite
+# Demand Forecasting Wireframe
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A comprehensive wireframe for a demand forecasting application built with Vite, React, TypeScript, and Tailwind CSS.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Multi-timeframe Heatmaps**: Interactive heatmaps for week, month, and year views
+- **Demand Analytics**: Visualize demand patterns across different time horizons
+- **Recruitment Planning**: Capacity planning and gap analysis
+- **Model Testing Panel**: Monitor model performance with various tests
+- **Responsive Design**: Built with Tailwind CSS for mobile-first design
 
-## React Compiler
+## Getting Started
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### Prerequisites
 
-## Expanding the ESLint configuration
+- Node.js (v18 or higher)
+- npm
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+### Installation
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+1. Clone the repository:
+```bash
+git clone <repository-url>
+cd demand-forecasting-wireframe
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+2. Install dependencies:
+```bash
+npm install
 ```
+
+3. Start the development server:
+```bash
+npm run dev
+```
+
+Or use the provided script:
+```bash
+./start-dev.sh
+```
+
+4. Open your browser and navigate to `http://localhost:5173`
+
+### Building for Production
+
+```bash
+npm run build
+```
+
+## Project Structure
+
+```
+src/
+├── PlanningScreen.tsx    # Main wireframe component
+├── App.tsx              # Root component
+├── index.css            # Tailwind CSS imports
+└── main.tsx             # Application entry point
+```
+
+## Components
+
+### PlanningScreen
+
+The main component that includes:
+
+- **Heatmap Visualization**: Interactive grid showing demand patterns
+- **Time Period Tabs**: Switch between week, month, and year views
+- **Recruitment Panel**: Shows capacity vs demand gap analysis
+- **Testing Panel**: Model validation and performance metrics
+- **Quick Stats**: Summary statistics and key metrics
+
+## Technologies Used
+
+- **Vite**: Fast build tool and development server
+- **React 18**: UI library with hooks
+- **TypeScript**: Type-safe JavaScript
+- **Tailwind CSS**: Utility-first CSS framework
+
+## Customization
+
+The wireframe uses mock data for demonstration. To integrate with real data:
+
+1. Replace the `generateHeatmapData` function with your data source
+2. Update the API endpoints in the component
+3. Modify the data structures to match your backend schema
+
+## License
+
+MIT License
