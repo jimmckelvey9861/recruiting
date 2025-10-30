@@ -1,7 +1,2 @@
-import PlanningScreen from './PlanningScreen'
-
-function App() {
-  return <PlanningScreen />
-}
-
-export default App
+import PlanningScreen from "./PlanningScreen";
+export default function App() { return <PlanningScreen />; }
