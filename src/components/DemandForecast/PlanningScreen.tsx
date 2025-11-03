@@ -114,6 +114,22 @@ export default function PlanningScreen() {
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth()) // 0..11
   const [route, setRoute] = useState<Route>('plan')
   const [recruitTarget, setRecruitTarget] = useState<string | 'ALL'>('ALL')
+  const [selectedJobs, setSelectedJobs] = useState<string[]>([])
+
+  const toggleJobSelection = (role: string) => {
+    setSelectedJobs(prev => 
+      prev.includes(role) 
+        ? prev.filter(r => r !== role)
+        : [...prev, role]
+    )
+  }
+
+  const getRecruitButtonText = () => {
+    if (selectedJobs.length === 0) return 'Recruit for Job'
+    if (selectedJobs.length === 1) return `Recruit ${selectedJobs[0]}s`
+    if (selectedJobs.length === 2) return `Recruit ${selectedJobs[0]}s & ${selectedJobs[1]}s`
+    return `Recruit ${selectedJobs[0]}s & ${selectedJobs.length - 1} more`
+  }
 
   const weekMatrix = useMemo(() => genWeek(selectedRole, weekOffset), [selectedRole, weekOffset])
   const weekStart = useMemo(() => mondayOf(weekOffset), [weekOffset])
@@ -156,14 +172,39 @@ export default function PlanningScreen() {
                 </select>
               </div>
               
+              {/* Recruit for Job Button */}
+              <div className="mb-3">
+                <button 
+                  className={`w-full rounded px-3 py-2 text-sm font-medium transition ${
+                    selectedJobs.length === 0 
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                  }`}
+                  disabled={selectedJobs.length === 0}
+                  onClick={() => {
+                    if (selectedJobs.length > 0) {
+                      setRecruitTarget(selectedJobs.join(','))
+                      setRoute('recruit')
+                    }
+                  }}
+                >
+                  {getRecruitButtonText()}
+                </button>
+              </div>
+              
               {roles.map((r) => {
                 const gap = r.demand - r.supply
                 const pct = Math.max(0, Math.min(100, (r.supply / Math.max(1, r.demand)) * 100))
+                const isSelected = selectedJobs.includes(r.role)
                 return (
                   <div
                     key={r.role}
                     onClick={() => setSelectedRole(r.role)}
-                    className={`border rounded bg-white p-3 cursor-pointer hover:shadow transition ${selectedRole === r.role ? 'ring-2 ring-blue-500' : ''}`}
+                    className={`border rounded p-3 cursor-pointer hover:shadow transition ${
+                      selectedRole === r.role ? 'ring-2 ring-blue-500' : ''
+                    } ${
+                      isSelected ? 'bg-blue-50' : 'bg-white'
+                    }`}
                   >
                     <div className="flex items-center justify-between">
                       <div>
@@ -174,7 +215,19 @@ export default function PlanningScreen() {
                         <div className="text-sm font-semibold text-gray-700 min-w-[52px] text-right">
                           {gap > 0 ? `+${gap}` : 'OK'}
                         </div>
-                        <button className="border rounded px-2 py-0.5 text-xs" onClick={(e)=>{ e.stopPropagation(); goRecruit(r.role) }}>Recruit</button>
+                        <button 
+                          className={`border rounded px-2 py-0.5 text-xs transition ${
+                            isSelected 
+                              ? 'bg-blue-600 text-white border-blue-600' 
+                              : 'bg-white text-gray-700 hover:bg-gray-50'
+                          }`}
+                          onClick={(e) => { 
+                            e.stopPropagation(); 
+                            toggleJobSelection(r.role);
+                          }}
+                        >
+                          Recruit
+                        </button>
                       </div>
                     </div>
                     <div className="mt-2 h-2 w-full bg-gray-200 rounded">
@@ -183,10 +236,6 @@ export default function PlanningScreen() {
                   </div>
                 )
               })}
-              {/* Recruit All button */}
-              <div className="pt-2">
-                <button className="w-full border rounded px-3 py-2 text-sm bg-white hover:bg-gray-50" onClick={()=>goRecruit('ALL')}>Recruit for All Open Roles</button>
-              </div>
             </div>
 
             {/* Right Panel: Details + Heatmap */}
