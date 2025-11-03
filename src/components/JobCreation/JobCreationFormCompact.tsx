@@ -75,6 +75,7 @@ export default function JobCreationFormCompact(){
   const [logoPan, setLogoPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [payOption, setPayOption] = useState<"exact" | "range" | "omit">("exact");
   const [questions, setQuestions] = useState<Question[]>([
     { id: 1, type: "Text", text: "", limit: "500", choices: [], newChoice: "" },
     { id: 2, type: "Video", text: "", limit: "60", choices: [], newChoice: "" },
@@ -420,17 +421,75 @@ export default function JobCreationFormCompact(){
 
         {/* Compensation & Benefits */}
         <Card title="Compensation & Benefits" icon={<span>💵</span>}>
-          <Field span="col-span-12 lg:col-span-6" label="Wage/Salary">
+          <Field span="col-span-12 lg:col-span-6">
+            <label className="flex items-center gap-2 text-[13px] text-gray-700 mb-1 cursor-pointer">
+              <input
+                type="radio"
+                name="payOption"
+                value="exact"
+                checked={payOption === "exact"}
+                onChange={(e) => setPayOption(e.target.value as "exact" | "range" | "omit")}
+                className="w-4 h-4"
+              />
+              Exact amount
+            </label>
             <div className="flex items-center gap-3">
-              <Input placeholder="$16–18/hr" defaultValue="$17/hr"/>
-              <label className="inline-flex items-center gap-2 text-sm"><input type="checkbox"/> Tip Eligible</label>
+              <Input 
+                placeholder="$16–18/hr" 
+                defaultValue="$17/hr"
+                disabled={payOption !== "exact"}
+                className={payOption !== "exact" ? "opacity-50 cursor-not-allowed" : ""}
+              />
+              <label className="inline-flex items-center gap-2 text-sm">
+                <input 
+                  type="checkbox" 
+                  disabled={payOption !== "exact"}
+                  className={payOption !== "exact" ? "cursor-not-allowed" : ""}
+                /> 
+                Tip Eligible
+              </label>
             </div>
           </Field>
-          <Field span="col-span-12 lg:col-span-6" label="Wage/Salary Range (Optional)">
+          <Field span="col-span-12 lg:col-span-6">
+            <label className="flex items-center gap-2 text-[13px] text-gray-700 mb-1 cursor-pointer">
+              <input
+                type="radio"
+                name="payOption"
+                value="range"
+                checked={payOption === "range"}
+                onChange={(e) => setPayOption(e.target.value as "exact" | "range" | "omit")}
+                className="w-4 h-4"
+              />
+              Pay range
+            </label>
             <div className="flex items-center gap-2">
-              <Input placeholder="Min (e.g., $15)"/>
-              <span className="text-gray-500">to</span>
-              <Input placeholder="Max (e.g., $20)"/>
+              <Input 
+                placeholder="Min (e.g., $15)"
+                disabled={payOption !== "range"}
+                className={payOption !== "range" ? "opacity-50 cursor-not-allowed" : ""}
+              />
+              <span className={`text-gray-500 ${payOption !== "range" ? "opacity-50" : ""}`}>to</span>
+              <Input 
+                placeholder="Max (e.g., $20)"
+                disabled={payOption !== "range"}
+                className={payOption !== "range" ? "opacity-50 cursor-not-allowed" : ""}
+              />
+            </div>
+          </Field>
+          <Field span="col-span-12 lg:col-span-6">
+            <label className="flex items-center gap-2 text-[13px] text-gray-700 mb-1 cursor-pointer">
+              <input
+                type="radio"
+                name="payOption"
+                value="omit"
+                checked={payOption === "omit"}
+                onChange={(e) => setPayOption(e.target.value as "exact" | "range" | "omit")}
+                className="w-4 h-4"
+              />
+              Omit pay
+            </label>
+            <div className={`text-sm ${payOption === "omit" ? "text-gray-600" : "text-gray-400"}`}>
+              {payOption === "omit" ? "Compensation information will not be displayed" : ""}
             </div>
           </Field>
           <Field span="col-span-12" label="Wage Details (Optional)">

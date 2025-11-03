@@ -1,11 +1,7 @@
-import JobCreationFormCompact from './components/JobCreation/JobCreationFormCompact'
+import PassimRecruitingApp from './PassimRecruitingApp'
 
 function App() {
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <JobCreationFormCompact />
-    </div>
-  )
+  return <PassimRecruitingApp />
 }
 
 export default App
