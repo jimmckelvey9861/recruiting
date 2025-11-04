@@ -342,10 +342,20 @@ function CampaignsWindow(props: CampaignsWindowProps){
   const handleCopy = () => {
     const currentCampaign = campaigns.find(c => c.id === activeId);
     if (currentCampaign) {
-      // Clear the form for a new campaign with copied data
-      setName(`${currentCampaign.name} (Copy)`);
-      setCampaignStatus('draft');
-      // Keep all other fields as they are (already populated from the selected campaign)
+      // Create a new campaign with copied data
+      const copiedCampaign: Campaign = {
+        ...currentCampaign,
+        id: `c${Date.now()}`,
+        name: `${currentCampaign.name} (Copy)`,
+        status: 'draft',
+        createdAt: new Date().toISOString().slice(0, 10),
+      };
+      
+      // Add to campaigns list and select it
+      setCampaigns(prev => [copiedCampaign, ...prev]);
+      setActiveId(copiedCampaign.id);
+      
+      // Form fields will auto-populate via useEffect when activeId changes
     }
   };
 
