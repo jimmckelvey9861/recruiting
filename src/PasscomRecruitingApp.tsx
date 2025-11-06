@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import PlanningScreen from './components/DemandForecast/PlanningScreen';
 import CampaignManager from './components/Campaign/CampaignManager';
 import AdvertisementManager from './components/Advertisement/AdvertisementManager';
+import CompanyInformationSection from './components/Advertisement/CompanyInformationSection';
 
-type Tab = 'demand' | 'advertisement' | 'campaign' | 'review';
+type Tab = 'demand' | 'advertisement' | 'campaign' | 'review' | 'company';
 
 interface JobFormData {
   role: string;
@@ -42,7 +43,8 @@ export default function PasscomRecruitingApp() {
     { id: 'demand', label: 'Demand' },
     { id: 'advertisement', label: 'Advertisement' },
     { id: 'campaign', label: 'Campaign' },
-    { id: 'review', label: 'Review' }
+    { id: 'review', label: 'Review' },
+    { id: 'company', label: 'Company' }
   ];
 
   return (
@@ -141,6 +143,16 @@ export default function PasscomRecruitingApp() {
             <div className="text-center">
               <h2 className="text-2xl font-semibold text-gray-700 mb-2">Review</h2>
               <p className="text-gray-500">Coming soon...</p>
+            </div>
+          </div>
+        )}
+        
+        {activeTab === 'company' && (
+          <div className="h-full overflow-auto bg-gray-50">
+            <div className="min-h-screen bg-gray-50 text-gray-900 p-6">
+              <div className="max-w-6xl mx-auto">
+                <CompanyInformationSection />
+              </div>
             </div>
           </div>
         )}
