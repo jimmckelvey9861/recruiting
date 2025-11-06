@@ -180,14 +180,13 @@ export default function CampaignManager({ selectedLocations, setSelectedLocation
             
             {/* Daily Applicants Chart */}
             <div className="mb-4">
-              <div className="flex items-center justify-between mb-2">
-                <div className="text-sm font-medium">Daily Applicants by Source</div>
+              <div className="flex items-center justify-end mb-2">
                 <div className="text-right">
                   <div className="text-2xl font-bold leading-5">{totalApplicantsInt.toLocaleString()}</div>
                   <div className="text-[11px] text-gray-500 leading-4">applicants</div>
                 </div>
               </div>
-              <AreaSection series={dailySeries} sources={current?.sources||[]} showPoints={true} />
+              <AreaSection series={dailySeries} sources={current?.sources||[]} showPoints={false} />
             </div>
 
             {/* Sources & Daily Budgets */}
@@ -201,7 +200,7 @@ export default function CampaignManager({ selectedLocations, setSelectedLocation
               {(current?.sources||[]).map((s)=> (
                 <div key={s.key} className="grid grid-cols-12 items-center text-sm py-0.5 border-b last:border-b-0">
                   <div className="col-span-4 capitalize">
-                    <span className="inline-block w-2 h-2 rounded-full mr-2" style={{background:SRC_COLOR[s.key]}}></span>
+                    <span className="inline-block w-3 h-3 rounded-full mr-2" style={{background:SRC_COLOR[s.key]}}></span>
                     {s.key.replace('_',' ')} <span className="text-gray-500">(CPA ${s.cpa.toFixed(2)})</span>
                   </div>
                   <div className="col-span-2">
@@ -669,13 +668,6 @@ function AreaSection({ series, sources, showPoints }: AreaSectionProps){
         const v=Math.round(t* Math.max(1,...stack.map(r=>r.total))); const y=PADT+innerH-t*innerH;
         return <text key={i} x={PADL-6} y={y+3} fontSize="10" textAnchor="end" fill="#475569">{v}</text>;
       })}
-
-      {enabled.map((s,idx)=>(
-        <g key={s.key} transform={`translate(${PADL + idx*150}, ${H-18})`}>
-          <rect width="10" height="10" rx="2" fill={SRC_COLOR[s.key]}/>
-          <text x="14" y="9" fontSize="10" fill="#334155" style={{textTransform:'capitalize'}}>{s.key.replace('_',' ')}</text>
-        </g>
-      ))}
     </svg>
   );
 }
