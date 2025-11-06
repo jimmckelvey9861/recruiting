@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import CoverageHeatmap from './CoverageHeatmap';
 
 // ===============================
 // Campaign Manager – compact, robust single file (JSX only)
@@ -168,8 +169,11 @@ export default function CampaignManager({ selectedLocations, setSelectedLocation
           />
         </div>
 
-        {/* RIGHT: Sources + Chart */}
+        {/* RIGHT: Heatmap + Sources + Chart */}
         <div className="col-span-12 md:col-span-7 lg:col-span-8 space-y-4">
+          {/* Coverage Heatmap */}
+          <CoverageHeatmap availableJobs={selectedJobs.length > 0 ? selectedJobs : ['Cook', 'Server', 'Bartender', 'Host']} />
+          
           <div className="bg-white border rounded-xl p-4">
             <div className="text-sm font-semibold mb-2">Sources & Daily Budgets</div>
             <div className="grid grid-cols-12 text-xs font-semibold text-gray-600 border-b pb-1">
