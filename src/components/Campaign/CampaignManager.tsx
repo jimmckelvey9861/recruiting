@@ -438,7 +438,7 @@ function CampaignsWindow(props: CampaignsWindowProps){
           onChange={()=>setEndMode('hires')} 
           className={endMode==='hires' ? 'accent-black shrink-0' : 'accent-gray-400 shrink-0'} 
         />
-        <div className={`flex-1 ${endMode==='hires' ? '' : 'opacity-60'}`} style={{ maxWidth: 'calc(33.333% - 22px)' }}>
+        <div className={`flex-1 ${endMode==='hires' ? '' : 'opacity-60'}`}>
           <Field label="Hires" active={endMode==='hires'}>
             <input 
               type="number" 
