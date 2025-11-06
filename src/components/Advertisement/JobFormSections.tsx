@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 const Label: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <label className="block text-[13px] text-gray-700 mb-1">{children}</label>
@@ -50,18 +50,54 @@ type SectionTab = 'details' | 'compensation' | 'schedule' | 'questions';
 export default function JobFormSections({ jobRole: _jobRole, onComplete }: JobFormSectionsProps) {
   // jobRole is used by parent for identification, not displayed since it's shown in the tab
   const [activeSection, setActiveSection] = useState<SectionTab>('details');
+  
+  // Form field state
+  const [title, setTitle] = useState("Line Cook");
+  const [jobDescription, setJobDescription] = useState("");
   const [skills, setSkills] = useState(["Food Handler", "POS (Square)"]);
   const [newSkill, setNewSkill] = useState("");
+  
+  const [payOption, setPayOption] = useState<"exact" | "range" | "omit">("exact");
+  const [payExactAmount, setPayExactAmount] = useState("");
+  const [payRangeMin, setPayRangeMin] = useState("");
+  const [payRangeMax, setPayRangeMax] = useState("");
   const [benefits, setBenefits] = useState(["Health", "PTO"]);
   const [newBenefit, setNewBenefit] = useState("");
-  const [payOption, setPayOption] = useState<"exact" | "range" | "omit">("exact");
   const [tipEligible, setTipEligible] = useState(false);
+  
+  const [scheduleType, setScheduleType] = useState("Full-time");
+  const [scheduleDescription, setScheduleDescription] = useState("");
+  
   const [questions, setQuestions] = useState<Question[]>([
-    { id: 1, type: "Text", text: "", limit: "500", choices: [], newChoice: "" },
-    { id: 2, type: "Video", text: "", limit: "60", choices: [], newChoice: "" },
-    { id: 3, type: "Multiple Choice", text: "", limit: "", choices: ["Option 1", "Option 2"], newChoice: "" },
-    { id: 4, type: "Text", text: "", limit: "500", choices: [], newChoice: "" }
+    { id: 1, type: "Text", text: "", limit: "500", choices: [], newChoice: "" }
   ]);
+  
+  // Check section completion
+  const isDetailsComplete = () => {
+    return title.trim() !== "" && jobDescription.trim() !== "";
+  };
+  
+  const isCompensationComplete = () => {
+    if (payOption === "omit") return true;
+    if (payOption === "exact") return payExactAmount.trim() !== "";
+    if (payOption === "range") return payRangeMin.trim() !== "" && payRangeMax.trim() !== "";
+    return false;
+  };
+  
+  const isScheduleComplete = () => {
+    return scheduleType.trim() !== "";
+  };
+  
+  const isQuestionsComplete = () => {
+    return questions.length > 0;
+  };
+  
+  // Auto-complete job when all sections are complete
+  useEffect(() => {
+    if (onComplete && isDetailsComplete() && isCompensationComplete() && isScheduleComplete() && isQuestionsComplete()) {
+      onComplete();
+    }
+  }, [title, jobDescription, payOption, payExactAmount, payRangeMin, payRangeMax, scheduleType, questions, onComplete]);
 
   const addQuestion = () => {
     const newId = questions.length > 0 ? Math.max(...questions.map(q => q.id)) + 1 : 1;
@@ -96,10 +132,10 @@ export default function JobFormSections({ jobRole: _jobRole, onComplete }: JobFo
   };
 
   const sections = [
-    { id: 'details' as SectionTab, label: 'Job Details' },
-    { id: 'compensation' as SectionTab, label: 'Compensation & Benefits' },
-    { id: 'schedule' as SectionTab, label: 'Schedule Information' },
-    { id: 'questions' as SectionTab, label: 'Application Questions' }
+    { id: 'details' as SectionTab, label: 'Job Details', isComplete: isDetailsComplete },
+    { id: 'compensation' as SectionTab, label: 'Compensation & Benefits', isComplete: isCompensationComplete },
+    { id: 'schedule' as SectionTab, label: 'Schedule Information', isComplete: isScheduleComplete },
+    { id: 'questions' as SectionTab, label: 'Application Questions', isComplete: isQuestionsComplete }
   ];
 
   return (
@@ -111,13 +147,14 @@ export default function JobFormSections({ jobRole: _jobRole, onComplete }: JobFo
             <button
               key={section.id}
               onClick={() => setActiveSection(section.id)}
-              className={`px-4 py-2 font-medium text-sm transition-all border-b-2 ${
+              className={`px-4 py-2 font-medium text-sm transition-all border-b-2 flex items-center gap-2 ${
                 activeSection === section.id
                   ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-gray-600 hover:text-gray-900'
               }`}
             >
-              {section.label}
+              <span>{section.label}</span>
+              {section.isComplete() && <span className="text-green-600">✓</span>}
             </button>
           ))}
         </div>
@@ -128,10 +165,21 @@ export default function JobFormSections({ jobRole: _jobRole, onComplete }: JobFo
         {activeSection === 'details' && (
           <div className="bg-white border rounded-xl p-5 shadow-sm">
             <div className="grid grid-cols-12 gap-3">
-              <Field label="Title"><Input placeholder="Line Cook" defaultValue="Line Cook" /></Field>
+              <Field label="Title">
+                <Input 
+                  placeholder="Line Cook" 
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                />
+              </Field>
 
             <Field span="col-span-12" label="Job Description">
-              <Textarea placeholder="Describe duties and environment…" rows={4} />
+              <Textarea 
+                placeholder="Describe duties and environment…" 
+                rows={4}
+                value={jobDescription}
+                onChange={(e) => setJobDescription(e.target.value)}
+              />
             </Field>
 
             <Field span="col-span-12 lg:col-span-6" label="Required Skills">
@@ -161,7 +209,13 @@ export default function JobFormSections({ jobRole: _jobRole, onComplete }: JobFo
                 />
                 Exact amount
               </label>
-              <Input placeholder="e.g., $18.50" disabled={payOption !== "exact"} className={payOption !== "exact" ? "opacity-50" : ""} />
+              <Input 
+                placeholder="e.g., $18.50" 
+                value={payExactAmount}
+                onChange={(e) => setPayExactAmount(e.target.value)}
+                disabled={payOption !== "exact"} 
+                className={payOption !== "exact" ? "opacity-50" : ""} 
+              />
             </Field>
 
             <Field span="col-span-12 lg:col-span-6">
@@ -176,9 +230,21 @@ export default function JobFormSections({ jobRole: _jobRole, onComplete }: JobFo
                 Pay range
               </label>
               <div className="flex gap-2 items-center">
-                <Input placeholder="Min" disabled={payOption !== "range"} className={payOption !== "range" ? "opacity-50" : ""} />
+                <Input 
+                  placeholder="Min" 
+                  value={payRangeMin}
+                  onChange={(e) => setPayRangeMin(e.target.value)}
+                  disabled={payOption !== "range"} 
+                  className={payOption !== "range" ? "opacity-50" : ""} 
+                />
                 <span className="text-gray-400">–</span>
-                <Input placeholder="Max" disabled={payOption !== "range"} className={payOption !== "range" ? "opacity-50" : ""} />
+                <Input 
+                  placeholder="Max" 
+                  value={payRangeMax}
+                  onChange={(e) => setPayRangeMax(e.target.value)}
+                  disabled={payOption !== "range"} 
+                  className={payOption !== "range" ? "opacity-50" : ""} 
+                />
               </div>
             </Field>
 
@@ -227,7 +293,11 @@ export default function JobFormSections({ jobRole: _jobRole, onComplete }: JobFo
           <div className="bg-white border rounded-xl p-5 shadow-sm">
             <div className="grid grid-cols-12 gap-3">
               <Field label="Schedule Type">
-              <select className="w-full h-9 px-2 rounded border border-gray-300">
+              <select 
+                className="w-full h-9 px-2 rounded border border-gray-300"
+                value={scheduleType}
+                onChange={(e) => setScheduleType(e.target.value)}
+              >
                 <option>Full-time</option>
                 <option>Part-time</option>
                 <option>Flexible</option>
@@ -235,7 +305,12 @@ export default function JobFormSections({ jobRole: _jobRole, onComplete }: JobFo
             </Field>
 
             <Field span="col-span-12" label="Schedule Description">
-              <Textarea placeholder="Describe typical work hours and shifts…" rows={3} />
+              <Textarea 
+                placeholder="Describe typical work hours and shifts…" 
+                rows={3}
+                value={scheduleDescription}
+                onChange={(e) => setScheduleDescription(e.target.value)}
+              />
             </Field>
             </div>
           </div>
@@ -316,21 +391,6 @@ export default function JobFormSections({ jobRole: _jobRole, onComplete }: JobFo
           </div>
         )}
       </div>
-
-      {/* Action Buttons */}
-      {onComplete && (
-        <div className="flex justify-between items-center pt-4 border-t">
-          <div className="text-sm text-gray-500 italic">
-            Changes are saved automatically
-          </div>
-          <button
-            onClick={onComplete}
-            className="px-6 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition"
-          >
-            Mark as Complete ✓
-          </button>
-        </div>
-      )}
     </div>
   );
 }
