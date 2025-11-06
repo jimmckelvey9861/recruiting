@@ -121,7 +121,6 @@ export default function PlanningScreen({ selectedJobs, setSelectedJobs, selected
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear())
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth()) // 0..11
   const [route, setRoute] = useState<Route>('plan')
-  const [recruitTarget, setRecruitTarget] = useState<string | 'ALL'>('ALL')
   const [showLocationDropdown, setShowLocationDropdown] = useState(false)
   const locationDropdownRef = useRef<HTMLDivElement>(null)
 
@@ -152,13 +151,6 @@ export default function PlanningScreen({ selectedJobs, setSelectedJobs, selected
         ? selectedLocations.filter(loc => loc !== location)
         : [...selectedLocations, location]
     )
-  }
-
-  const getRecruitButtonText = () => {
-    if (selectedJobs.length === 0) return 'Recruit for Job'
-    if (selectedJobs.length === 1) return `Recruit ${selectedJobs[0]}s`
-    if (selectedJobs.length === 2) return `Recruit ${selectedJobs[0]}s & ${selectedJobs[1]}s`
-    return `Recruit ${selectedJobs[0]}s & ${selectedJobs.length - 1} more`
   }
 
   const weekMatrix = useMemo(() => genWeek(selectedRole, weekOffset), [selectedRole, weekOffset])
@@ -231,26 +223,6 @@ export default function PlanningScreen({ selectedJobs, setSelectedJobs, selected
                     </div>
                   )}
                 </div>
-              </div>
-              
-              {/* Recruit for Job Button */}
-              <div className="mb-3">
-                <button 
-                  className={`w-full rounded px-3 py-2 text-sm font-medium transition ${
-                    selectedJobs.length === 0 
-                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-                      : 'bg-blue-600 text-white hover:bg-blue-700'
-                  }`}
-                  disabled={selectedJobs.length === 0}
-                  onClick={() => {
-                    if (selectedJobs.length > 0) {
-                      setRecruitTarget(selectedJobs.join(','))
-                      setRoute('recruit')
-                    }
-                  }}
-                >
-                  {getRecruitButtonText()}
-                </button>
               </div>
               
               {roles.map((r) => {
@@ -379,7 +351,6 @@ export default function PlanningScreen({ selectedJobs, setSelectedJobs, selected
               <h2 className="text-xl font-semibold">Recruiting</h2>
               <button className="border rounded px-3 py-1 text-sm" onClick={()=>setRoute('plan')}>Back to Planning</button>
             </div>
-            <div className="text-sm text-gray-700 mb-4">Target: <b>{recruitTarget === 'ALL' ? 'All Open Roles' : recruitTarget}</b></div>
             <div className="rounded border bg-white p-4 text-sm text-gray-600">
               This is a placeholder for the dedicated Recruiting screen (campaign setup, sources, budget, creatives).
             </div>
