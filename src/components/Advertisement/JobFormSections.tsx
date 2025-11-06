@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 
 const Label: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <label className="block text-[13px] text-gray-700 mb-1">{children}</label>
@@ -54,9 +54,6 @@ export default function JobFormSections({ jobRole: _jobRole, onComplete }: JobFo
   const [newSkill, setNewSkill] = useState("");
   const [benefits, setBenefits] = useState(["Health", "PTO"]);
   const [newBenefit, setNewBenefit] = useState("");
-  const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
-  const [showLocationDropdown, setShowLocationDropdown] = useState(false);
-  const locationDropdownRef = useRef<HTMLDivElement>(null);
   const [payOption, setPayOption] = useState<"exact" | "range" | "omit">("exact");
   const [tipEligible, setTipEligible] = useState(false);
   const [questions, setQuestions] = useState<Question[]>([
@@ -65,31 +62,6 @@ export default function JobFormSections({ jobRole: _jobRole, onComplete }: JobFo
     { id: 3, type: "Multiple Choice", text: "", limit: "", choices: ["Option 1", "Option 2"], newChoice: "" },
     { id: 4, type: "Text", text: "", limit: "500", choices: [], newChoice: "" }
   ]);
-  const availableLocations = [
-    "123 Main St, Boston, MA",
-    "456 Second St, Cambridge, MA",
-    "789 Third Ave, Brookline, MA",
-    "321 Park Blvd, Somerville, MA"
-  ];
-
-  // Close location dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (locationDropdownRef.current && !locationDropdownRef.current.contains(event.target as Node)) {
-        setShowLocationDropdown(false);
-      }
-    };
-    if (showLocationDropdown) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [showLocationDropdown]);
-
-  const toggleLocation = (loc: string) => {
-    setSelectedLocations(prev =>
-      prev.includes(loc) ? prev.filter(l => l !== loc) : [...prev, loc]
-    );
-  };
 
   const addQuestion = () => {
     const newId = questions.length > 0 ? Math.max(...questions.map(q => q.id)) + 1 : 1;
@@ -157,35 +129,6 @@ export default function JobFormSections({ jobRole: _jobRole, onComplete }: JobFo
           <div className="bg-white border rounded-xl p-5 shadow-sm">
             <div className="grid grid-cols-12 gap-3">
               <Field label="Title"><Input placeholder="Line Cook" defaultValue="Line Cook" /></Field>
-            <Field span="col-span-12" label="Location">
-              <div className="relative" ref={locationDropdownRef}>
-                <button
-                  type="button"
-                  onClick={() => setShowLocationDropdown(!showLocationDropdown)}
-                  className="w-full border rounded px-2 py-2 text-sm bg-white text-left flex items-center justify-between hover:bg-gray-50"
-                >
-                  <span className="truncate">
-                    {selectedLocations.length === 0 ? 'Select locations...' : selectedLocations.join('; ')}
-                  </span>
-                  <span className="ml-2">▼</span>
-                </button>
-                {showLocationDropdown && (
-                  <div className="absolute z-10 w-full mt-1 bg-white border rounded shadow-lg max-h-48 overflow-y-auto">
-                    {availableLocations.map((loc) => (
-                      <label key={loc} className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={selectedLocations.includes(loc)}
-                          onChange={() => toggleLocation(loc)}
-                          className="mr-2"
-                        />
-                        <span className="text-sm">{loc}</span>
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </Field>
 
             <Field span="col-span-12" label="Job Description">
               <Textarea placeholder="Describe duties and environment…" rows={4} />
@@ -289,6 +232,10 @@ export default function JobFormSections({ jobRole: _jobRole, onComplete }: JobFo
                 <option>Part-time</option>
                 <option>Flexible</option>
               </select>
+            </Field>
+
+            <Field span="col-span-12" label="Schedule Description">
+              <Textarea placeholder="Describe typical work hours and shifts…" rows={3} />
             </Field>
             </div>
           </div>
