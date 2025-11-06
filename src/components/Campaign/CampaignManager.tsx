@@ -176,16 +176,16 @@ export default function CampaignManager({ selectedLocations, setSelectedLocation
           
           {/* Combined Sources Section */}
           <div className="bg-white border rounded-xl p-4">
-            <div className="text-sm font-semibold mb-3">Sources</div>
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-sm font-semibold">Sources</div>
+              <div className="text-right">
+                <div className="text-2xl font-bold leading-5">{totalApplicantsInt.toLocaleString()}</div>
+                <div className="text-[11px] text-gray-500 leading-4">applicants</div>
+              </div>
+            </div>
             
             {/* Daily Applicants Chart */}
             <div className="mb-4">
-              <div className="flex items-center justify-end mb-2">
-                <div className="text-right">
-                  <div className="text-2xl font-bold leading-5">{totalApplicantsInt.toLocaleString()}</div>
-                  <div className="text-[11px] text-gray-500 leading-4">applicants</div>
-                </div>
-              </div>
               <AreaSection series={dailySeries} sources={current?.sources||[]} showPoints={false} />
             </div>
 
