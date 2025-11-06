@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import PlanningScreen from './components/DemandForecast/PlanningScreen';
 import CampaignManager from './components/Campaign/CampaignManager';
 import AdvertisementManager from './components/Advertisement/AdvertisementManager';
@@ -22,6 +22,16 @@ export default function PasscomRecruitingApp() {
   const [selectedJobs, setSelectedJobs] = useState<string[]>([]);
   const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
   const [jobForms, setJobForms] = useState<JobFormData[]>([]);
+  
+  // Dropdown states
+  const [showLocationDropdown, setShowLocationDropdown] = useState(false);
+  const [showJobDropdown, setShowJobDropdown] = useState(false);
+  const locationDropdownRef = useRef<HTMLDivElement>(null);
+  const jobDropdownRef = useRef<HTMLDivElement>(null);
+  
+  // Available options
+  const availableLocations = ['BOS', 'LGA', 'DCA', 'ORD'];
+  const availableJobs = ['Cook', 'Server', 'Bartender', 'Host'];
 
   // Update job forms when selected jobs change
   useEffect(() => {
@@ -38,6 +48,36 @@ export default function PasscomRecruitingApp() {
   useEffect(() => {
     localStorage.setItem('passcom-recruiting-active-tab', activeTab);
   }, [activeTab]);
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (locationDropdownRef.current && !locationDropdownRef.current.contains(event.target as Node)) {
+        setShowLocationDropdown(false);
+      }
+      if (jobDropdownRef.current && !jobDropdownRef.current.contains(event.target as Node)) {
+        setShowJobDropdown(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const toggleLocationSelection = (location: string) => {
+    setSelectedLocations(prev =>
+      prev.includes(location)
+        ? prev.filter(loc => loc !== location)
+        : [...prev, location]
+    );
+  };
+
+  const toggleJobSelection = (job: string) => {
+    setSelectedJobs(prev =>
+      prev.includes(job)
+        ? prev.filter(j => j !== job)
+        : [...prev, job]
+    );
+  };
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'demand', label: 'Demand' },
@@ -78,27 +118,79 @@ export default function PasscomRecruitingApp() {
               ))}
             </div>
             
-            {/* Target Tag */}
-            <div className="px-4 py-2 bg-gray-100 border border-gray-300 rounded-lg text-sm">
-              {selectedLocations.length === 0 && selectedJobs.length === 0 ? (
-                <span className="text-gray-500 italic">Choose Locations & Jobs to recruit</span>
-              ) : (
-                <div className="flex items-center gap-2">
-                  {selectedLocations.length > 0 && (
-                    <span className="text-gray-700">
-                      <span className="font-medium">Locations:</span> {selectedLocations.join(', ')}
-                    </span>
-                  )}
-                  {selectedLocations.length > 0 && selectedJobs.length > 0 && (
-                    <span className="text-gray-400">|</span>
-                  )}
-                  {selectedJobs.length > 0 && (
-                    <span className="text-gray-700">
-                      <span className="font-medium">Jobs:</span> {selectedJobs.join(', ')}
-                    </span>
-                  )}
-                </div>
-              )}
+            {/* Location and Job Selectors */}
+            <div className="flex gap-2">
+              {/* Location Selector */}
+              <div className="relative" ref={locationDropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setShowLocationDropdown(!showLocationDropdown)}
+                  className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm hover:bg-gray-50 flex items-center gap-2 min-w-[140px]"
+                >
+                  <span className="text-gray-700">
+                    {selectedLocations.length === 0 
+                      ? 'Select Locations' 
+                      : selectedLocations.length === 1
+                        ? selectedLocations[0]
+                        : `${selectedLocations.length} stores`}
+                  </span>
+                  <span className="text-gray-400">▼</span>
+                </button>
+                
+                {showLocationDropdown && (
+                  <div className="absolute right-0 z-10 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg w-48">
+                    {availableLocations.map((location) => (
+                      <label
+                        key={location}
+                        className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedLocations.includes(location)}
+                          onChange={() => toggleLocationSelection(location)}
+                          className="mr-2"
+                        />
+                        <span className="text-sm">{location}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Job Selector */}
+              <div className="relative" ref={jobDropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setShowJobDropdown(!showJobDropdown)}
+                  className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm hover:bg-gray-50 flex items-center gap-2 min-w-[140px]"
+                >
+                  <span className="text-gray-700 truncate">
+                    {selectedJobs.length === 0 
+                      ? 'Select Jobs' 
+                      : selectedJobs.join(', ')}
+                  </span>
+                  <span className="text-gray-400">▼</span>
+                </button>
+                
+                {showJobDropdown && (
+                  <div className="absolute right-0 z-10 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg w-48">
+                    {availableJobs.map((job) => (
+                      <label
+                        key={job}
+                        className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedJobs.includes(job)}
+                          onChange={() => toggleJobSelection(job)}
+                          className="mr-2"
+                        />
+                        <span className="text-sm">{job}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
