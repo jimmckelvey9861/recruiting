@@ -1,10 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import PlanningScreen from './components/DemandForecast/PlanningScreen';
 import CampaignManager from './components/Campaign/CampaignManager';
 import AdvertisementManager from './components/Advertisement/AdvertisementManager';
 import CompanyInformationSection from './components/Advertisement/CompanyInformationSection';
 
-type Tab = 'demand' | 'advertisement' | 'campaign' | 'review' | 'company';
+type Tab = 'advertisement' | 'campaign' | 'review' | 'company';
 
 interface JobFormData {
   role: string;
@@ -16,7 +15,7 @@ export default function PasscomRecruitingApp() {
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     // Load persisted tab from localStorage
     const saved = localStorage.getItem('passcom-recruiting-active-tab');
-    return (saved as Tab) || 'demand';
+    return (saved as Tab) || 'advertisement';
   });
 
   const [selectedJobs, setSelectedJobs] = useState<string[]>([]);
@@ -80,7 +79,6 @@ export default function PasscomRecruitingApp() {
   };
 
   const tabs: { id: Tab; label: string }[] = [
-    { id: 'demand', label: 'Demand' },
     { id: 'advertisement', label: 'Advertisement' },
     { id: 'campaign', label: 'Campaign' },
     { id: 'review', label: 'Review' },
@@ -198,17 +196,6 @@ export default function PasscomRecruitingApp() {
 
       {/* Tab Content */}
       <div className="flex-1 overflow-hidden">
-        {activeTab === 'demand' && (
-          <div className="h-full">
-            <PlanningScreen 
-              selectedJobs={selectedJobs} 
-              setSelectedJobs={setSelectedJobs}
-              selectedLocations={selectedLocations}
-              setSelectedLocations={setSelectedLocations}
-            />
-          </div>
-        )}
-        
         {activeTab === 'advertisement' && (
           <div className="h-full overflow-auto bg-gray-50">
             <AdvertisementManager

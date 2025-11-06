@@ -23,7 +23,7 @@ export default function AdvertisementManager({ selectedJobs, jobForms, setJobFor
       <div className="min-h-screen bg-gray-50 text-gray-900 p-6">
         <div className="max-w-6xl mx-auto">
           <div className="text-center py-12 bg-white rounded-xl border">
-            <p className="text-gray-500">Select jobs from the Demand tab to create advertisements</p>
+            <p className="text-gray-500">Select a Job or Jobs to create Advertisements</p>
           </div>
         </div>
       </div>
