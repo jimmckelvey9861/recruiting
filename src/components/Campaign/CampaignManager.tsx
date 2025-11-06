@@ -198,9 +198,9 @@ export default function CampaignManager({ selectedLocations, setSelectedLocation
                     }} />
                 </div>
                 <div className="col-span-3">
-                  <input type="number" step="0.01" className="w-28 px-2 py-0.5 bg-transparent outline-none" value={s.dailyBudget.toFixed(2)}
+                  <input type="number" step="1" className="w-28 px-2 py-0.5 bg-transparent outline-none" value={Math.round(s.dailyBudget)}
                     onChange={e=>{
-                      const val = round2(Number(e.target.value||0));
+                      const val = Math.round(Number(e.target.value||0));
                       setCampaigns(prev=> prev.map(c=> c.id!==(current?.id||'')? c: ({...c, sources: c.sources.map(v=> v.key===s.key? {...v,dailyBudget:Math.max(0,val)}:v)})));
                     }} />
                 </div>
