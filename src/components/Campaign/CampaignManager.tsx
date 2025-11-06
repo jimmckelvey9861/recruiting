@@ -225,6 +225,16 @@ export default function CampaignManager({ selectedLocations, setSelectedLocation
 }
 
 // ===============================
+// Field Component (outside to prevent recreation)
+// ===============================
+const Field = ({label, children, active = false}: {label: string; children: React.ReactNode; active?: boolean})=> (
+  <div className={`relative border rounded-md px-2 pt-2 pb-1 bg-white min-h-[38px] ${active ? 'border-gray-600' : 'border-gray-400'}`}>
+    <div className="absolute left-2 -top-2 bg-white px-1 text-[11px] text-gray-500">{label}</div>
+    {children}
+  </div>
+);
+
+// ===============================
 // CampaignsWindow – flattened fields, robust date defaults
 // ===============================
 interface CampaignsWindowProps {
@@ -283,12 +293,6 @@ function CampaignsWindow(props: CampaignsWindowProps){
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId]); // Only re-run when campaign selection changes, not on every campaigns array update
 
-  const Field = ({label, children, active = false}: {label: string; children: React.ReactNode; active?: boolean})=> (
-    <div className={`relative border rounded-md px-2 pt-2 pb-1 bg-white min-h-[38px] ${active ? 'border-gray-600' : 'border-gray-400'}`}>
-      <div className="absolute left-2 -top-2 bg-white px-1 text-[11px] text-gray-500">{label}</div>
-      {children}
-    </div>
-  );
   const inputBase = "w-full bg-transparent outline-none text-sm py-1";
 
   const saveStart = (v: string)=>{ setStart(v); setDateRange((r)=>({...(r||{}), start:v})); };
