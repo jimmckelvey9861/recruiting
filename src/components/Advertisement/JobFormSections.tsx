@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 const Label: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <label className="block text-[13px] text-gray-700 mb-1">{children}</label>
@@ -72,6 +72,12 @@ export default function JobFormSections({ jobRole: _jobRole, onComplete }: JobFo
     { id: 1, type: "Text", text: "", limit: "500", choices: [], newChoice: "" }
   ]);
   
+  // Job media
+  const [jobImage, setJobImage] = useState<string | null>(null);
+  const jobImageInputRef = useRef<HTMLInputElement>(null);
+  const [jobVideo, setJobVideo] = useState<string | null>(null);
+  const jobVideoInputRef = useRef<HTMLInputElement>(null);
+  
   // Check section completion
   const isDetailsComplete = () => {
     return title.trim() !== "" && jobDescription.trim() !== "";
@@ -98,6 +104,28 @@ export default function JobFormSections({ jobRole: _jobRole, onComplete }: JobFo
       onComplete();
     }
   }, [title, jobDescription, payOption, payExactAmount, payRangeMin, payRangeMax, scheduleType, questions, onComplete]);
+
+  const handleJobImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setJobImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleJobVideoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setJobVideo(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const addQuestion = () => {
     const newId = questions.length > 0 ? Math.max(...questions.map(q => q.id)) + 1 : 1;
@@ -190,6 +218,84 @@ export default function JobFormSections({ jobRole: _jobRole, onComplete }: JobFo
                 onChange={e => setNewSkill(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter' && newSkill.trim()) { setSkills(p => [...p, newSkill.trim()]); setNewSkill(""); e.preventDefault(); } }}
               />
+            </Field>
+
+            <Field span="col-span-12" label="Job Media (Optional)">
+              <div className="flex gap-6 items-start">
+                {/* Job Image */}
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-[13px] text-gray-700">Image</span>
+                    <input
+                      ref={jobImageInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleJobImageUpload}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => jobImageInputRef.current?.click()}
+                      className="text-blue-600 hover:underline text-sm"
+                    >
+                      Upload
+                    </button>
+                  </div>
+                  {jobImage ? (
+                    <div className="relative w-24 h-24 border rounded-lg overflow-hidden bg-white">
+                      <img src={jobImage} alt="Job" className="w-full h-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => setJobImage(null)}
+                        className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 text-xs hover:bg-red-600"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="w-24 h-24 border-2 border-dashed rounded-lg flex items-center justify-center bg-gray-50">
+                      <span className="text-gray-400 text-2xl">📷</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Job Video */}
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-[13px] text-gray-700">Video</span>
+                    <input
+                      ref={jobVideoInputRef}
+                      type="file"
+                      accept="video/*"
+                      onChange={handleJobVideoUpload}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => jobVideoInputRef.current?.click()}
+                      className="text-blue-600 hover:underline text-sm"
+                    >
+                      Upload
+                    </button>
+                  </div>
+                  {jobVideo ? (
+                    <div className="relative border rounded-lg overflow-hidden bg-black" style={{ width: '192px', height: '96px' }}>
+                      <video src={jobVideo} className="w-full h-full object-contain" controls />
+                      <button
+                        type="button"
+                        onClick={() => setJobVideo(null)}
+                        className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 text-xs hover:bg-red-600 z-10"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="border-2 border-dashed rounded-lg flex items-center justify-center bg-gray-50" style={{ width: '192px', height: '96px' }}>
+                      <span className="text-gray-400 text-2xl">🎥</span>
+                    </div>
+                  )}
+                </div>
+              </div>
             </Field>
             </div>
           </div>

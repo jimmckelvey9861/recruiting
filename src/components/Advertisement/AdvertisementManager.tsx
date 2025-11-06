@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import JobFormSections from './JobFormSections';
+import MobilePreview from '../MobilePreview';
 
 interface JobFormData {
   role: string;
@@ -32,8 +33,14 @@ export default function AdvertisementManager({ selectedJobs, jobForms, setJobFor
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 p-6">
       <div className="max-w-6xl mx-auto">
-        {/* Job Tabs */}
-        <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+        <div className="flex gap-6">
+          {/* Mobile Preview */}
+          <MobilePreview />
+          
+          {/* Form Content */}
+          <div className="flex-1">
+            {/* Job Tabs */}
+            <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
           {/* Job Tab Headers */}
           <div className="border-b bg-gray-50 px-4 pt-3">
             <div className="flex gap-2 overflow-x-auto">
@@ -72,6 +79,8 @@ export default function AdvertisementManager({ selectedJobs, jobForms, setJobFor
                 }}
               />
             )}
+          </div>
+        </div>
           </div>
         </div>
       </div>

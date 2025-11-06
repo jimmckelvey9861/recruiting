@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import MobilePreview from '../MobilePreview';
 
 const Card: React.FC<{ title: string; icon?: React.ReactNode; children: React.ReactNode }> = ({ title, icon, children }) => (
   <div className="bg-white border rounded-xl p-5 shadow-sm">
@@ -129,7 +130,13 @@ export default function CompanyInformationSection() {
 
   return (
     <>
-      <Card title="Company Information" icon={<span>🏢</span>}>
+      <div className="flex gap-6">
+        {/* Mobile Preview */}
+        <MobilePreview />
+        
+        {/* Form Content */}
+        <div className="flex-1">
+          <Card title="Company Information" icon={<span>🏢</span>}>
         <Field span="col-span-12 lg:col-span-6" label="Company Name">
           <Input placeholder="e.g., TechCorp Solutions" defaultValue="TechCorp Solutions" />
         </Field>
@@ -275,6 +282,8 @@ export default function CompanyInformationSection() {
           </div>
         </Field>
       </Card>
+        </div>
+      </div>
 
       {/* Logo Editor Modal */}
       {showLogoEditor && companyLogo && (
