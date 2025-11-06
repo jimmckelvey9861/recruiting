@@ -3,7 +3,7 @@ import CampaignManager from './components/Campaign/CampaignManager';
 import AdvertisementManager from './components/Advertisement/AdvertisementManager';
 import CompanyInformationSection from './components/Advertisement/CompanyInformationSection';
 
-type Tab = 'advertisement' | 'campaign' | 'review' | 'company';
+type Tab = 'campaign' | 'advertisement' | 'review' | 'company';
 
 interface JobFormData {
   role: string;
@@ -15,7 +15,7 @@ export default function PasscomRecruitingApp() {
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     // Load persisted tab from localStorage
     const saved = localStorage.getItem('passcom-recruiting-active-tab');
-    return (saved as Tab) || 'advertisement';
+    return (saved as Tab) || 'campaign';
   });
 
   const [selectedJobs, setSelectedJobs] = useState<string[]>([]);
@@ -79,8 +79,8 @@ export default function PasscomRecruitingApp() {
   };
 
   const tabs: { id: Tab; label: string }[] = [
-    { id: 'advertisement', label: 'Advertisement' },
     { id: 'campaign', label: 'Campaign' },
+    { id: 'advertisement', label: 'Advertisement' },
     { id: 'review', label: 'Review' },
     { id: 'company', label: 'Company' }
   ];
@@ -196,16 +196,6 @@ export default function PasscomRecruitingApp() {
 
       {/* Tab Content */}
       <div className="flex-1 overflow-hidden">
-        {activeTab === 'advertisement' && (
-          <div className="h-full overflow-auto bg-gray-50">
-            <AdvertisementManager
-              selectedJobs={selectedJobs}
-              jobForms={jobForms}
-              setJobForms={setJobForms}
-            />
-          </div>
-        )}
-        
         {activeTab === 'campaign' && (
           <div className="h-full overflow-auto">
             <CampaignManager
@@ -213,6 +203,16 @@ export default function PasscomRecruitingApp() {
               setSelectedLocations={setSelectedLocations}
               selectedJobs={selectedJobs}
               setSelectedJobs={setSelectedJobs}
+            />
+          </div>
+        )}
+        
+        {activeTab === 'advertisement' && (
+          <div className="h-full overflow-auto bg-gray-50">
+            <AdvertisementManager
+              selectedJobs={selectedJobs}
+              jobForms={jobForms}
+              setJobForms={setJobForms}
             />
           </div>
         )}
