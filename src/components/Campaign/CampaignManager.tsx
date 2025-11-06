@@ -174,53 +174,59 @@ export default function CampaignManager({ selectedLocations, setSelectedLocation
           {/* Coverage Heatmap */}
           <CoverageHeatmap availableJobs={selectedJobs.length > 0 ? selectedJobs : ['Cook', 'Server', 'Bartender', 'Host']} />
           
+          {/* Combined Sources Section */}
           <div className="bg-white border rounded-xl p-4">
-            <div className="text-sm font-semibold mb-2">Sources & Daily Budgets</div>
-            <div className="grid grid-cols-12 text-xs font-semibold text-gray-600 border-b pb-1">
-              <div className="col-span-4">Source</div>
-              <div className="col-span-2">Enabled</div>
-              <div className="col-span-3">Daily Cap (0 = infinite)</div>
-              <div className="col-span-3">Daily Budget ($)</div>
-            </div>
-            {(current?.sources||[]).map((s)=> (
-              <div key={s.key} className="grid grid-cols-12 items-center text-sm py-1 border-b last:border-b-0">
-                <div className="col-span-4 capitalize">
-                  <span className="inline-block w-2 h-2 rounded-full mr-2" style={{background:SRC_COLOR[s.key]}}></span>
-                  {s.key.replace('_',' ')} <span className="text-gray-500">(CPA ${s.cpa.toFixed(2)})</span>
-                </div>
-                <div className="col-span-2">
-                  <input type="checkbox" checked={s.enabled} onChange={e=>{
-                    const on = e.target.checked;
-                    setCampaigns(prev=> prev.map(c=> c.id!==(current?.id||'')? c: ({...c, sources: c.sources.map(v=> v.key===s.key? {...v,enabled:on}:v)})));
-                  }} />
-                </div>
-                <div className="col-span-3">
-                  <input type="number" min={0} className="w-28 px-2 py-0.5 bg-transparent outline-none" value={s.dailyCap}
-                    onChange={e=>{
-                      const val = Math.max(0, Number(e.target.value||0));
-                      setCampaigns(prev=> prev.map(c=> c.id!==(current?.id||'')? c: ({...c, sources: c.sources.map(v=> v.key===s.key? {...v,dailyCap:val}:v)})));
-                    }} />
-                </div>
-                <div className="col-span-3">
-                  <input type="number" step="1" className="w-28 px-2 py-0.5 bg-transparent outline-none" value={Math.round(s.dailyBudget)}
-                    onChange={e=>{
-                      const val = Math.round(Number(e.target.value||0));
-                      setCampaigns(prev=> prev.map(c=> c.id!==(current?.id||'')? c: ({...c, sources: c.sources.map(v=> v.key===s.key? {...v,dailyBudget:Math.max(0,val)}:v)})));
-                    }} />
+            <div className="text-sm font-semibold mb-3">Sources</div>
+            
+            {/* Daily Applicants Chart */}
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm font-medium">Daily Applicants by Source</div>
+                <div className="text-right">
+                  <div className="text-2xl font-bold leading-5">{totalApplicantsInt.toLocaleString()}</div>
+                  <div className="text-[11px] text-gray-500 leading-4">applicants</div>
                 </div>
               </div>
-            ))}
-          </div>
+              <AreaSection series={dailySeries} sources={current?.sources||[]} showPoints={true} />
+            </div>
 
-          <div className="bg-white border rounded-xl p-4">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-sm font-semibold">Daily Applicants by Source</div>
-              <div className="text-right">
-                <div className="text-2xl font-bold leading-5">{totalApplicantsInt.toLocaleString()}</div>
-                <div className="text-[11px] text-gray-500 leading-4">applicants</div>
+            {/* Sources & Daily Budgets */}
+            <div>
+              <div className="grid grid-cols-12 text-xs font-semibold text-gray-600 border-b pb-1 mb-1">
+                <div className="col-span-4">Source</div>
+                <div className="col-span-2">Enabled</div>
+                <div className="col-span-3">Daily Cap (0 = infinite)</div>
+                <div className="col-span-3">Daily Budget ($)</div>
               </div>
+              {(current?.sources||[]).map((s)=> (
+                <div key={s.key} className="grid grid-cols-12 items-center text-sm py-0.5 border-b last:border-b-0">
+                  <div className="col-span-4 capitalize">
+                    <span className="inline-block w-2 h-2 rounded-full mr-2" style={{background:SRC_COLOR[s.key]}}></span>
+                    {s.key.replace('_',' ')} <span className="text-gray-500">(CPA ${s.cpa.toFixed(2)})</span>
+                  </div>
+                  <div className="col-span-2">
+                    <input type="checkbox" checked={s.enabled} onChange={e=>{
+                      const on = e.target.checked;
+                      setCampaigns(prev=> prev.map(c=> c.id!==(current?.id||'')? c: ({...c, sources: c.sources.map(v=> v.key===s.key? {...v,enabled:on}:v)})));
+                    }} />
+                  </div>
+                  <div className="col-span-3">
+                    <input type="number" min={0} className="w-28 px-2 py-0.5 bg-transparent outline-none" value={s.dailyCap}
+                      onChange={e=>{
+                        const val = Math.max(0, Number(e.target.value||0));
+                        setCampaigns(prev=> prev.map(c=> c.id!==(current?.id||'')? c: ({...c, sources: c.sources.map(v=> v.key===s.key? {...v,dailyCap:val}:v)})));
+                      }} />
+                  </div>
+                  <div className="col-span-3">
+                    <input type="number" step="1" className="w-28 px-2 py-0.5 bg-transparent outline-none" value={Math.round(s.dailyBudget)}
+                      onChange={e=>{
+                        const val = Math.round(Number(e.target.value||0));
+                        setCampaigns(prev=> prev.map(c=> c.id!==(current?.id||'')? c: ({...c, sources: c.sources.map(v=> v.key===s.key? {...v,dailyBudget:Math.max(0,val)}:v)})));
+                      }} />
+                  </div>
+                </div>
+              ))}
             </div>
-            <AreaSection series={dailySeries} sources={current?.sources||[]} showPoints={true} />
           </div>
         </div>
       </div>
