@@ -132,6 +132,15 @@ function genWeek(role: string, weekOffset = 0) {
   
   const base = baseMap[role] || 5
   
+  // Decay factor: 10% workforce quits per month = ~2.5% per week
+  // Negative weekOffset = past (better staffed), Positive = future (understaffed)
+  const decayRate = 0.025 // 2.5% per week
+  const decayFactor = 1 - (weekOffset * decayRate)
+  
+  // Current month bonus: Add extra capacity for current month (weeks -2 to +2)
+  const isCurrentMonth = weekOffset >= -2 && weekOffset <= 2
+  const currentMonthBonus = isCurrentMonth ? 1.5 : 0 // Extra 1-2 employees per shift
+  
   return Array.from({ length: 7 }, (_, d) => (
     Array.from({ length: 48 }, (_, s) => {
       const hour = Math.floor(s / 2)
@@ -152,8 +161,17 @@ function genWeek(role: string, weekOffset = 0) {
       // -3σ to +3σ maps roughly to -30% to +30%
       const percentDelta = normalValue * 0.10 // Each unit is 10%
       
-      // Calculate supply based on demand + percentage delta
-      const supply = Math.max(0, Math.round(demand * (1 + percentDelta)))
+      // Calculate base supply with normal distribution
+      let supply = demand * (1 + percentDelta)
+      
+      // Apply decay factor (workforce attrition over time)
+      supply = supply * decayFactor
+      
+      // Add current month bonus (extra capacity)
+      supply = supply + currentMonthBonus
+      
+      // Round and ensure non-negative
+      supply = Math.max(0, Math.round(supply))
       
       return { demand, supply, closed: false }
     })
