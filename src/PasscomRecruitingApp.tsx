@@ -5,6 +5,18 @@ import CompanyInformationSection from './components/Advertisement/CompanyInforma
 
 type Tab = 'campaign' | 'advertisement' | 'review' | 'company';
 
+// Job base colors (matching CoverageHeatmap)
+const JOB_BASE_COLORS: Record<string, string> = {
+  "Server": "#3498DB",       // Blue
+  "Cook": "#E74C3C",         // Red
+  "Bartender": "#9B59B6",    // Purple
+  "Security": "#F39C12",     // Orange
+  "Dishwasher": "#1ABC9C",   // Turquoise
+  "Manager": "#34495E",      // Dark Gray
+  "Cleaner": "#16A085",      // Green
+  "Barista": "#E67E22"       // Burnt Orange
+};
+
 interface JobFormData {
   role: string;
   completed: boolean;
@@ -162,12 +174,19 @@ export default function PasscomRecruitingApp() {
                   onClick={() => setShowJobDropdown(!showJobDropdown)}
                   className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm hover:bg-gray-50 flex items-center gap-2 min-w-[140px]"
                 >
-                  <span className="text-gray-700 truncate">
-                    {selectedJobs.length === 0 
-                      ? 'Select Jobs' 
-                      : selectedJobs.join(', ')}
-                  </span>
-                  <span className="text-gray-400">▼</span>
+                  {selectedJobs.length === 0 ? (
+                    <span className="text-gray-700 truncate">Select Jobs</span>
+                  ) : (
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {selectedJobs.map(job => (
+                        <div key={job} className="flex items-center gap-1">
+                          <div className="w-3 h-3 rounded" style={{ background: JOB_BASE_COLORS[job] || '#3498DB' }} />
+                          <span className="text-gray-700">{job}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <span className="text-gray-400 ml-auto">▼</span>
                 </button>
                 
                 {showJobDropdown && (
@@ -177,12 +196,19 @@ export default function PasscomRecruitingApp() {
                         key={job}
                         className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer"
                       >
-                        <input
-                          type="checkbox"
-                          checked={selectedJobs.includes(job)}
-                          onChange={() => toggleJobSelection(job)}
-                          className="mr-2"
-                        />
+                        <div 
+                          className="w-4 h-4 rounded mr-2 flex items-center justify-center border-2"
+                          style={{ 
+                            borderColor: JOB_BASE_COLORS[job] || '#3498DB',
+                            background: selectedJobs.includes(job) ? (JOB_BASE_COLORS[job] || '#3498DB') : 'white'
+                          }}
+                        >
+                          {selectedJobs.includes(job) && (
+                            <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                          )}
+                        </div>
                         <span className="text-sm">{job}</span>
                       </label>
                     ))}
