@@ -132,14 +132,9 @@ function genWeek(role: string, weekOffset = 0) {
   
   const base = baseMap[role] || 5
   
-  // Decay factor: 10% workforce quits per month = ~2.5% per week
-  // Negative weekOffset = past (better staffed), Positive = future (understaffed)
-  const decayRate = 0.025 // 2.5% per week
-  const decayFactor = 1 - (weekOffset * decayRate)
-  
-  // Current month bonus: Add extra capacity for current month (weeks -2 to +2)
-  const isCurrentMonth = weekOffset >= -2 && weekOffset <= 2
-  const currentMonthBonus = isCurrentMonth ? 1.5 : 0 // Extra 1-2 employees per shift
+  // Trend from +2 (20% oversupply) at week 0 to -3 (30% undersupply) at week 40 (10 months)
+  // Linear trend: -5 levels over 40 weeks = -0.125 levels per week
+  const trendMean = 2 - (weekOffset * 0.125)
   
   return Array.from({ length: 7 }, (_, d) => (
     Array.from({ length: 48 }, (_, s) => {
@@ -152,26 +147,17 @@ function genWeek(role: string, weekOffset = 0) {
       const phase = 1 + 0.03 * Math.sin((weekOffset * 7 + d + s / 48) * 0.9)
       const demand = Math.round(base * phase * (0.25 + 1.2 * (0.7 * lunch + 1.0 * dinner)) * weekend)
       
-      // Generate supply using normal distribution
-      // Mean = 0 (balanced), StdDev = 1.5 gives good spread across -3 to +3
-      // This creates a bell curve centered at balanced staffing
-      const normalValue = normalRandom(weekOffset, d, s, 0, 1.5)
+      // Generate supply using normal distribution with trending mean
+      // StdDev = 1.2 gives spread while maintaining the trend
+      // trendMean shifts from +2 (current) to -3 (10 months out)
+      const normalValue = normalRandom(weekOffset, d, s, trendMean, 1.2)
       
-      // Convert normal value to percentage delta
-      // -3σ to +3σ maps roughly to -30% to +30%
-      const percentDelta = normalValue * 0.10 // Each unit is 10%
+      // Convert normal value (which is already in staffing level units) to percentage delta
+      // Each level = 10%, so multiply by 0.10
+      const percentDelta = normalValue * 0.10
       
-      // Calculate base supply with normal distribution
-      let supply = demand * (1 + percentDelta)
-      
-      // Apply decay factor (workforce attrition over time)
-      supply = supply * decayFactor
-      
-      // Add current month bonus (extra capacity)
-      supply = supply + currentMonthBonus
-      
-      // Round and ensure non-negative
-      supply = Math.max(0, Math.round(supply))
+      // Calculate supply based on demand + percentage delta
+      const supply = Math.max(0, Math.round(demand * (1 + percentDelta)))
       
       return { demand, supply, closed: false }
     })
