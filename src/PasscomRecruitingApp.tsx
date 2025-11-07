@@ -30,7 +30,7 @@ export default function PasscomRecruitingApp() {
   
   // Available options
   const availableLocations = ['BOS', 'LGA', 'DCA', 'ORD'];
-  const availableJobs = ['Cook', 'Server', 'Bartender', 'Host'];
+  const availableJobs = ['Server', 'Cook', 'Bartender', 'Security', 'Dishwasher', 'Manager', 'Cleaner', 'Barista'];
 
   // Update job forms when selected jobs change
   useEffect(() => {
