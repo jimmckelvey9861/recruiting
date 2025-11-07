@@ -308,8 +308,7 @@ export default function CoverageHeatmap({ selectedJobs }: CoverageHeatmapProps) 
         )}
         {viewMode === 'month' && (
           <MonthGrid
-            weekMatrix={weekMatrices[0]?.matrix || []}
-            role={selectedJobs[0]}
+            weekMatrices={weekMatrices}
             year={currentYear}
             month={currentMonth}
             onDayClick={(dateObj: Date)=>goToWeekContaining(dateObj)}
@@ -317,8 +316,7 @@ export default function CoverageHeatmap({ selectedJobs }: CoverageHeatmapProps) 
         )}
         {viewMode === 'year' && (
           <YearGridDays
-            weekMatrix={weekMatrices[0]?.matrix || []}
-            role={selectedJobs[0]}
+            weekMatrices={weekMatrices}
             year={currentYear}
             onMonthClick={(monthIdx: number)=>goToMonth(currentYear, monthIdx)}
           />
@@ -407,40 +405,54 @@ function getDivision(demand: number, supply: number): number {
 }
 
 function MonthGrid(
-  { weekMatrix, role, year, month, onDayClick }:
-  { weekMatrix: { demand: number; supply: number; closed: boolean }[][], role: string, year: number, month: number, onDayClick?: (d: Date)=>void }
+  { weekMatrices, year, month, onDayClick }:
+  { weekMatrices: { job: string, matrix: { demand: number; supply: number; closed: boolean }[][] }[], year: number, month: number, onDayClick?: (d: Date)=>void }
 ) {
-  // Count distribution across 7 divisions for each weekday
-  const divisionsByWeekday = weekMatrix.map(daySlots => {
-    const counts = Array(7).fill(0) // 7 divisions (-3 to +3)
-    for (const { demand, supply, closed } of daySlots) {
-      if (!closed) {
-        const div = getDivision(demand, supply)
-        if (div >= -3 && div <= 3) {
-          counts[div + 3]++ // Map -3 to index 0, 0 to index 3, +3 to index 6
+  const jobCount = weekMatrices.length
+  const cellHeight = jobCount === 1 ? 64 : 32 * jobCount // Scale height based on job count
+
+  // For each job, calculate distribution across 7 divisions for each weekday
+  const jobsData = weekMatrices.map(({ job, matrix }) => {
+    const divisionsByWeekday = matrix.map(daySlots => {
+      const counts = Array(7).fill(0) // 7 divisions (-3 to +3)
+      for (const { demand, supply, closed } of daySlots) {
+        if (!closed) {
+          const div = getDivision(demand, supply)
+          if (div >= -3 && div <= 3) {
+            counts[div + 3]++ // Map -3 to index 0, 0 to index 3, +3 to index 6
+          }
         }
       }
-    }
-    return counts
+      return counts
+    })
+    return { job, divisionsByWeekday }
   })
 
   const first = new Date(year, month, 1)
   const lastDay = new Date(year, month + 1, 0).getDate()
   const firstWeekdayJS = first.getDay()
   const firstWeekdayMon0 = (firstWeekdayJS + 6) % 7
+  
   const cells = Array.from({ length: 42 }, (_, idx) => {
     const dayNum = idx - firstWeekdayMon0 + 1
     if (dayNum < 1 || dayNum > lastDay) return { label: "", type: 'empty' as const }
     const dt = new Date(year, month, dayNum)
     const jsDay = dt.getDay()
     const weekday = (jsDay + 6) % 7
-    const counts = divisionsByWeekday[weekday]
-    const total = counts.reduce((a, b) => a + b, 0)
-    if (total === 0) return { label: String(dayNum), type: 'closed' as const, dateObj: dt }
     
-    // Calculate percentage for each division
-    const percentages = counts.map(c => total > 0 ? (c / total) * 100 : 0)
-    return { label: String(dayNum), type: 'divisions' as const, percentages, dateObj: dt }
+    // Build data for each job for this day
+    const jobsPercentages = jobsData.map(({ job, divisionsByWeekday }) => {
+      const counts = divisionsByWeekday[weekday]
+      const total = counts.reduce((a, b) => a + b, 0)
+      if (total === 0) return { job, percentages: null }
+      const percentages = counts.map(c => total > 0 ? (c / total) * 100 : 0)
+      return { job, percentages }
+    })
+    
+    const allClosed = jobsPercentages.every(jp => jp.percentages === null)
+    if (allClosed) return { label: String(dayNum), type: 'closed' as const, dateObj: dt }
+    
+    return { label: String(dayNum), type: 'divisions' as const, jobsPercentages, dateObj: dt }
   })
 
   return (
@@ -449,25 +461,25 @@ function MonthGrid(
         <div key={d} className="text-xs font-medium text-center text-gray-600">{d}</div>
       ))}
       {cells.map((c, i) => (
-        <div key={i} className="border rounded h-16 p-1 flex flex-col cursor-pointer" onClick={() => c.dateObj && onDayClick && onDayClick(c.dateObj)}>
-          <div className="text-[10px] text-gray-500">{c.label}</div>
+        <div key={i} className="border rounded p-1 flex flex-col cursor-pointer" style={{ height: `${cellHeight}px` }} onClick={() => c.dateObj && onDayClick && onDayClick(c.dateObj)}>
+          <div className="text-[10px] text-gray-500 mb-1">{c.label}</div>
           {c.type === 'empty' && <div className="flex-1 rounded bg-gray-100" />}
           {c.type === 'closed' && <div className="flex-1 rounded" style={{ background: COLORS.closed }} />}
           {c.type === 'divisions' && (
-            <div className="flex-1 rounded overflow-hidden flex">
-              {c.percentages.map((pct, divIdx) => {
-                if (pct <= 0) return null
-                // Generate color for this division (7 divisions: -3 to +3)
-                const mockDemand = 10
-                const mockSupply = divIdx === 0 ? 6.5 :  // -3: -30% or worse
-                                  divIdx === 1 ? 7.5 :   // -2: -20% to -30%
-                                  divIdx === 2 ? 8.5 :   // -1: -10% to -20%
-                                  divIdx === 3 ? 10 :    // 0: balanced
-                                  divIdx === 4 ? 11.5 :  // +1: +10% to +20%
-                                  divIdx === 5 ? 12.5 :  // +2: +20% to +30%
-                                  14                      // +3: +30% or more
-                const color = cellColor(mockDemand, mockSupply, role)
-                return <div key={divIdx} style={{ width: `${pct}%`, background: color }} />
+            <div className="flex-1 flex flex-col gap-[2px]">
+              {c.jobsPercentages.map(({ job, percentages }) => {
+                if (!percentages) return <div key={job} className="flex-1 rounded" style={{ background: COLORS.closed }} />
+                return (
+                  <div key={job} className="flex-1 rounded overflow-hidden flex">
+                    {percentages.map((pct, divIdx) => {
+                      if (pct <= 0) return null
+                      const mockDemand = 10
+                      const mockSupply = divIdx === 0 ? 6.5 : divIdx === 1 ? 7.5 : divIdx === 2 ? 8.5 : divIdx === 3 ? 10 : divIdx === 4 ? 11.5 : divIdx === 5 ? 12.5 : 14
+                      const color = cellColor(mockDemand, mockSupply, job)
+                      return <div key={divIdx} style={{ width: `${pct}%`, background: color }} />
+                    })}
+                  </div>
+                )
               })}
             </div>
           )}
@@ -478,21 +490,28 @@ function MonthGrid(
 }
 
 function YearGridDays(
-  { weekMatrix, role, year, onMonthClick }:
-  { weekMatrix: { demand: number; supply: number; closed: boolean }[][], role: string, year?: number, onMonthClick?: (m: number)=>void }
+  { weekMatrices, year, onMonthClick }:
+  { weekMatrices: { job: string, matrix: { demand: number; supply: number; closed: boolean }[][] }[], year?: number, onMonthClick?: (m: number)=>void }
 ) {
-  // Count distribution across 7 divisions for each weekday
-  const divisionsByWeekday = weekMatrix.map(daySlots => {
-    const counts = Array(7).fill(0) // 7 divisions (-3 to +3)
-    for (const { demand, supply, closed } of daySlots) {
-      if (!closed) {
-        const div = getDivision(demand, supply)
-        if (div >= -3 && div <= 3) {
-          counts[div + 3]++ // Map -3 to index 0, 0 to index 3, +3 to index 6
+  const jobCount = weekMatrices.length
+  const cellHeight = jobCount === 1 ? 10 : 6 * jobCount // Scale height based on job count
+  const monthHeight = jobCount === 1 ? 154 : 100 + (jobCount * 15) // Scale month card height
+
+  // For each job, calculate distribution across 7 divisions for each weekday
+  const jobsData = weekMatrices.map(({ job, matrix }) => {
+    const divisionsByWeekday = matrix.map(daySlots => {
+      const counts = Array(7).fill(0) // 7 divisions (-3 to +3)
+      for (const { demand, supply, closed } of daySlots) {
+        if (!closed) {
+          const div = getDivision(demand, supply)
+          if (div >= -3 && div <= 3) {
+            counts[div + 3]++ // Map -3 to index 0, 0 to index 3, +3 to index 6
+          }
         }
       }
-    }
-    return counts
+      return counts
+    })
+    return { job, divisionsByWeekday }
   })
 
   const yr = year || new Date().getFullYear()
@@ -511,17 +530,24 @@ function YearGridDays(
           const dt = new Date(yr, m, dayNum)
           const jsDay = dt.getDay()
           const weekday = (jsDay + 6) % 7
-          const counts = divisionsByWeekday[weekday]
-          const total = counts.reduce((a, b) => a + b, 0)
-          if (total === 0) return { type: 'closed' as const }
           
-          // Calculate percentage for each division
-          const percentages = counts.map(c => total > 0 ? (c / total) * 100 : 0)
-          return { type: 'divisions' as const, percentages }
+          // Build data for each job for this day
+          const jobsPercentages = jobsData.map(({ job, divisionsByWeekday }) => {
+            const counts = divisionsByWeekday[weekday]
+            const total = counts.reduce((a, b) => a + b, 0)
+            if (total === 0) return { job, percentages: null }
+            const percentages = counts.map(c => total > 0 ? (c / total) * 100 : 0)
+            return { job, percentages }
+          })
+          
+          const allClosed = jobsPercentages.every(jp => jp.percentages === null)
+          if (allClosed) return { type: 'closed' as const }
+          
+          return { type: 'divisions' as const, jobsPercentages }
         })
 
         return (
-          <div key={m} className="border rounded p-2 h-[154px] flex flex-col">
+          <div key={m} className="border rounded p-2 flex flex-col" style={{ height: `${monthHeight}px` }}>
             <div className="text-xs font-medium text-gray-700 mb-1 cursor-pointer" onClick={() => onMonthClick && onMonthClick(m)}>
               {first.toLocaleString(undefined, { month: 'short' })}
             </div>
@@ -530,24 +556,24 @@ function YearGridDays(
                 <div key={`h-${m}-${idx}`} className="text-[9px] text-gray-400 text-center">{d[0]}</div>
               ))}
               {cells.map((c, idx) => (
-                <div key={idx} className="h-4">
-                  {c.type === 'empty' && <div className="w-full h-[10px] rounded bg-gray-100" />}
-                  {c.type === 'closed' && <div className="w-full h-[10px] rounded" style={{ background: COLORS.closed }} />}
+                <div key={idx} style={{ height: `${cellHeight + 6}px` }}>
+                  {c.type === 'empty' && <div className="w-full rounded bg-gray-100" style={{ height: `${cellHeight}px` }} />}
+                  {c.type === 'closed' && <div className="w-full rounded" style={{ height: `${cellHeight}px`, background: COLORS.closed }} />}
                   {c.type === 'divisions' && (
-                    <div className="w-full h-[10px] rounded overflow-hidden flex">
-                      {c.percentages.map((pct, divIdx) => {
-                        if (pct <= 0) return null
-                        // Generate color for this division (7 divisions: -3 to +3)
-                        const mockDemand = 10
-                        const mockSupply = divIdx === 0 ? 6.5 :  // -3: -30% or worse
-                                          divIdx === 1 ? 7.5 :   // -2: -20% to -30%
-                                          divIdx === 2 ? 8.5 :   // -1: -10% to -20%
-                                          divIdx === 3 ? 10 :    // 0: balanced
-                                          divIdx === 4 ? 11.5 :  // +1: +10% to +20%
-                                          divIdx === 5 ? 12.5 :  // +2: +20% to +30%
-                                          14                      // +3: +30% or more
-                        const color = cellColor(mockDemand, mockSupply, role)
-                        return <div key={divIdx} style={{ width: `${pct}%`, background: color }} />
+                    <div className="w-full rounded overflow-hidden flex flex-col gap-[1px]" style={{ height: `${cellHeight}px` }}>
+                      {c.jobsPercentages.map(({ job, percentages }) => {
+                        if (!percentages) return <div key={job} className="flex-1 rounded" style={{ background: COLORS.closed }} />
+                        return (
+                          <div key={job} className="flex-1 rounded overflow-hidden flex">
+                            {percentages.map((pct, divIdx) => {
+                              if (pct <= 0) return null
+                              const mockDemand = 10
+                              const mockSupply = divIdx === 0 ? 6.5 : divIdx === 1 ? 7.5 : divIdx === 2 ? 8.5 : divIdx === 3 ? 10 : divIdx === 4 ? 11.5 : divIdx === 5 ? 12.5 : 14
+                              const color = cellColor(mockDemand, mockSupply, job)
+                              return <div key={divIdx} style={{ width: `${pct}%`, background: color }} />
+                            })}
+                          </div>
+                        )
                       })}
                     </div>
                   )}
