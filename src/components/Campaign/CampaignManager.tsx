@@ -174,8 +174,20 @@ export default function CampaignManager({ selectedLocations, setSelectedLocation
           {/* Coverage Heatmap */}
           <CoverageHeatmap selectedJobs={selectedJobs} />
           
-          {/* Combined Sources Section */}
+          {/* Combined Sources Section with Campaign Editor */}
           <div className="bg-white border rounded-xl p-4">
+            {/* Campaign Editor - Moved from left sidebar */}
+            <CampaignEditor
+              current={current}
+              campaigns={campaigns}
+              activeId={activeId}
+              setActiveId={setActiveId}
+              setCampaigns={setCampaigns}
+              dateRange={dateRange}
+              setDateRange={setDateRange}
+              selectedLocations={selectedLocations}
+              selectedJobs={selectedJobs}
+            />
             <div className="flex items-center justify-between mb-3">
               <div className="text-sm font-semibold">Sources</div>
               <div className="text-right">
@@ -244,32 +256,32 @@ const Field = ({label, children, active = false}: {label: string; children: Reac
 );
 
 // ===============================
-// CampaignsWindow – flattened fields, robust date defaults
+// CampaignEditor - Compact single-row campaign editor
 // ===============================
-interface CampaignsWindowProps {
+interface CampaignEditorProps {
+  current: Campaign | undefined;
   campaigns: Campaign[];
   activeId: string;
   setActiveId: (id: string) => void;
   setCampaigns: React.Dispatch<React.SetStateAction<Campaign[]>>;
   dateRange: { start: string; end: string };
   setDateRange: React.Dispatch<React.SetStateAction<{ start: string; end: string }>>;
-  onSelectCampaign: (campaign: Campaign) => void;
   selectedLocations: string[];
   selectedJobs: string[];
 }
 
-function CampaignsWindow(props: CampaignsWindowProps){
+function CampaignEditor(props: CampaignEditorProps) {
   const {
-    campaigns = [],
+    current,
+    campaigns,
     activeId,
-    setActiveId = ()=>{},
-    setCampaigns = ()=>{},
+    setActiveId,
+    setCampaigns,
     dateRange: incomingDateRange,
-    setDateRange = ()=>{},
-    onSelectCampaign,
+    setDateRange,
     selectedLocations,
     selectedJobs,
-  } = props || {};
+  } = props;
 
   const today = new Date();
   const defaultStart = isoDate(today);
@@ -287,7 +299,7 @@ function CampaignsWindow(props: CampaignsWindowProps){
   const [endDate, setEndDate] = useState(dateRange.end);
   const [campaignStatus, setCampaignStatus] = useState<'active' | 'suspended' | 'draft'>('draft');
 
-  // Populate form when a campaign is selected (only when activeId changes)
+  // Populate form when a campaign is selected
   useEffect(() => {
     const selectedCampaign = campaigns.find(c => c.id === activeId);
     if (selectedCampaign) {
@@ -300,27 +312,24 @@ function CampaignsWindow(props: CampaignsWindowProps){
       setCampaignStatus(selectedCampaign.status);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeId]); // Only re-run when campaign selection changes, not on every campaigns array update
+  }, [activeId]);
 
-  const inputBase = "w-full bg-transparent outline-none text-sm py-1";
+  const inputBase = "w-full bg-transparent outline-none text-sm py-1 px-2";
 
-  const saveStart = (v: string)=>{ setStart(v); setDateRange((r)=>({...(r||{}), start:v})); };
-  const saveEnd   = (v: string)=>{ setEndDate(v); setEndMode('date'); setDateRange((r)=>({...(r||{}), end:v})); };
+  const saveStart = (v: string) => { setStart(v); setDateRange((r) => ({ ...(r || {}), start: v })); };
+  const saveEnd = (v: string) => { setEndDate(v); setEndMode('date'); setDateRange((r) => ({ ...(r || {}), end: v })); };
 
   const handleLaunchSuspend = () => {
     const newStatus: 'active' | 'suspended' = campaignStatus === 'active' ? 'suspended' : 'active';
     setCampaignStatus(newStatus);
-    
-    // Check if this campaign already exists in the list
+
     const existingCampaign = campaigns.find(c => c.id === activeId);
-    
+
     if (existingCampaign) {
-      // Update existing campaign status (includes copied campaigns)
-      setCampaigns(prev => prev.map(c => 
+      setCampaigns(prev => prev.map(c =>
         c.id === activeId ? { ...c, status: newStatus } : c
       ));
     } else if (campaignStatus === 'draft' && name.trim()) {
-      // Create a brand new campaign (only if it doesn't exist yet)
       const newCampaign: Campaign = {
         id: `c${Date.now()}`,
         name: name.trim(),
@@ -341,8 +350,7 @@ function CampaignsWindow(props: CampaignsWindowProps){
   };
 
   const handleSave = () => {
-    // Save current campaign changes
-    setCampaigns(prev => prev.map(c => 
+    setCampaigns(prev => prev.map(c =>
       c.id === activeId ? {
         ...c,
         name,
@@ -358,7 +366,6 @@ function CampaignsWindow(props: CampaignsWindowProps){
   const handleCopy = () => {
     const currentCampaign = campaigns.find(c => c.id === activeId);
     if (currentCampaign) {
-      // Create a new campaign with copied data
       const copiedCampaign: Campaign = {
         ...currentCampaign,
         id: `c${Date.now()}`,
@@ -366,26 +373,195 @@ function CampaignsWindow(props: CampaignsWindowProps){
         status: 'draft',
         createdAt: new Date().toISOString().slice(0, 10),
       };
-      
-      // Add to campaigns list and select it
       setCampaigns(prev => [copiedCampaign, ...prev]);
       setActiveId(copiedCampaign.id);
-      
-      // Form fields will auto-populate via useEffect when activeId changes
     }
   };
 
   const handleDelete = () => {
     const currentCampaign = campaigns.find(c => c.id === activeId);
-    if (currentCampaign && window.confirm(`Are you sure you want to delete "${currentCampaign.name}"? This action cannot be undone.`)) {
+    if (currentCampaign && window.confirm(`Are you sure you want to delete "${currentCampaign.name}"?`)) {
       setCampaigns(prev => prev.filter(c => c.id !== activeId));
-      // Select the first remaining campaign or clear if none left
       const remaining = campaigns.filter(c => c.id !== activeId);
       if (remaining.length > 0) {
         setActiveId(remaining[0].id);
       }
     }
   };
+
+  const handleNewCampaign = () => {
+    setName('');
+    setStart(dateRange.start);
+    setEndMode('date');
+    setEndBudget(1000);
+    setEndHires(10);
+    setEndDate(dateRange.end);
+    setCampaignStatus('draft');
+    setActiveId('');
+  };
+
+  return (
+    <div className="mb-4 pb-4 border-b">
+      {/* Compact Single Row Layout */}
+      <div className="flex items-end gap-2 mb-3">
+        {/* Campaign Name */}
+        <div className="flex-1">
+          <Field label="Campaign" active={true}>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="Campaign Name" className={inputBase} />
+          </Field>
+        </div>
+
+        {/* Start Date */}
+        <div className="w-40">
+          <Field label="Start Date" active={true}>
+            <input type="date" value={start} onChange={e => saveStart(e.target.value)} className={inputBase} />
+          </Field>
+        </div>
+
+        {/* Campaign End Criterion with Radio Buttons */}
+        <div className="flex items-end gap-2">
+          {/* Budget */}
+          <div className="flex items-end gap-1">
+            <input
+              aria-label="Budget radio"
+              type="radio"
+              name="end"
+              checked={endMode === 'budget'}
+              onChange={() => setEndMode('budget')}
+              className="mb-2"
+            />
+            <div className={`w-32 ${endMode === 'budget' ? '' : 'opacity-50'}`}>
+              <Field label="Budget" active={endMode === 'budget'}>
+                <input
+                  type="number"
+                  min={0}
+                  step={100}
+                  value={endBudget}
+                  onChange={e => setEndBudget(Math.max(0, Math.floor(Number(e.target.value || 0))))}
+                  className={inputBase}
+                  disabled={endMode !== 'budget'}
+                />
+              </Field>
+            </div>
+          </div>
+
+          {/* Hires */}
+          <div className="flex items-end gap-1">
+            <input
+              aria-label="Hires radio"
+              type="radio"
+              name="end"
+              checked={endMode === 'hires'}
+              onChange={() => setEndMode('hires')}
+              className="mb-2"
+            />
+            <div className={`w-24 ${endMode === 'hires' ? '' : 'opacity-50'}`}>
+              <Field label="Hires" active={endMode === 'hires'}>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={endHires}
+                  onChange={e => setEndHires(Math.max(0, Math.floor(Number(e.target.value || 0))))}
+                  className={inputBase}
+                  disabled={endMode !== 'hires'}
+                />
+              </Field>
+            </div>
+          </div>
+
+          {/* End Date */}
+          <div className="flex items-end gap-1">
+            <input
+              aria-label="End date radio"
+              type="radio"
+              name="end"
+              checked={endMode === 'date'}
+              onChange={() => setEndMode('date')}
+              className="mb-2"
+            />
+            <div className={`w-40 ${endMode === 'date' ? '' : 'opacity-50'}`}>
+              <Field label="End Date" active={endMode === 'date'}>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={e => saveEnd(e.target.value)}
+                  className={inputBase}
+                  disabled={endMode !== 'date'}
+                />
+              </Field>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Action Buttons Row */}
+      <div className="flex gap-2">
+        <button
+          onClick={handleNewCampaign}
+          className="px-4 py-1.5 rounded-lg font-medium text-sm transition bg-purple-600 hover:bg-purple-700 text-white"
+        >
+          New Campaign
+        </button>
+        {campaignStatus !== 'active' ? (
+          <button
+            onClick={handleLaunchSuspend}
+            className="px-4 py-1.5 rounded-lg font-medium text-sm transition bg-green-600 hover:bg-green-700 text-white"
+          >
+            Launch
+          </button>
+        ) : (
+          <button
+            onClick={handleLaunchSuspend}
+            className="px-4 py-1.5 rounded-lg font-medium text-sm transition bg-orange-600 hover:bg-orange-700 text-white"
+          >
+            Suspend
+          </button>
+        )}
+        <button
+          onClick={handleSave}
+          className="px-4 py-1.5 rounded-lg font-medium text-sm transition bg-blue-600 hover:bg-blue-700 text-white"
+        >
+          Save
+        </button>
+        <button
+          onClick={handleCopy}
+          className="px-4 py-1.5 rounded-lg font-medium text-sm transition bg-gray-600 hover:bg-gray-700 text-white"
+        >
+          Copy
+        </button>
+        <button
+          onClick={handleDelete}
+          className="px-4 py-1.5 rounded-lg font-medium text-sm transition bg-red-600 hover:bg-red-700 text-white"
+        >
+          Delete
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ===============================
+// CampaignsWindow – flattened fields, robust date defaults
+// ===============================
+interface CampaignsWindowProps {
+  campaigns: Campaign[];
+  activeId: string;
+  setActiveId: (id: string) => void;
+  setCampaigns: React.Dispatch<React.SetStateAction<Campaign[]>>;
+  dateRange: { start: string; end: string };
+  setDateRange: React.Dispatch<React.SetStateAction<{ start: string; end: string }>>;
+  onSelectCampaign: (campaign: Campaign) => void;
+  selectedLocations: string[];
+  selectedJobs: string[];
+}
+
+function CampaignsWindow(props: CampaignsWindowProps){
+  const {
+    campaigns = [],
+    activeId,
+    onSelectCampaign,
+  } = props || {};
 
   const previewRows = useMemo(()=>{
     return (campaigns || []).map((c)=>{
@@ -399,130 +575,11 @@ function CampaignsWindow(props: CampaignsWindowProps){
 
   return (
     <div className="bg-white border rounded-xl p-3">
-      {/* Row 1 */}
-      <div className="flex gap-2 mb-2">
-        <div className="flex-1">
-          <Field label="Campaign" active={true}>
-            <input value={name} onChange={e=>setName(e.target.value)} placeholder="Name" className={inputBase}/>
-          </Field>
-        </div>
-        <div className="w-[33%]">
-          <Field label="Start Date" active={true}>
-            <input type="date" value={start} onChange={e=>saveStart(e.target.value)} className={inputBase} />
-          </Field>
-        </div>
-      </div>
-
-      {/* Campaign End Criteria */}
-      <div className="text-xs text-gray-600 mb-2">Campaign End Criteria</div>
-      <div className="flex items-center gap-[5px] mb-3">
-        {/* Budget */}
-        <input 
-          aria-label="Budget radio" 
-          type="radio" 
-          name="end" 
-          checked={endMode==='budget'} 
-          onChange={()=>setEndMode('budget')} 
-          className={endMode==='budget' ? 'accent-black shrink-0' : 'accent-gray-400 shrink-0'} 
-        />
-        <div className={`flex-1 ${endMode==='budget' ? '' : 'opacity-60'}`}>
-          <Field label="Budget" active={endMode==='budget'}>
-            <input 
-              type="number" 
-              min={0} 
-              step={1} 
-              value={endBudget}
-              onChange={e=>setEndBudget(Math.max(0, Math.floor(Number(e.target.value||0))))}
-              className={inputBase}
-            />
-          </Field>
-        </div>
-        
-        {/* Hires */}
-        <input 
-          aria-label="Hires radio" 
-          type="radio" 
-          name="end" 
-          checked={endMode==='hires'} 
-          onChange={()=>setEndMode('hires')} 
-          className={endMode==='hires' ? 'accent-black shrink-0' : 'accent-gray-400 shrink-0'} 
-        />
-        <div className={`flex-1 ${endMode==='hires' ? '' : 'opacity-60'}`}>
-          <Field label="Hires" active={endMode==='hires'}>
-            <input 
-              type="number" 
-              min={0} 
-              step={1} 
-              value={endHires}
-              onChange={e=>setEndHires(Math.max(0, Math.floor(Number(e.target.value||0))))}
-              className={inputBase}
-            />
-          </Field>
-        </div>
-        
-        {/* End Date */}
-        <input 
-          aria-label="End date radio" 
-          type="radio" 
-          name="end" 
-          checked={endMode==='date'} 
-          onChange={()=>setEndMode('date')} 
-          className={endMode==='date' ? 'accent-black shrink-0' : 'accent-gray-400 shrink-0'} 
-        />
-        <div className={`flex-1 ${endMode==='date' ? '' : 'opacity-60'}`}>
-          <Field label="End Date" active={endMode==='date'}>
-            <input type="date" value={endDate} onChange={e=>saveEnd(e.target.value)} className={inputBase} />
-          </Field>
-        </div>
-      </div>
-
-      {/* Campaign Action Buttons */}
-      <div className="mb-3 space-y-2">
-        {/* Primary Actions */}
-        <div className="flex gap-2">
-          {campaignStatus !== 'active' && (
-            <button
-              onClick={handleLaunchSuspend}
-              className="flex-1 px-3 py-2 rounded-lg font-medium text-sm transition bg-green-600 hover:bg-green-700 text-white"
-            >
-              Launch
-            </button>
-          )}
-          {campaignStatus === 'active' && (
-            <button
-              onClick={handleLaunchSuspend}
-              className="flex-1 px-3 py-2 rounded-lg font-medium text-sm transition bg-orange-600 hover:bg-orange-700 text-white"
-            >
-              Suspend
-            </button>
-          )}
-          <button
-            onClick={handleSave}
-            className="flex-1 px-3 py-2 rounded-lg font-medium text-sm transition bg-blue-600 hover:bg-blue-700 text-white"
-          >
-            Save
-          </button>
-        </div>
-        
-        {/* Secondary Actions */}
-        <div className="flex gap-2">
-          <button
-            onClick={handleCopy}
-            className="flex-1 px-3 py-2 rounded-lg font-medium text-sm transition bg-gray-600 hover:bg-gray-700 text-white"
-          >
-            Copy
-          </button>
-          <button
-            onClick={handleDelete}
-            className="flex-1 px-3 py-2 rounded-lg font-medium text-sm transition bg-red-600 hover:bg-red-700 text-white"
-          >
-            Delete
-          </button>
-        </div>
-      </div>
-
+      {/* Title */}
+      <div className="text-sm font-semibold mb-3">Campaigns</div>
+      
       {/* Scrollable Campaign List */}
-      <div className="border rounded-lg h-64 overflow-y-scroll pr-2">
+      <div className="border rounded-lg h-[calc(100vh-200px)] overflow-y-scroll pr-2">
         <div className="divide-y">
           {previewRows.map(row=> {
             const campaign = campaigns.find(c => c.id === row.id);
