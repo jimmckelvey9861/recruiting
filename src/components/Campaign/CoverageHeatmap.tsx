@@ -260,7 +260,7 @@ export default function CoverageHeatmap({ selectedJobs }: CoverageHeatmapProps) 
     <div className="bg-white border rounded-xl p-4">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
-          <h2 className="font-semibold text-base">Coverage Heatmap</h2>
+          <h2 className="font-semibold text-base">Coverage</h2>
           
           {/* Show selected jobs with their colors */}
           <div className="flex items-center gap-2">
