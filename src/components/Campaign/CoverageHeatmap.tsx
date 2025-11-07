@@ -85,12 +85,13 @@ function cellColor(demand: number, supply: number, role: string): string {
   }
 }
 
-// Calculate the delta number to display in cell
+// Calculate the level to display in cell (-3 to +3)
 function getDeltaDisplay(demand: number, supply: number): string {
   if (demand <= 0) return ""
-  const delta = supply - demand
-  if (delta === 0) return ""
-  return delta > 0 ? `+${delta}` : `${delta}`
+  const level = getDivision(demand, supply)
+  if (level === -99) return "" // closed
+  if (level === 0) return ""   // balanced
+  return level > 0 ? `+${level}` : `${level}`
 }
 
 function isOpen(dayIdx: number, hour: number) {
@@ -116,16 +117,16 @@ function genWeek(role: string, weekOffset = 0) {
     "Barista": 7
   }
   
-  // Supply variance patterns for each role (favoring oversupply)
+  // Supply variance patterns for each role (mix of over and undersupply)
   const supplyVarianceMap: Record<string, number> = {
-    "Server": 1.15,      // +1 to +2 oversupply
-    "Cook": 1.25,        // +2 to +3 oversupply
-    "Bartender": 1.35,   // +3 oversupply
-    "Security": 1.20,    // +2 oversupply
-    "Dishwasher": 1.10,  // +1 oversupply
-    "Manager": 1.30,     // +2 to +3 oversupply
-    "Cleaner": 0.80,     // -2 undersupply (for contrast)
-    "Barista": 1.40      // +3 to +4 oversupply
+    "Server": 1.12,      // +1 oversupply (with noise can vary from 0 to +2)
+    "Cook": 1.18,        // +1 to +2 oversupply
+    "Bartender": 1.25,   // +2 to +3 oversupply
+    "Security": 1.15,    // +1 to +2 oversupply
+    "Dishwasher": 0.95,  // slight undersupply (with noise: -1 to 0)
+    "Manager": 1.20,     // +2 oversupply
+    "Cleaner": 0.75,     // -2 to -3 undersupply (with noise)
+    "Barista": 1.30      // +2 to +3 oversupply
   }
   
   const base = baseMap[role] || 5
@@ -144,7 +145,7 @@ function genWeek(role: string, weekOffset = 0) {
       
       // Generate supply with variance and some noise for realistic patterns
       const targetSupply = demand * supplyBase
-      const noiseVal = noise(weekOffset, d, s) * demand * 0.08 // Proportional noise (±8% of demand)
+      const noiseVal = noise(weekOffset, d, s) * demand * 0.15 // Proportional noise (±15% of demand)
       const supply = Math.max(0, Math.round(targetSupply + noiseVal))
       
       return { demand, supply, closed: false }
@@ -278,7 +279,7 @@ export default function CoverageHeatmap({ availableJobs }: CoverageHeatmapProps)
             <span className="inline-flex items-center gap-1"><span className="inline-block w-4 h-3 rounded" style={{background:cellColor(10, 6.5, selectedRole)}}/>-3: ≥30% undersupply (black)</span>
             <span className="inline-flex items-center gap-1 text-gray-500"><span className="inline-block w-4 h-3 rounded" style={{background:COLORS.closed}}/>closed</span>
           </div>
-          <div className="mt-2 text-gray-600">Numbers in cells show staff count difference: +N (oversupply) or -N (undersupply)</div>
+          <div className="mt-2 text-gray-600">Numbers in cells show staffing level: +1 (10-20% over), +2 (20-30% over), +3 (≥30% over), etc.</div>
         </div>
       )}
 
