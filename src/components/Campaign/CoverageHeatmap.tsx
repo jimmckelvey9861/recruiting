@@ -187,20 +187,22 @@ function rollMonth(year: number, month: number, delta: number) {
 }
 
 interface CoverageHeatmapProps {
-  availableJobs: string[];
+  selectedJobs: string[];
 }
 
-export default function CoverageHeatmap({ availableJobs }: CoverageHeatmapProps) {
-  // Default to first available job, or if none, default to "Server"
-  const defaultRole = availableJobs.length > 0 ? availableJobs[0] : "Server"
-  const [selectedRole, setSelectedRole] = useState(defaultRole)
+export default function CoverageHeatmap({ selectedJobs }: CoverageHeatmapProps) {
   const [viewMode, setViewMode] = useState<'week'|'month'|'year'>('week')
   const [showLegend, setShowLegend] = useState(false)
   const [weekOffset, setWeekOffset] = useState(0)
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear())
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth())
 
-  const weekMatrix = useMemo(() => genWeek(selectedRole, weekOffset), [selectedRole, weekOffset])
+  // Generate week matrices for all selected jobs
+  const weekMatrices = useMemo(() => 
+    selectedJobs.map(job => ({ job, matrix: genWeek(job, weekOffset) })),
+    [selectedJobs, weekOffset]
+  )
+  
   const weekStart = useMemo(() => mondayOf(weekOffset), [weekOffset])
   const weekEnd = useMemo(() => addDays(weekStart, 6), [weekStart])
 
@@ -225,22 +227,32 @@ export default function CoverageHeatmap({ availableJobs }: CoverageHeatmapProps)
     setCurrentMonth(r.month)
   }
 
+  // Show placeholder if no jobs selected
+  if (selectedJobs.length === 0) {
+    return (
+      <div className="bg-white border rounded-xl p-4">
+        <div className="text-center py-12 text-gray-500">
+          Select one or more jobs to view coverage heatmap
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="bg-white border rounded-xl p-4">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
           <h2 className="font-semibold text-base">Coverage Heatmap</h2>
           
-          {/* Compact Job Selector */}
-          <select 
-            value={selectedRole}
-            onChange={(e) => setSelectedRole(e.target.value)}
-            className="text-sm border rounded px-2 py-1 bg-white"
-          >
-            {availableJobs.map(job => (
-              <option key={job} value={job}>{job}</option>
+          {/* Show selected jobs with their colors */}
+          <div className="flex items-center gap-2">
+            {selectedJobs.map(job => (
+              <div key={job} className="flex items-center gap-1 text-xs">
+                <div className="w-3 h-3 rounded" style={{ background: JOB_BASE_COLORS[job] || '#3498DB' }} />
+                <span>{job}</span>
+              </div>
             ))}
-          </select>
+          </div>
 
           {viewMode === 'week' && (
             <div className="flex items-center gap-1 text-sm">
@@ -277,27 +289,27 @@ export default function CoverageHeatmap({ availableJobs }: CoverageHeatmapProps)
         <div className="mb-3 p-2 border rounded bg-gray-50 text-xs">
           <div className="mb-2 font-semibold">7 staffing levels (10% increments):</div>
           <div className="flex flex-wrap gap-3">
-            <span className="inline-flex items-center gap-1"><span className="inline-block w-4 h-3 rounded" style={{background:cellColor(10, 14, selectedRole)}}/>+3: ≥30% oversupply (white)</span>
-            <span className="inline-flex items-center gap-1"><span className="inline-block w-4 h-3 rounded" style={{background:cellColor(10, 12.5, selectedRole)}}/>+2: 20-30% oversupply</span>
-            <span className="inline-flex items-center gap-1"><span className="inline-block w-4 h-3 rounded" style={{background:cellColor(10, 11.5, selectedRole)}}/>+1: 10-20% oversupply</span>
-            <span className="inline-flex items-center gap-1"><span className="inline-block w-4 h-3 rounded" style={{background:cellColor(10, 10, selectedRole)}}/>0: balanced (base color)</span>
-            <span className="inline-flex items-center gap-1"><span className="inline-block w-4 h-3 rounded" style={{background:cellColor(10, 8.5, selectedRole)}}/>-1: 10-20% undersupply</span>
-            <span className="inline-flex items-center gap-1"><span className="inline-block w-4 h-3 rounded" style={{background:cellColor(10, 7.5, selectedRole)}}/>-2: 20-30% undersupply</span>
-            <span className="inline-flex items-center gap-1"><span className="inline-block w-4 h-3 rounded" style={{background:cellColor(10, 6.5, selectedRole)}}/>-3: ≥30% undersupply (black)</span>
+            <span className="inline-flex items-center gap-1"><span className="inline-block w-4 h-3 rounded" style={{background:cellColor(10, 14, selectedJobs[0])}}/>+3: ≥30% oversupply (white)</span>
+            <span className="inline-flex items-center gap-1"><span className="inline-block w-4 h-3 rounded" style={{background:cellColor(10, 12.5, selectedJobs[0])}}/>+2: 20-30% oversupply</span>
+            <span className="inline-flex items-center gap-1"><span className="inline-block w-4 h-3 rounded" style={{background:cellColor(10, 11.5, selectedJobs[0])}}/>+1: 10-20% oversupply</span>
+            <span className="inline-flex items-center gap-1"><span className="inline-block w-4 h-3 rounded" style={{background:cellColor(10, 10, selectedJobs[0])}}/>0: balanced (base color)</span>
+            <span className="inline-flex items-center gap-1"><span className="inline-block w-4 h-3 rounded" style={{background:cellColor(10, 8.5, selectedJobs[0])}}/>-1: 10-20% undersupply</span>
+            <span className="inline-flex items-center gap-1"><span className="inline-block w-4 h-3 rounded" style={{background:cellColor(10, 7.5, selectedJobs[0])}}/>-2: 20-30% undersupply</span>
+            <span className="inline-flex items-center gap-1"><span className="inline-block w-4 h-3 rounded" style={{background:cellColor(10, 6.5, selectedJobs[0])}}/>-3: ≥30% undersupply (black)</span>
             <span className="inline-flex items-center gap-1 text-gray-500"><span className="inline-block w-4 h-3 rounded" style={{background:COLORS.closed}}/>closed</span>
           </div>
-          <div className="mt-2 text-gray-600">Numbers in cells show staffing level: +1 (10-20% over), +2 (20-30% over), +3 (≥30% over), etc.</div>
+          <div className="mt-2 text-gray-600">Numbers in cells show staffing level. When multiple jobs selected, cells subdivide laterally.</div>
         </div>
       )}
 
       <div className="overflow-auto max-h-[400px]">
         {viewMode === 'week' && (
-          <WeekGrid weekMatrix={weekMatrix} role={selectedRole} />
+          <WeekGrid weekMatrices={weekMatrices} />
         )}
         {viewMode === 'month' && (
           <MonthGrid
-            weekMatrix={weekMatrix}
-            role={selectedRole}
+            weekMatrix={weekMatrices[0]?.matrix || []}
+            role={selectedJobs[0]}
             year={currentYear}
             month={currentMonth}
             onDayClick={(dateObj: Date)=>goToWeekContaining(dateObj)}
@@ -305,8 +317,8 @@ export default function CoverageHeatmap({ availableJobs }: CoverageHeatmapProps)
         )}
         {viewMode === 'year' && (
           <YearGridDays
-            weekMatrix={weekMatrix}
-            role={selectedRole}
+            weekMatrix={weekMatrices[0]?.matrix || []}
+            role={selectedJobs[0]}
             year={currentYear}
             onMonthClick={(monthIdx: number)=>goToMonth(currentYear, monthIdx)}
           />
@@ -316,7 +328,9 @@ export default function CoverageHeatmap({ availableJobs }: CoverageHeatmapProps)
   )
 }
 
-function WeekGrid({ weekMatrix, role }: { weekMatrix: { demand: number; supply: number; closed: boolean }[][], role: string }) {
+function WeekGrid({ weekMatrices }: { weekMatrices: { job: string, matrix: { demand: number; supply: number; closed: boolean }[][] }[] }) {
+  const jobCount = weekMatrices.length
+  
   return (
     <div className="min-w-[720px]">
       <div className="grid" style={{ gridTemplateColumns: `60px repeat(7, 1fr)`, columnGap: '2px' }}>
@@ -339,23 +353,29 @@ function WeekGrid({ weekMatrix, role }: { weekMatrix: { demand: number; supply: 
                     <span className="absolute -translate-y-2 text-[9px] leading-none text-gray-500">{hourLabel}</span>
                   )}
                 </div>
-                {weekMatrix.map((daySlots, dayIdx) => {
-                  const { demand, supply, closed } = daySlots[rowIdx]
-                  const bg = closed ? COLORS.closed : cellColor(demand, supply, role)
-                  const delta = getDeltaDisplay(demand, supply)
-                  // White text for undersupply (shades/darker), black text for oversupply (tints/lighter)
-                  const isUndersupply = !closed && (supply - demand) < 0
-                  return (
-                    <div
-                      key={`${dayIdx}-${rowIdx}`}
-                      title={`D:${demand} S:${supply}${closed?' (closed)':''}`}
-                      style={{ height: '18px', background: bg }}
-                      className="flex items-center justify-center text-[9px] font-medium"
-                    >
-                      <span className={isUndersupply ? "text-white" : "text-gray-900"}>{delta}</span>
-                    </div>
-                  )
-                })}
+                {/* For each day column */}
+                {Array.from({ length: 7 }).map((_, dayIdx) => (
+                  <div key={dayIdx} className="flex h-[18px]">
+                    {/* Subdivide laterally for each job */}
+                    {weekMatrices.map(({ job, matrix }) => {
+                      const { demand, supply, closed } = matrix[dayIdx][rowIdx]
+                      const bg = closed ? COLORS.closed : cellColor(demand, supply, job)
+                      const delta = getDeltaDisplay(demand, supply)
+                      const isUndersupply = !closed && (supply - demand) < 0
+                      
+                      return (
+                        <div
+                          key={job}
+                          title={`${job}: D:${demand} S:${supply}${closed?' (closed)':''}`}
+                          style={{ background: bg, width: `${100 / jobCount}%` }}
+                          className="flex items-center justify-center text-[9px] font-medium"
+                        >
+                          <span className={isUndersupply ? "text-white" : "text-gray-900"}>{delta}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ))}
               </div>
               <div className="grid" style={{ gridTemplateColumns: `60px repeat(7, 1fr)`, columnGap: '2px' }}>
                 <div style={{ height: '2px', background: '#f1f5f9' }} />

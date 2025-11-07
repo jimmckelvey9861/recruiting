@@ -172,7 +172,7 @@ export default function CampaignManager({ selectedLocations, setSelectedLocation
         {/* RIGHT: Heatmap + Sources + Chart */}
         <div className="col-span-12 md:col-span-7 lg:col-span-8 space-y-4">
           {/* Coverage Heatmap */}
-          <CoverageHeatmap availableJobs={selectedJobs.length > 0 ? selectedJobs : ['Server', 'Cook', 'Bartender', 'Security', 'Dishwasher', 'Manager', 'Cleaner', 'Barista']} />
+          <CoverageHeatmap selectedJobs={selectedJobs} />
           
           {/* Combined Sources Section */}
           <div className="bg-white border rounded-xl p-4">
