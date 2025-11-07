@@ -405,9 +405,19 @@ function MonthGrid(
   const jobCount = weekMatrices.length
   const cellHeight = jobCount === 1 ? 64 : 32 * jobCount // Scale height based on job count
 
-  // For each job, calculate distribution across 7 divisions for each weekday
-  const jobsData = weekMatrices.map(({ job, matrix }) => {
-    const divisionsByWeekday = matrix.map(daySlots => {
+  const first = new Date(year, month, 1)
+  
+  // Calculate week offset for this month relative to current month
+  const now = new Date()
+  const currentYear = now.getFullYear()
+  const currentMonth = now.getMonth()
+  const monthsFromNow = (year - currentYear) * 12 + (month - currentMonth)
+  const weeksFromNow = Math.round(monthsFromNow * 4.33) // ~4.33 weeks per month
+  
+  // For each job, generate data for this specific month and calculate distribution
+  const jobsData = weekMatrices.map(({ job }) => {
+    const monthMatrix = genWeek(job, weeksFromNow)
+    const divisionsByWeekday = monthMatrix.map(daySlots => {
       const counts = Array(7).fill(0) // 7 divisions (-3 to +3)
       for (const { demand, supply, closed } of daySlots) {
         if (!closed) {
@@ -421,8 +431,7 @@ function MonthGrid(
     })
     return { job, divisionsByWeekday }
   })
-
-  const first = new Date(year, month, 1)
+  
   const lastDay = new Date(year, month + 1, 0).getDate()
   const firstWeekdayJS = first.getDay()
   const firstWeekdayMon0 = (firstWeekdayJS + 6) % 7
@@ -491,24 +500,10 @@ function YearGridDays(
   const cellHeight = jobCount === 1 ? 10 : 6 * jobCount // Scale height based on job count
   const monthHeight = jobCount === 1 ? 154 : 100 + (jobCount * 15) // Scale month card height
 
-  // For each job, calculate distribution across 7 divisions for each weekday
-  const jobsData = weekMatrices.map(({ job, matrix }) => {
-    const divisionsByWeekday = matrix.map(daySlots => {
-      const counts = Array(7).fill(0) // 7 divisions (-3 to +3)
-      for (const { demand, supply, closed } of daySlots) {
-        if (!closed) {
-          const div = getDivision(demand, supply)
-          if (div >= -3 && div <= 3) {
-            counts[div + 3]++ // Map -3 to index 0, 0 to index 3, +3 to index 6
-          }
-        }
-      }
-      return counts
-    })
-    return { job, divisionsByWeekday }
-  })
-
   const yr = year || new Date().getFullYear()
+  const now = new Date()
+  const currentYear = now.getFullYear()
+  const currentMonth = now.getMonth()
 
   return (
     <div className="grid gap-3 p-3" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
@@ -518,6 +513,28 @@ function YearGridDays(
         const firstWeekdayJS = first.getDay()
         const firstWeekdayMon0 = (firstWeekdayJS + 6) % 7
 
+        // Calculate week offset for this month relative to current month
+        const monthsFromNow = (yr - currentYear) * 12 + (m - currentMonth)
+        const weeksFromNow = Math.round(monthsFromNow * 4.33) // ~4.33 weeks per month
+        
+        // Generate data for each job for this specific month's offset
+        const jobsDataForMonth = weekMatrices.map(({ job }) => {
+          const monthMatrix = genWeek(job, weeksFromNow)
+          const divisionsByWeekday = monthMatrix.map(daySlots => {
+            const counts = Array(7).fill(0) // 7 divisions (-3 to +3)
+            for (const { demand, supply, closed } of daySlots) {
+              if (!closed) {
+                const div = getDivision(demand, supply)
+                if (div >= -3 && div <= 3) {
+                  counts[div + 3]++ // Map -3 to index 0, 0 to index 3, +3 to index 6
+                }
+              }
+            }
+            return counts
+          })
+          return { job, divisionsByWeekday }
+        })
+
         const cells = Array.from({ length: 42 }, (_, idx) => {
           const dayNum = idx - firstWeekdayMon0 + 1
           if (dayNum < 1 || dayNum > lastDay) return { type: 'empty' as const }
@@ -526,7 +543,7 @@ function YearGridDays(
           const weekday = (jsDay + 6) % 7
           
           // Build data for each job for this day
-          const jobsPercentages = jobsData.map(({ job, divisionsByWeekday }) => {
+          const jobsPercentages = jobsDataForMonth.map(({ job, divisionsByWeekday }) => {
             const counts = divisionsByWeekday[weekday]
             const total = counts.reduce((a, b) => a + b, 0)
             if (total === 0) return { job, percentages: null }
