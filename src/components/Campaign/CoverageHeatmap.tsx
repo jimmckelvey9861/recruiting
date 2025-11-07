@@ -144,7 +144,7 @@ function genWeek(role: string, weekOffset = 0) {
       
       // Generate supply with variance and some noise for realistic patterns
       const targetSupply = demand * supplyBase
-      const noiseVal = noise(weekOffset, d, s) * 1.5 // Added noise for variance
+      const noiseVal = noise(weekOffset, d, s) * demand * 0.08 // Proportional noise (±8% of demand)
       const supply = Math.max(0, Math.round(targetSupply + noiseVal))
       
       return { demand, supply, closed: false }
