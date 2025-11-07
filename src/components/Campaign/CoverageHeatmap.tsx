@@ -42,10 +42,8 @@ function rgbToHex(r: number, g: number, b: number): string {
 }
 
 // Calculate color based on supply/demand delta
-// For oversupply: add white tint (20% per 10% oversupply)
-// For undersupply: add black tint (20% per 10% undersupply)
-// 50%+ oversupply = completely white
-// 50%+ undersupply = completely black
+// 7 divisions: -3 (black), -2, -1, 0 (base), +1, +2, +3 (white)
+// Each division is 10% staffing increment
 function cellColor(demand: number, supply: number, role: string): string {
   if (demand <= 0 && supply <= 0) return COLORS.closed
   
@@ -55,25 +53,35 @@ function cellColor(demand: number, supply: number, role: string): string {
   // Calculate delta as a percentage
   const delta = (supply - demand) / Math.max(1, demand)
   
-  // Clamp delta to +/- 50%
-  const clampedDelta = Math.max(-0.5, Math.min(0.5, delta))
+  // Determine division level (-3 to +3)
+  let level = 0
+  if (delta <= -0.30) level = -3       // -30% or worse → black
+  else if (delta <= -0.20) level = -2  // -20% to -30%
+  else if (delta <= -0.10) level = -1  // -10% to -20%
+  else if (delta >= 0.30) level = 3    // +30% or more → white
+  else if (delta >= 0.20) level = 2    // +20% to +30%
+  else if (delta >= 0.10) level = 1    // +10% to +20%
+  // else level = 0 (balanced, -10% to +10%)
   
-  if (clampedDelta >= 0) {
+  if (level > 0) {
     // Oversupply: blend towards white
-    // 50% oversupply = 100% white, 0% = base color
-    const whiteBlend = clampedDelta * 2 // 0 to 1
+    // level 1 = 33% white, level 2 = 66% white, level 3 = 100% white
+    const whiteBlend = level / 3
     const r = rgb.r + (255 - rgb.r) * whiteBlend
     const g = rgb.g + (255 - rgb.g) * whiteBlend
     const b = rgb.b + (255 - rgb.b) * whiteBlend
     return rgbToHex(r, g, b)
-  } else {
+  } else if (level < 0) {
     // Undersupply: blend towards black
-    // -50% undersupply = 100% black, 0% = base color
-    const blackBlend = Math.abs(clampedDelta) * 2 // 0 to 1
+    // level -1 = 33% black, level -2 = 66% black, level -3 = 100% black
+    const blackBlend = Math.abs(level) / 3
     const r = rgb.r * (1 - blackBlend)
     const g = rgb.g * (1 - blackBlend)
     const b = rgb.b * (1 - blackBlend)
     return rgbToHex(r, g, b)
+  } else {
+    // Balanced: return base color
+    return baseColor
   }
 }
 
@@ -108,16 +116,16 @@ function genWeek(role: string, weekOffset = 0) {
     "Barista": 7
   }
   
-  // Supply variance patterns for each role (wider range for better visualization)
+  // Supply variance patterns for each role (favoring oversupply)
   const supplyVarianceMap: Record<string, number> = {
-    "Server": 0.75,      // Heavy undersupply
-    "Cook": 0.85,        // Moderate undersupply
-    "Bartender": 1.20,   // Moderate oversupply
-    "Security": 1.40,    // Heavy oversupply
-    "Dishwasher": 0.95,  // Slight undersupply
-    "Manager": 1.05,     // Slight oversupply
-    "Cleaner": 0.60,     // Very heavy undersupply
-    "Barista": 1.50      // Very heavy oversupply
+    "Server": 1.15,      // +1 to +2 oversupply
+    "Cook": 1.25,        // +2 to +3 oversupply
+    "Bartender": 1.35,   // +3 oversupply
+    "Security": 1.20,    // +2 oversupply
+    "Dishwasher": 1.10,  // +1 oversupply
+    "Manager": 1.30,     // +2 to +3 oversupply
+    "Cleaner": 0.80,     // -2 undersupply (for contrast)
+    "Barista": 1.40      // +3 to +4 oversupply
   }
   
   const base = baseMap[role] || 5
@@ -259,18 +267,18 @@ export default function CoverageHeatmap({ availableJobs }: CoverageHeatmapProps)
 
       {showLegend && (
         <div className="mb-3 p-2 border rounded bg-gray-50 text-xs">
-          <div className="mb-2 font-semibold">Color indicates supply relative to demand:</div>
+          <div className="mb-2 font-semibold">7 staffing levels (10% increments):</div>
           <div className="flex flex-wrap gap-3">
-            <span className="inline-flex items-center gap-1"><span className="inline-block w-4 h-3 rounded" style={{background:"#FFFFFF", border:"1px solid #ccc"}}/>50%+ oversupply (white)</span>
-            <span className="inline-flex items-center gap-1"><span className="inline-block w-4 h-3 rounded" style={{background:cellColor(10, 13, selectedRole)}}/>30% oversupply (lighter)</span>
-            <span className="inline-flex items-center gap-1"><span className="inline-block w-4 h-3 rounded" style={{background:cellColor(10, 11, selectedRole)}}/>10% oversupply</span>
-            <span className="inline-flex items-center gap-1"><span className="inline-block w-4 h-3 rounded" style={{background:cellColor(10, 10, selectedRole)}}/>balanced (base color)</span>
-            <span className="inline-flex items-center gap-1"><span className="inline-block w-4 h-3 rounded" style={{background:cellColor(10, 9, selectedRole)}}/>10% undersupply</span>
-            <span className="inline-flex items-center gap-1"><span className="inline-block w-4 h-3 rounded" style={{background:cellColor(10, 7, selectedRole)}}/>30% undersupply (darker)</span>
-            <span className="inline-flex items-center gap-1"><span className="inline-block w-4 h-3 rounded" style={{background:"#000000"}}/>50%+ undersupply (black)</span>
-            <span className="inline-flex items-center gap-1 text-gray-500"><span className="inline-block w-4 h-3 rounded" style={{background:COLORS.closed}}/>closed / no demand</span>
+            <span className="inline-flex items-center gap-1"><span className="inline-block w-4 h-3 rounded" style={{background:cellColor(10, 14, selectedRole)}}/>+3: ≥30% oversupply (white)</span>
+            <span className="inline-flex items-center gap-1"><span className="inline-block w-4 h-3 rounded" style={{background:cellColor(10, 12.5, selectedRole)}}/>+2: 20-30% oversupply</span>
+            <span className="inline-flex items-center gap-1"><span className="inline-block w-4 h-3 rounded" style={{background:cellColor(10, 11.5, selectedRole)}}/>+1: 10-20% oversupply</span>
+            <span className="inline-flex items-center gap-1"><span className="inline-block w-4 h-3 rounded" style={{background:cellColor(10, 10, selectedRole)}}/>0: balanced (base color)</span>
+            <span className="inline-flex items-center gap-1"><span className="inline-block w-4 h-3 rounded" style={{background:cellColor(10, 8.5, selectedRole)}}/>-1: 10-20% undersupply</span>
+            <span className="inline-flex items-center gap-1"><span className="inline-block w-4 h-3 rounded" style={{background:cellColor(10, 7.5, selectedRole)}}/>-2: 20-30% undersupply</span>
+            <span className="inline-flex items-center gap-1"><span className="inline-block w-4 h-3 rounded" style={{background:cellColor(10, 6.5, selectedRole)}}/>-3: ≥30% undersupply (black)</span>
+            <span className="inline-flex items-center gap-1 text-gray-500"><span className="inline-block w-4 h-3 rounded" style={{background:COLORS.closed}}/>closed</span>
           </div>
-          <div className="mt-2 text-gray-600">Numbers in cells show the difference: +N (oversupply) or -N (undersupply)</div>
+          <div className="mt-2 text-gray-600">Numbers in cells show staff count difference: +N (oversupply) or -N (undersupply)</div>
         </div>
       )}
 
@@ -355,36 +363,34 @@ function WeekGrid({ weekMatrix, role }: { weekMatrix: { demand: number; supply: 
   )
 }
 
-// Classify supply/demand delta into 11 divisions from black to white
+// Classify supply/demand delta into 7 divisions (-3 to +3)
 function getDivision(demand: number, supply: number): number {
-  if (demand <= 0) return -1 // closed/no demand
+  if (demand <= 0) return -99 // closed/no demand (special value)
   const delta = (supply - demand) / demand
   
-  // 11 divisions (0-10) from black to white
-  if (delta <= -0.40) return 0  // -40% or worse (black)
-  if (delta <= -0.30) return 1  // -30% to -40%
-  if (delta <= -0.20) return 2  // -20% to -30%
-  if (delta <= -0.10) return 3  // -10% to -20%
-  if (delta <= -0.05) return 4  // -5% to -10%
-  if (delta <= 0.05) return 5   // -5% to +5% (balanced)
-  if (delta <= 0.10) return 6   // +5% to +10%
-  if (delta <= 0.20) return 7   // +10% to +20%
-  if (delta <= 0.30) return 8   // +20% to +30%
-  if (delta <= 0.40) return 9   // +30% to +40%
-  return 10                      // +40% or more (white)
+  // 7 divisions: -3, -2, -1, 0, +1, +2, +3
+  if (delta <= -0.30) return -3  // -30% or worse → black
+  if (delta <= -0.20) return -2  // -20% to -30%
+  if (delta <= -0.10) return -1  // -10% to -20%
+  if (delta >= 0.30) return 3    // +30% or more → white
+  if (delta >= 0.20) return 2    // +20% to +30%
+  if (delta >= 0.10) return 1    // +10% to +20%
+  return 0                        // -10% to +10% (balanced)
 }
 
 function MonthGrid(
   { weekMatrix, role, year, month, onDayClick }:
   { weekMatrix: { demand: number; supply: number; closed: boolean }[][], role: string, year: number, month: number, onDayClick?: (d: Date)=>void }
 ) {
-  // Count distribution across 11 divisions for each weekday
+  // Count distribution across 7 divisions for each weekday
   const divisionsByWeekday = weekMatrix.map(daySlots => {
-    const counts = Array(11).fill(0) // 11 divisions (0-10)
+    const counts = Array(7).fill(0) // 7 divisions (-3 to +3)
     for (const { demand, supply, closed } of daySlots) {
       if (!closed) {
         const div = getDivision(demand, supply)
-        if (div >= 0 && div <= 10) counts[div]++
+        if (div >= -3 && div <= 3) {
+          counts[div + 3]++ // Map -3 to index 0, 0 to index 3, +3 to index 6
+        }
       }
     }
     return counts
@@ -423,19 +429,15 @@ function MonthGrid(
             <div className="flex-1 rounded overflow-hidden flex">
               {c.percentages.map((pct, divIdx) => {
                 if (pct <= 0) return null
-                // Generate color for this division (0-10)
+                // Generate color for this division (7 divisions: -3 to +3)
                 const mockDemand = 10
-                const mockSupply = divIdx === 0 ? 5.5 :  // -40% or worse
-                                  divIdx === 1 ? 6.5 :   // -30% to -40%
-                                  divIdx === 2 ? 7.5 :   // -20% to -30%
-                                  divIdx === 3 ? 8.5 :   // -10% to -20%
-                                  divIdx === 4 ? 9.5 :   // -5% to -10%
-                                  divIdx === 5 ? 10 :    // -5% to +5% (balanced)
-                                  divIdx === 6 ? 10.5 :  // +5% to +10%
-                                  divIdx === 7 ? 11.5 :  // +10% to +20%
-                                  divIdx === 8 ? 12.5 :  // +20% to +30%
-                                  divIdx === 9 ? 13.5 :  // +30% to +40%
-                                  15                      // +40% or more
+                const mockSupply = divIdx === 0 ? 6.5 :  // -3: -30% or worse
+                                  divIdx === 1 ? 7.5 :   // -2: -20% to -30%
+                                  divIdx === 2 ? 8.5 :   // -1: -10% to -20%
+                                  divIdx === 3 ? 10 :    // 0: balanced
+                                  divIdx === 4 ? 11.5 :  // +1: +10% to +20%
+                                  divIdx === 5 ? 12.5 :  // +2: +20% to +30%
+                                  14                      // +3: +30% or more
                 const color = cellColor(mockDemand, mockSupply, role)
                 return <div key={divIdx} style={{ width: `${pct}%`, background: color }} />
               })}
@@ -451,13 +453,15 @@ function YearGridDays(
   { weekMatrix, role, year, onMonthClick }:
   { weekMatrix: { demand: number; supply: number; closed: boolean }[][], role: string, year?: number, onMonthClick?: (m: number)=>void }
 ) {
-  // Count distribution across 11 divisions for each weekday
+  // Count distribution across 7 divisions for each weekday
   const divisionsByWeekday = weekMatrix.map(daySlots => {
-    const counts = Array(11).fill(0) // 11 divisions (0-10)
+    const counts = Array(7).fill(0) // 7 divisions (-3 to +3)
     for (const { demand, supply, closed } of daySlots) {
       if (!closed) {
         const div = getDivision(demand, supply)
-        if (div >= 0 && div <= 10) counts[div]++
+        if (div >= -3 && div <= 3) {
+          counts[div + 3]++ // Map -3 to index 0, 0 to index 3, +3 to index 6
+        }
       }
     }
     return counts
@@ -505,19 +509,15 @@ function YearGridDays(
                     <div className="w-full h-[10px] rounded overflow-hidden flex">
                       {c.percentages.map((pct, divIdx) => {
                         if (pct <= 0) return null
-                        // Generate color for this division (0-10)
+                        // Generate color for this division (7 divisions: -3 to +3)
                         const mockDemand = 10
-                        const mockSupply = divIdx === 0 ? 5.5 :  // -40% or worse
-                                          divIdx === 1 ? 6.5 :   // -30% to -40%
-                                          divIdx === 2 ? 7.5 :   // -20% to -30%
-                                          divIdx === 3 ? 8.5 :   // -10% to -20%
-                                          divIdx === 4 ? 9.5 :   // -5% to -10%
-                                          divIdx === 5 ? 10 :    // -5% to +5% (balanced)
-                                          divIdx === 6 ? 10.5 :  // +5% to +10%
-                                          divIdx === 7 ? 11.5 :  // +10% to +20%
-                                          divIdx === 8 ? 12.5 :  // +20% to +30%
-                                          divIdx === 9 ? 13.5 :  // +30% to +40%
-                                          15                      // +40% or more
+                        const mockSupply = divIdx === 0 ? 6.5 :  // -3: -30% or worse
+                                          divIdx === 1 ? 7.5 :   // -2: -20% to -30%
+                                          divIdx === 2 ? 8.5 :   // -1: -10% to -20%
+                                          divIdx === 3 ? 10 :    // 0: balanced
+                                          divIdx === 4 ? 11.5 :  // +1: +10% to +20%
+                                          divIdx === 5 ? 12.5 :  // +2: +20% to +30%
+                                          14                      // +3: +30% or more
                         const color = cellColor(mockDemand, mockSupply, role)
                         return <div key={divIdx} style={{ width: `${pct}%`, background: color }} />
                       })}
