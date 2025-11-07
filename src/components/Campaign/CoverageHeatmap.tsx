@@ -104,6 +104,19 @@ function noise(seed: number, d: number, s: number) {
   return (x - Math.floor(x)) * 2 - 1
 }
 
+// Box-Muller transform to generate normally distributed random numbers
+function normalRandom(seed: number, d: number, s: number, mean: number = 0, stdDev: number = 1.5): number {
+  // Generate two uniform random numbers using different seeds
+  const x1 = Math.sin((seed + 1) * 9301 + d * 49297 + s * 233280) * 43758.5453
+  const u1 = x1 - Math.floor(x1)
+  const x2 = Math.sin((seed + 2) * 9301 + d * 49297 + (s + 1) * 233280) * 43758.5453
+  const u2 = x2 - Math.floor(x2)
+  
+  // Box-Muller transform
+  const z0 = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2)
+  return mean + z0 * stdDev
+}
+
 function genWeek(role: string, weekOffset = 0) {
   // Base demand levels for each role
   const baseMap: Record<string, number> = {
@@ -117,20 +130,7 @@ function genWeek(role: string, weekOffset = 0) {
     "Barista": 7
   }
   
-  // Supply variance patterns for each role (mix of over and undersupply)
-  const supplyVarianceMap: Record<string, number> = {
-    "Server": 1.12,      // +1 oversupply (with noise can vary from 0 to +2)
-    "Cook": 1.18,        // +1 to +2 oversupply
-    "Bartender": 1.25,   // +2 to +3 oversupply
-    "Security": 1.15,    // +1 to +2 oversupply
-    "Dishwasher": 0.95,  // slight undersupply (with noise: -1 to 0)
-    "Manager": 1.20,     // +2 oversupply
-    "Cleaner": 0.75,     // -2 to -3 undersupply (with noise)
-    "Barista": 1.30      // +2 to +3 oversupply
-  }
-  
   const base = baseMap[role] || 5
-  const supplyBase = supplyVarianceMap[role] || 1.0
   
   return Array.from({ length: 7 }, (_, d) => (
     Array.from({ length: 48 }, (_, s) => {
@@ -143,10 +143,17 @@ function genWeek(role: string, weekOffset = 0) {
       const phase = 1 + 0.03 * Math.sin((weekOffset * 7 + d + s / 48) * 0.9)
       const demand = Math.round(base * phase * (0.25 + 1.2 * (0.7 * lunch + 1.0 * dinner)) * weekend)
       
-      // Generate supply with variance and some noise for realistic patterns
-      const targetSupply = demand * supplyBase
-      const noiseVal = noise(weekOffset, d, s) * demand * 0.15 // Proportional noise (±15% of demand)
-      const supply = Math.max(0, Math.round(targetSupply + noiseVal))
+      // Generate supply using normal distribution
+      // Mean = 0 (balanced), StdDev = 1.5 gives good spread across -3 to +3
+      // This creates a bell curve centered at balanced staffing
+      const normalValue = normalRandom(weekOffset, d, s, 0, 1.5)
+      
+      // Convert normal value to percentage delta
+      // -3σ to +3σ maps roughly to -30% to +30%
+      const percentDelta = normalValue * 0.10 // Each unit is 10%
+      
+      // Calculate supply based on demand + percentage delta
+      const supply = Math.max(0, Math.round(demand * (1 + percentDelta)))
       
       return { demand, supply, closed: false }
     })
