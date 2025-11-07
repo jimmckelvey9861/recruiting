@@ -313,6 +313,7 @@ export default function CoverageHeatmap({ selectedJobs }: CoverageHeatmapProps) 
             weekMatrices={weekMatrices}
             year={currentYear}
             onMonthClick={(monthIdx: number)=>goToMonth(currentYear, monthIdx)}
+            onDayClick={(dateObj: Date)=>goToWeekContaining(dateObj)}
           />
         )}
       </div>
@@ -493,8 +494,8 @@ function MonthGrid(
 }
 
 function YearGridDays(
-  { weekMatrices, year, onMonthClick }:
-  { weekMatrices: { job: string, matrix: { demand: number; supply: number; closed: boolean }[][] }[], year?: number, onMonthClick?: (m: number)=>void }
+  { weekMatrices, year, onMonthClick, onDayClick }:
+  { weekMatrices: { job: string, matrix: { demand: number; supply: number; closed: boolean }[][] }[], year?: number, onMonthClick?: (m: number)=>void, onDayClick?: (d: Date)=>void }
 ) {
   const jobCount = weekMatrices.length
   const cellHeight = jobCount === 1 ? 10 : 6 * jobCount // Scale height based on job count
@@ -537,7 +538,7 @@ function YearGridDays(
 
         const cells = Array.from({ length: 42 }, (_, idx) => {
           const dayNum = idx - firstWeekdayMon0 + 1
-          if (dayNum < 1 || dayNum > lastDay) return { type: 'empty' as const }
+          if (dayNum < 1 || dayNum > lastDay) return { type: 'empty' as const, dateObj: null }
           const dt = new Date(yr, m, dayNum)
           const jsDay = dt.getDay()
           const weekday = (jsDay + 6) % 7
@@ -552,9 +553,9 @@ function YearGridDays(
           })
           
           const allClosed = jobsPercentages.every(jp => jp.percentages === null)
-          if (allClosed) return { type: 'closed' as const }
+          if (allClosed) return { type: 'closed' as const, dateObj: dt }
           
-          return { type: 'divisions' as const, jobsPercentages }
+          return { type: 'divisions' as const, jobsPercentages, dateObj: dt }
         })
 
         return (
@@ -567,7 +568,12 @@ function YearGridDays(
                 <div key={`h-${m}-${idx}`} className="text-[9px] text-gray-400 text-center">{d[0]}</div>
               ))}
               {cells.map((c, idx) => (
-                <div key={idx} style={{ height: `${cellHeight + 6}px` }}>
+                <div 
+                  key={idx} 
+                  style={{ height: `${cellHeight + 6}px` }}
+                  className={c.dateObj ? "cursor-pointer" : ""}
+                  onClick={() => c.dateObj && onDayClick && onDayClick(c.dateObj)}
+                >
                   {c.type === 'empty' && <div className="w-full rounded bg-gray-100" style={{ height: `${cellHeight}px` }} />}
                   {c.type === 'closed' && <div className="w-full rounded" style={{ height: `${cellHeight}px`, background: COLORS.closed }} />}
                   {c.type === 'divisions' && (
