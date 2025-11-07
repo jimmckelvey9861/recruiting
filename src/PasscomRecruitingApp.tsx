@@ -174,12 +174,19 @@ export default function PasscomRecruitingApp() {
                   onClick={() => setShowJobDropdown(!showJobDropdown)}
                   className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm hover:bg-gray-50 flex items-center gap-2 min-w-[140px]"
                 >
-                  <span className="text-gray-700 truncate">
-                    {selectedJobs.length === 0 
-                      ? 'Select Jobs' 
-                      : selectedJobs.join(', ')}
-                  </span>
-                  <span className="text-gray-400">▼</span>
+                  {selectedJobs.length === 0 ? (
+                    <span className="text-gray-700">Select Jobs</span>
+                  ) : (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {selectedJobs.map(job => (
+                        <div key={job} className="flex items-center gap-1">
+                          <div className="w-3 h-3 rounded" style={{ background: JOB_BASE_COLORS[job] || '#3498DB' }} />
+                          <span className="text-gray-700">{job}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <span className="text-gray-400 ml-auto">▼</span>
                 </button>
                 
                 {showJobDropdown && (
@@ -203,6 +210,7 @@ export default function PasscomRecruitingApp() {
                             </svg>
                           )}
                         </div>
+                        <div className="w-3 h-3 rounded mr-2 flex-shrink-0" style={{ background: JOB_BASE_COLORS[job] || '#3498DB' }} />
                         <span className="text-sm">{job}</span>
                       </label>
                     ))}

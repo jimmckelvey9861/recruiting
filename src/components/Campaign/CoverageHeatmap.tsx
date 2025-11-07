@@ -261,16 +261,6 @@ export default function CoverageHeatmap({ selectedJobs }: CoverageHeatmapProps) 
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
           <h2 className="font-semibold text-base">Coverage</h2>
-          
-          {/* Show selected jobs with their colors */}
-          <div className="flex items-center gap-2">
-            {selectedJobs.map(job => (
-              <div key={job} className="flex items-center gap-1 text-xs">
-                <div className="w-3 h-3 rounded" style={{ background: JOB_BASE_COLORS[job] || '#3498DB' }} />
-                <span>{job}</span>
-              </div>
-            ))}
-          </div>
 
           {viewMode === 'week' && (
             <div className="flex items-center gap-1 text-sm">
