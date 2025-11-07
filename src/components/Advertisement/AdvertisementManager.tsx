@@ -2,6 +2,17 @@ import { useState } from 'react';
 import JobFormSections from './JobFormSections';
 import MobilePreview from '../MobilePreview';
 
+const JOB_BASE_COLORS: Record<string, string> = {
+  "Server": "#D72A4D",       // Red
+  "Cook": "#FB8331",         // Orange
+  "Bartender": "#FFCB03",    // Yellow
+  "Security": "#21BF6B",     // Green
+  "Dishwasher": "#12B9B1",   // Teal
+  "Manager": "#2E98DB",      // Light Blue
+  "Cleaner": "#3967D6",      // Dark Blue
+  "Barista": "#8855D0"       // Purple
+};
+
 interface JobFormData {
   role: string;
   completed: boolean;
@@ -44,26 +55,42 @@ export default function AdvertisementManager({ selectedJobs, jobForms, setJobFor
           {/* Job Tab Headers */}
           <div className="border-b bg-gray-50 px-4 pt-3">
             <div className="flex gap-2 overflow-x-auto">
-              {jobForms.map((job, index) => (
-                <button
-                  key={job.role}
-                  onClick={() => setActiveJobTab(index)}
-                  className={`
-                    px-4 py-2 rounded-t-lg font-medium text-sm transition-all flex items-center gap-2 whitespace-nowrap
-                    ${activeJobTab === index
-                      ? job.completed 
-                        ? 'bg-green-600 text-white' 
-                        : 'bg-blue-600 text-white'
-                      : job.completed
-                        ? 'bg-green-50 text-green-700 hover:bg-green-100 border border-b-0'
-                        : 'bg-white text-gray-700 hover:bg-gray-50 border border-b-0'
-                    }
-                  `}
-                >
-                  <span>{job.role}</span>
-                  {job.completed && <span>✓</span>}
-                </button>
-              ))}
+              {jobForms.map((job, index) => {
+                const jobColor = JOB_BASE_COLORS[job.role] || '#3498DB';
+                const isActive = activeJobTab === index;
+                
+                // Helper to convert hex to RGB and add alpha for lighter backgrounds
+                const hexToRgba = (hex: string, alpha: number) => {
+                  const r = parseInt(hex.slice(1, 3), 16);
+                  const g = parseInt(hex.slice(3, 5), 16);
+                  const b = parseInt(hex.slice(5, 7), 16);
+                  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+                };
+                
+                return (
+                  <button
+                    key={job.role}
+                    onClick={() => setActiveJobTab(index)}
+                    className={`
+                      px-4 py-2 rounded-t-lg font-medium text-sm transition-all flex items-center gap-2 whitespace-nowrap
+                      ${isActive
+                        ? 'text-white'
+                        : job.completed
+                          ? 'text-gray-800 hover:opacity-80 border border-b-0'
+                          : 'bg-white text-gray-700 hover:bg-gray-50 border border-b-0'
+                      }
+                    `}
+                    style={isActive ? { 
+                      backgroundColor: jobColor 
+                    } : job.completed ? {
+                      backgroundColor: hexToRgba(jobColor, 0.2)
+                    } : undefined}
+                  >
+                    <span>{job.role}</span>
+                    {job.completed && <span>✓</span>}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
