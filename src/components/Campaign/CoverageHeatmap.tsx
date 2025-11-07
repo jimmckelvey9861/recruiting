@@ -117,7 +117,7 @@ function normalRandom(seed: number, d: number, s: number, mean: number = 0, stdD
   return mean + z0 * stdDev
 }
 
-function genWeek(role: string, weekOffset = 0) {
+function genWeek(role: string, weekOffset = 0, withCampaign = false) {
   // Base demand levels for each role
   const baseMap: Record<string, number> = {
     "Server": 8,
@@ -134,7 +134,14 @@ function genWeek(role: string, weekOffset = 0) {
   
   // Trend from +2 (20% oversupply) at week 0 to -3 (30% undersupply) at week 40 (10 months)
   // Linear trend: -5 levels over 40 weeks = -0.125 levels per week
-  const trendMean = 2 - (weekOffset * 0.125)
+  let trendMean = 2 - (weekOffset * 0.125)
+  
+  // If campaign is active, assume 1 hire per week offsets some of the decline
+  // 1 hire per week = approximately +0.10 levels per week improvement
+  if (withCampaign && weekOffset > 0) {
+    // Campaign impact: +0.10 levels per week (offsetting most of the -0.125 decline)
+    trendMean = trendMean + (weekOffset * 0.10)
+  }
   
   return Array.from({ length: 7 }, (_, d) => (
     Array.from({ length: 48 }, (_, s) => {
@@ -200,11 +207,12 @@ export default function CoverageHeatmap({ selectedJobs }: CoverageHeatmapProps) 
   const [weekOffset, setWeekOffset] = useState(0)
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear())
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth())
+  const [showWithCampaign, setShowWithCampaign] = useState(false)
 
   // Generate week matrices for all selected jobs
   const weekMatrices = useMemo(() => 
-    selectedJobs.map(job => ({ job, matrix: genWeek(job, weekOffset) })),
-    [selectedJobs, weekOffset]
+    selectedJobs.map(job => ({ job, matrix: genWeek(job, weekOffset, showWithCampaign) })),
+    [selectedJobs, weekOffset, showWithCampaign]
   )
   
   const weekStart = useMemo(() => mondayOf(weekOffset), [weekOffset])
@@ -272,10 +280,27 @@ export default function CoverageHeatmap({ selectedJobs }: CoverageHeatmapProps) 
         </div>
         
         <div className="flex items-center gap-2 text-sm">
-          <button onClick={()=>setViewMode('week')} className={`px-2 py-1 border rounded ${viewMode==='week'?'bg-gray-900 text-white':''}`}>Week</button>
-          <button onClick={()=>setViewMode('month')} className={`px-2 py-1 border rounded ${viewMode==='month'?'bg-gray-900 text-white':''}`}>Month</button>
-          <button onClick={()=>setViewMode('year')} className={`px-2 py-1 border rounded ${viewMode==='year'?'bg-gray-900 text-white':''}`}>Year</button>
-          <button onClick={()=>setShowLegend(!showLegend)} className="ml-2 underline">Legend</button>
+          <div className="flex items-center gap-2">
+            <button onClick={()=>setViewMode('week')} className={`px-2 py-1 border rounded ${viewMode==='week'?'bg-gray-900 text-white':''}`}>Week</button>
+            <button onClick={()=>setViewMode('month')} className={`px-2 py-1 border rounded ${viewMode==='month'?'bg-gray-900 text-white':''}`}>Month</button>
+            <button onClick={()=>setViewMode('year')} className={`px-2 py-1 border rounded ${viewMode==='year'?'bg-gray-900 text-white':''}`}>Year</button>
+            <button onClick={()=>setShowLegend(!showLegend)} className="ml-2 underline">Legend</button>
+          </div>
+          
+          <div className="flex items-center gap-1 ml-4 border-l pl-4">
+            <button 
+              onClick={()=>setShowWithCampaign(false)} 
+              className={`px-3 py-1 border rounded text-sm ${!showWithCampaign?'bg-blue-600 text-white':'bg-white hover:bg-gray-50'}`}
+            >
+              Before Campaign
+            </button>
+            <button 
+              onClick={()=>setShowWithCampaign(true)} 
+              className={`px-3 py-1 border rounded text-sm ${showWithCampaign?'bg-green-600 text-white':'bg-white hover:bg-gray-50'}`}
+            >
+              After Campaign
+            </button>
+          </div>
         </div>
       </div>
 
@@ -305,6 +330,7 @@ export default function CoverageHeatmap({ selectedJobs }: CoverageHeatmapProps) 
             weekMatrices={weekMatrices}
             year={currentYear}
             month={currentMonth}
+            withCampaign={showWithCampaign}
             onDayClick={(dateObj: Date)=>goToWeekContaining(dateObj)}
           />
         )}
@@ -312,6 +338,7 @@ export default function CoverageHeatmap({ selectedJobs }: CoverageHeatmapProps) 
           <YearGridDays
             weekMatrices={weekMatrices}
             year={currentYear}
+            withCampaign={showWithCampaign}
             onMonthClick={(monthIdx: number)=>goToMonth(currentYear, monthIdx)}
             onDayClick={(dateObj: Date)=>goToWeekContaining(dateObj)}
           />
@@ -400,8 +427,8 @@ function getDivision(demand: number, supply: number): number {
 }
 
 function MonthGrid(
-  { weekMatrices, year, month, onDayClick }:
-  { weekMatrices: { job: string, matrix: { demand: number; supply: number; closed: boolean }[][] }[], year: number, month: number, onDayClick?: (d: Date)=>void }
+  { weekMatrices, year, month, withCampaign, onDayClick }:
+  { weekMatrices: { job: string, matrix: { demand: number; supply: number; closed: boolean }[][] }[], year: number, month: number, withCampaign: boolean, onDayClick?: (d: Date)=>void }
 ) {
   const jobCount = weekMatrices.length
   const cellHeight = jobCount === 1 ? 64 : 32 * jobCount // Scale height based on job count
@@ -417,7 +444,7 @@ function MonthGrid(
   
   // For each job, generate data for this specific month and calculate distribution
   const jobsData = weekMatrices.map(({ job }) => {
-    const monthMatrix = genWeek(job, weeksFromNow)
+    const monthMatrix = genWeek(job, weeksFromNow, withCampaign)
     const divisionsByWeekday = monthMatrix.map(daySlots => {
       const counts = Array(7).fill(0) // 7 divisions (-3 to +3)
       for (const { demand, supply, closed } of daySlots) {
@@ -494,8 +521,8 @@ function MonthGrid(
 }
 
 function YearGridDays(
-  { weekMatrices, year, onMonthClick, onDayClick }:
-  { weekMatrices: { job: string, matrix: { demand: number; supply: number; closed: boolean }[][] }[], year?: number, onMonthClick?: (m: number)=>void, onDayClick?: (d: Date)=>void }
+  { weekMatrices, year, withCampaign, onMonthClick, onDayClick }:
+  { weekMatrices: { job: string, matrix: { demand: number; supply: number; closed: boolean }[][] }[], year?: number, withCampaign: boolean, onMonthClick?: (m: number)=>void, onDayClick?: (d: Date)=>void }
 ) {
   const jobCount = weekMatrices.length
   const cellHeight = jobCount === 1 ? 10 : 6 * jobCount // Scale height based on job count
@@ -520,7 +547,7 @@ function YearGridDays(
         
         // Generate data for each job for this specific month's offset
         const jobsDataForMonth = weekMatrices.map(({ job }) => {
-          const monthMatrix = genWeek(job, weeksFromNow)
+          const monthMatrix = genWeek(job, weeksFromNow, withCampaign)
           const divisionsByWeekday = monthMatrix.map(daySlots => {
             const counts = Array(7).fill(0) // 7 divisions (-3 to +3)
             for (const { demand, supply, closed } of daySlots) {
