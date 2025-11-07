@@ -7,16 +7,16 @@ const HALF_HOUR_SLOTS = Array.from({ length: 48 }, (_, i) => {
   return `${h.toString().padStart(2,'0')}:${m}`
 })
 
-// Base colors for each job role (from provided palette)
+// Base colors for each job role (exact colors from user specification)
 const JOB_BASE_COLORS: Record<string, string> = {
-  "Server": "#E74C3C",      // Red/Pink
-  "Cook": "#E67E22",        // Orange
-  "Bartender": "#F39C12",   // Yellow
-  "Security": "#27AE60",    // Green
-  "Dishwasher": "#16A085",  // Teal
-  "Manager": "#3498DB",     // Blue
-  "Cleaner": "#2C3E50",     // Indigo
-  "Barista": "#9B59B6"      // Purple
+  "Server": "#D72A4D",       // Red
+  "Cook": "#FB8331",         // Orange
+  "Bartender": "#FFCB03",    // Yellow
+  "Security": "#21BF6B",     // Green
+  "Dishwasher": "#12B9B1",   // Teal
+  "Manager": "#2E98DB",      // Light Blue
+  "Cleaner": "#3967D6",      // Dark Blue
+  "Barista": "#8855D0"       // Purple
 }
 
 const COLORS = {

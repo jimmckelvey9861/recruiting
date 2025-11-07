@@ -7,14 +7,14 @@ type Tab = 'campaign' | 'advertisement' | 'review' | 'company';
 
 // Job base colors (matching CoverageHeatmap)
 const JOB_BASE_COLORS: Record<string, string> = {
-  "Server": "#3498DB",       // Blue
-  "Cook": "#E74C3C",         // Red
-  "Bartender": "#9B59B6",    // Purple
-  "Security": "#F39C12",     // Orange
-  "Dishwasher": "#1ABC9C",   // Turquoise
-  "Manager": "#34495E",      // Dark Gray
-  "Cleaner": "#16A085",      // Green
-  "Barista": "#E67E22"       // Burnt Orange
+  "Server": "#D72A4D",       // Red
+  "Cook": "#FB8331",         // Orange
+  "Bartender": "#FFCB03",    // Yellow
+  "Security": "#21BF6B",     // Green
+  "Dishwasher": "#12B9B1",   // Teal
+  "Manager": "#2E98DB",      // Light Blue
+  "Cleaner": "#3967D6",      // Dark Blue
+  "Barista": "#8855D0"       // Purple
 };
 
 interface JobFormData {
