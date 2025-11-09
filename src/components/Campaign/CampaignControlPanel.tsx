@@ -68,8 +68,8 @@ export default function CampaignControlPanel() {
   const patch = (k:string,v:any) => setRows(prev=> prev.map(r=> r.id===active.id ? {...r,[k]:v} : r));
   const patchArray = (k:string,arr:string[]) => setRows(prev=> prev.map(r=> r.id===active.id ? {...r,[k]:arr} : r));
 
-  const inputBase = "w-full bg-transparent border border-gray-200 rounded-md px-2 py-1 text-sm";
-  const valuePill = "px-2 py-1 bg-slate-50 border border-gray-200 rounded-md text-sm";
+  const inputBase = "w-full bg-transparent outline-none px-1 py-1 text-sm";
+  const valueDisplay = "py-1 text-sm text-gray-900";
 
   return (
     <div className="w-full bg-white border rounded-xl p-3">
@@ -187,7 +187,7 @@ export default function CampaignControlPanel() {
                          onChange={(e)=>patch('dailyCap', Math.max(0, Math.floor(Number(e.target.value||0))))} />
                 </Field>
                 <Field label="$/App (CPA)" className="col-span-3">
-                  <div className={valuePill}>{fmtMoney2(cpa)}</div>
+                  <div className={valueDisplay}>{fmtMoney2(cpa)}</div>
                 </Field>
               </div>
 
@@ -200,7 +200,7 @@ export default function CampaignControlPanel() {
                   <div className="py-1 text-sm text-gray-900">{fmtInt(active.hires)}</div>
                 </Field>
                 <Field label="$/Hire" className="col-span-3">
-                  <div className={valuePill}>{cph? fmtMoney2(cph) : "$0.00"}</div>
+                  <div className={valueDisplay}>{cph? fmtMoney2(cph) : "$0.00"}</div>
                 </Field>
                 <Field label="Applicant Quality" className="col-span-3">
                   <div className="py-1 text-sm text-gray-900">{Number.isFinite(active?.qIndex) ? (active.qIndex).toFixed(1) : '—'}</div>
@@ -210,15 +210,15 @@ export default function CampaignControlPanel() {
               {/* Row F: Prediction vs Actual */}
               <div className="grid grid-cols-12 gap-2 items-center">
                 <Field label="Predicted Applicants (vs. Actual)" className="col-span-6">
-                  <div className="flex items-center gap-2">
-                    <div className={valuePill}>Pred: {fmtInt(active.predictedApps)}</div>
-                    <div className={valuePill}>Actual: {fmtInt(active.apps)}</div>
+                  <div className="flex items-center gap-2 py-1 text-sm text-gray-900">
+                    <span>Pred: {fmtInt(active.predictedApps)}</span>
+                    <span>Actual: {fmtInt(active.apps)}</span>
                   </div>
                 </Field>
                 <Field label="Predicted Hires (vs. Actual)" className="col-span-6">
-                  <div className="flex items-center gap-2">
-                    <div className={valuePill}>Pred: {fmtInt(active.predictedHires)}</div>
-                    <div className={valuePill}>Actual: {fmtInt(active.hires)}</div>
+                  <div className="flex items-center gap-2 py-1 text-sm text-gray-900">
+                    <span>Pred: {fmtInt(active.predictedHires)}</span>
+                    <span>Actual: {fmtInt(active.hires)}</span>
                   </div>
                 </Field>
               </div>
@@ -251,7 +251,7 @@ function Chips({value=[], onChange=()=>{}, placeholder}:{value:string[]; onChang
           </span>
         ))}
       </div>
-      <input className="w-full bg-transparent border border-gray-200 rounded-md px-2 py-1 text-sm" placeholder={placeholder}
+      <input className="w-full bg-transparent outline-none px-1 py-1 text-sm" placeholder={placeholder}
              value={txt} onChange={(e)=>setTxt(e.target.value)}
              onKeyDown={(e)=>{
                if(e.key==='Enter' && txt.trim()){
