@@ -193,16 +193,16 @@ export default function CampaignControlPanel() {
 
               {/* Row E: Funnel Metrics */}
               <div className="grid grid-cols-12 gap-2 items-center">
-                <Field label="Applications" className="col-span-6">
+                <Field label="Applications" className="col-span-3">
                   <div className="py-1 text-sm text-gray-900">{fmtInt(active.apps)}</div>
                 </Field>
-                <Field label="Hires" className="col-span-6">
+                <Field label="Hires" className="col-span-3">
                   <div className="py-1 text-sm text-gray-900">{fmtInt(active.hires)}</div>
                 </Field>
                 <Field label="$/Hire" className="col-span-3">
                   <div className={valuePill}>{cph? fmtMoney2(cph) : "$0.00"}</div>
                 </Field>
-                <Field label="Applicant Quality" className="col-span-6">
+                <Field label="Applicant Quality" className="col-span-3">
                   <div className="py-1 text-sm text-gray-900">{Number.isFinite(active?.qIndex) ? (active.qIndex).toFixed(1) : '—'}</div>
                 </Field>
               </div>
