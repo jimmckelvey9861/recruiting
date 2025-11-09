@@ -193,10 +193,10 @@ export default function CampaignControlPanel() {
 
               {/* Row E: Funnel Metrics */}
               <div className="grid grid-cols-12 gap-2 items-center">
-                <Field label="Applications Received (to date)" className="col-span-6">
+                <Field label="Applications" className="col-span-6">
                   <div className="py-1 text-sm text-gray-900">{fmtInt(active.apps)}</div>
                 </Field>
-                <Field label="Hires Completed" className="col-span-6">
+                <Field label="Hires" className="col-span-6">
                   <div className="py-1 text-sm text-gray-900">{fmtInt(active.hires)}</div>
                 </Field>
                 <Field label="Cost Per Hire (CPH)" className="col-span-3">
