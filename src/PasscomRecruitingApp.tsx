@@ -82,12 +82,9 @@ export default function PasscomRecruitingApp() {
     );
   };
 
-  const toggleJobSelection = (job: string) => {
-    setSelectedJobs(prev =>
-      prev.includes(job)
-        ? prev.filter(j => j !== job)
-        : [...prev, job]
-    );
+  const selectJob = (job: string) => {
+    setSelectedJobs([job]);
+    setShowJobDropdown(false);
   };
 
   const tabs: { id: Tab; label: string }[] = [
@@ -175,15 +172,11 @@ export default function PasscomRecruitingApp() {
                   className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm hover:bg-gray-50 flex items-center gap-2 min-w-[140px]"
                 >
                   {selectedJobs.length === 0 ? (
-                    <span className="text-gray-700">Select Jobs</span>
+                    <span className="text-gray-700">Select Job</span>
                   ) : (
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {selectedJobs.map(job => (
-                        <div key={job} className="flex items-center gap-1">
-                          <div className="w-3 h-3 rounded" style={{ background: JOB_BASE_COLORS[job] || '#3498DB' }} />
-                          <span className="text-gray-700">{job}</span>
-                        </div>
-                      ))}
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded" style={{ background: JOB_BASE_COLORS[selectedJobs[0]] || '#3498DB' }} />
+                      <span className="text-gray-700">{selectedJobs[0]}</span>
                     </div>
                   )}
                   <span className="text-gray-400 ml-auto">▼</span>
@@ -195,19 +188,17 @@ export default function PasscomRecruitingApp() {
                       <label
                         key={job}
                         className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer"
-                        onClick={() => toggleJobSelection(job)}
+                        onClick={() => selectJob(job)}
                       >
                         <div 
-                          className="w-4 h-4 rounded mr-2 flex items-center justify-center border-2 flex-shrink-0"
+                          className="w-4 h-4 rounded-full mr-2 flex items-center justify-center border-2 flex-shrink-0"
                           style={{ 
                             borderColor: JOB_BASE_COLORS[job] || '#3498DB',
                             background: selectedJobs.includes(job) ? (JOB_BASE_COLORS[job] || '#3498DB') : 'white'
                           }}
                         >
                           {selectedJobs.includes(job) && (
-                            <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                            </svg>
+                            <div className="w-2 h-2 rounded-full bg-white" />
                           )}
                         </div>
                         <div className="w-3 h-3 rounded mr-2 flex-shrink-0" style={{ background: JOB_BASE_COLORS[job] || '#3498DB' }} />
