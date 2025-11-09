@@ -182,7 +182,7 @@ export default function CampaignControlPanel() {
                   <input type="number" className={`${inputBase} text-right`} value={active.totalBudget}
                          onChange={(e)=>patch('totalBudget', Math.max(0, Math.floor(Number(e.target.value||0))))} />
                 </Field>
-                <Field label="Budget Used To Date ($)" className="col-span-6">
+                <Field label="Budget Used To Date ($)" className="col-span-3">
                   <div className="py-1 text-sm text-gray-900">{fmtMoney(active.spent)}</div>
                 </Field>
                 <Field label="Daily Budget Cap ($)" className="col-span-3">
