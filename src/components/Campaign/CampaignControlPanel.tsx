@@ -108,7 +108,7 @@ export default function CampaignControlPanel() {
         <div className="col-span-12 lg:col-span-8">
           {active && (
             <div className="space-y-3">
-              {/* Row A: ID, Name, Owner, Created, Status */}
+              {/* Row A: ID, Name, Owner, Status */}
               <div className="grid grid-cols-12 gap-2 items-center">
                 <Field label="Campaign ID" className="col-span-3">
                   <input className={inputBase} value={active.id} onChange={(e)=>patch('id', e.target.value)} />
@@ -119,15 +119,12 @@ export default function CampaignControlPanel() {
                 <Field label="Created By / Owner" className="col-span-4">
                   <input className={inputBase} value={active.owner} onChange={(e)=>patch('owner', e.target.value)} />
                 </Field>
-                <Field label="Created Date" className="col-span-3">
-                  <input type="date" className={inputBase} value={fmtDate(active.created)} onChange={(e)=>patch('created', e.target.value)} />
-                </Field>
                 <Field label="Status" className="col-span-3">
                   <select className={inputBase} value={active.status} onChange={(e)=>patch('status', e.target.value)}>
                     {['Active','Paused','Completed','Pending','Archived'].map(s=> <option key={s} value={s}>{s}</option>)}
                   </select>
                 </Field>
-                <Field label="Job Role" className="col-span-6">
+                <Field label="Job Role" className="col-span-9">
                   <select className={inputBase} value={(active.roles&&active.roles[0])||''}
                           onChange={(e)=>patchArray('roles',[e.target.value])}>
                     {['Bartender','Line Cook','Server','Host'].map(opt=> <option key={opt} value={opt}>{opt}</option>)}
@@ -160,7 +157,7 @@ export default function CampaignControlPanel() {
                     <option value="date">By Date</option>
                   </select>
                 </Field>
-                <Field label="End Criterion Target Value" className="col-span-3">
+                <Field label="End Value" className="col-span-3">
                   {active.endType==='budget' && (
                     <input type="number" className={`${inputBase} text-right`} value={active.endTarget as number}
                            onChange={(e)=>patch('endTarget', Math.max(0, Math.floor(Number(e.target.value||0))))} />
@@ -182,14 +179,14 @@ export default function CampaignControlPanel() {
                   <input type="number" className={`${inputBase} text-right`} value={active.totalBudget}
                          onChange={(e)=>patch('totalBudget', Math.max(0, Math.floor(Number(e.target.value||0))))} />
                 </Field>
-                <Field label="Budget Used To Date ($)" className="col-span-3">
+                <Field label="Budget Used ($)" className="col-span-3">
                   <div className="py-1 text-sm text-gray-900">{fmtMoney(active.spent)}</div>
                 </Field>
-                <Field label="Daily Budget Cap ($)" className="col-span-3">
+                <Field label="Daily Cap ($)" className="col-span-3">
                   <input type="number" className={`${inputBase} text-right`} value={active.dailyCap}
                          onChange={(e)=>patch('dailyCap', Math.max(0, Math.floor(Number(e.target.value||0))))} />
                 </Field>
-                <Field label="Cost Per Application (CPA)" className="col-span-3">
+                <Field label="$/App (CPA)" className="col-span-3">
                   <div className={valuePill}>{fmtMoney2(cpa)}</div>
                 </Field>
               </div>
