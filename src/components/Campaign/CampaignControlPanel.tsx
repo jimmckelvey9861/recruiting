@@ -91,25 +91,47 @@ export default function CampaignControlPanel() {
                 {['Active','Paused','Completed','Pending','Archived'].map(s=> <option key={s} value={s}>{s}</option>)}
               </select>
             </Field>
-            <Field label="Job Role" className="col-span-9">
-              <select className={inputBase} value={(active.roles&&active.roles[0])||''}
-                      onChange={(e)=>patchArray('roles',[e.target.value])}>
-                {['Bartender','Line Cook','Server','Host'].map(opt=> <option key={opt} value={opt}>{opt}</option>)}
+            <Field label="Related Campaigns" className="col-span-9">
+              <select 
+                className={inputBase} 
+                value=""
+                onChange={(e)=>{
+                  const val = e.target.value;
+                  if (val === 'link_all') {
+                    const allCampaigns = rows
+                      .filter(r => (r.status === 'Active' || r.status === 'Pending') && r.id !== active.id)
+                      .map(r => r.id);
+                    patchArray('related', allCampaigns);
+                  } else if (val && !active.related.includes(val)) {
+                    patchArray('related', [...active.related, val]);
+                  }
+                  e.target.value = ''; // Reset dropdown
+                }}
+              >
+                <option value="">Link all campaigns</option>
+                {rows
+                  .filter(r => (r.status === 'Active' || r.status === 'Pending') && r.id !== active.id)
+                  .map(r => (
+                    <option key={r.id} value={r.id}>
+                      {r.name} ({r.id})
+                    </option>
+                  ))
+                }
               </select>
+              {active.related.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {active.related.map((id: string) => (
+                    <span key={id} className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-100 text-xs">
+                      {id}
+                      <button className="text-gray-500" onClick={()=> patchArray('related', active.related.filter((rid: string) => rid !== id))} aria-label="remove">×</button>
+                    </span>
+                  ))}
+                </div>
+              )}
             </Field>
           </div>
 
-          {/* Row B: Roles & Locations */}
-          <div className="grid grid-cols-12 gap-2 items-center">
-            <Field label="Related Campaigns" className="col-span-6">
-              <Chips value={active.related} onChange={(arr)=>patchArray('related', arr)} placeholder="Add Campaign ID" />
-            </Field>
-            <Field label="Location(s)" className="col-span-6">
-              <Chips value={active.locations} onChange={(arr)=>patchArray('locations', arr)} placeholder="Add location" />
-            </Field>
-          </div>
-
-          {/* Row C: Schedule / End Criterion */}
+          {/* Row B: Schedule / End Criterion */}
           <div className="grid grid-cols-12 gap-2 items-center">
             <Field label="Start Date" className="col-span-3">
               <input type="date" className={inputBase} value={fmtDate(active.start)} onChange={(e)=>patch('start', e.target.value)} />
@@ -140,7 +162,7 @@ export default function CampaignControlPanel() {
             </Field>
           </div>
 
-          {/* Row D: Budget & Costs */}
+          {/* Row C: Budget & Costs */}
           <div className="grid grid-cols-12 gap-2 items-center">
             <Field label="Total Budget ($)" className="col-span-3">
               <input type="number" className={`${inputBase} text-right`} value={active.totalBudget}
@@ -158,7 +180,7 @@ export default function CampaignControlPanel() {
             </Field>
           </div>
 
-          {/* Row E: Funnel Metrics */}
+          {/* Row D: Funnel Metrics */}
           <div className="grid grid-cols-12 gap-2 items-center">
             <Field label="Applications" className="col-span-3">
               <div className="py-1 text-sm text-gray-900">{fmtInt(active.apps)}</div>
@@ -174,7 +196,7 @@ export default function CampaignControlPanel() {
             </Field>
           </div>
 
-          {/* Row F: Prediction vs Actual */}
+          {/* Row E: Prediction vs Actual */}
           <div className="grid grid-cols-12 gap-2 items-center">
             <Field label="Predicted Applicants (vs. Actual)" className="col-span-6">
               <div className="flex items-center gap-2 py-1 text-sm text-gray-900">
@@ -200,29 +222,6 @@ function Field({label, className, children}:{label:string; className?:string; ch
     <div className={`relative bg-white border border-gray-200 rounded-lg px-3 pt-2 pb-2 ${className||''}`}>
       <div className="absolute -top-2 left-2 bg-white px-1 text-[11px] text-gray-500">{label}</div>
       {children}
-    </div>
-  );
-}
-
-function Chips({value=[], onChange=()=>{}, placeholder}:{value:string[]; onChange:(v:string[])=>void; placeholder?:string}){
-  const [txt,setTxt] = useState("");
-  return (
-    <div>
-      <div className="flex flex-wrap gap-1 mb-1">
-        {(value||[]).map((v:string,i:number)=> (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-100 text-sm" key={`${v}-${i}`}>
-            {v}
-            <button className="text-gray-500" onClick={()=> onChange((value||[]).filter((_,idx)=>idx!==i))} aria-label="remove">×</button>
-          </span>
-        ))}
-      </div>
-      <input className="w-full bg-transparent outline-none px-1 py-1 text-sm" placeholder={placeholder}
-             value={txt} onChange={(e)=>setTxt(e.target.value)}
-             onKeyDown={(e)=>{
-               if(e.key==='Enter' && txt.trim()){
-                 onChange([...(value||[]), txt.trim()]); setTxt(''); e.preventDefault();
-               }
-             }} />
     </div>
   );
 }
