@@ -304,68 +304,66 @@ export default function JobFormSections({ jobRole: _jobRole, onComplete }: JobFo
         {activeSection === 'compensation' && (
           <div className="bg-white border rounded-xl p-5 shadow-sm">
             <div className="grid grid-cols-12 gap-3">
-            <Field span="col-span-12 lg:col-span-6">
-              <label className="flex items-center gap-2 text-[13px] text-gray-700 mb-1 cursor-pointer">
-                <input
-                  type="radio"
-                  name="payOption"
-                  checked={payOption === "exact"}
-                  onChange={() => setPayOption("exact")}
-                  className="w-4 h-4"
-                />
-                Exact amount
-              </label>
-              <Input 
-                placeholder="e.g., $18.50" 
-                value={payExactAmount}
-                onChange={(e) => setPayExactAmount(e.target.value)}
-                disabled={payOption !== "exact"} 
-                className={payOption !== "exact" ? "opacity-50" : ""} 
-              />
-            </Field>
-
-            <Field span="col-span-12 lg:col-span-6">
-              <label className="flex items-center gap-2 text-[13px] text-gray-700 mb-1 cursor-pointer">
-                <input
-                  type="radio"
-                  name="payOption"
-                  checked={payOption === "range"}
-                  onChange={() => setPayOption("range")}
-                  className="w-4 h-4"
-                />
-                Pay range
-              </label>
-              <div className="flex gap-2 items-center">
-                <Input 
-                  placeholder="Min" 
-                  value={payRangeMin}
-                  onChange={(e) => setPayRangeMin(e.target.value)}
-                  disabled={payOption !== "range"} 
-                  className={payOption !== "range" ? "opacity-50" : ""} 
-                />
-                <span className="text-gray-400">–</span>
-                <Input 
-                  placeholder="Max" 
-                  value={payRangeMax}
-                  onChange={(e) => setPayRangeMax(e.target.value)}
-                  disabled={payOption !== "range"} 
-                  className={payOption !== "range" ? "opacity-50" : ""} 
-                />
-              </div>
-            </Field>
-
             <Field span="col-span-12">
-              <label className="flex items-center gap-2 text-[13px] text-gray-700 mb-1 cursor-pointer">
-                <input
-                  type="radio"
-                  name="payOption"
-                  checked={payOption === "omit"}
-                  onChange={() => setPayOption("omit")}
-                  className="w-4 h-4"
+              <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+                <label className="flex items-center gap-2 text-[13px] text-gray-700 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="payOption"
+                    checked={payOption === "exact"}
+                    onChange={() => setPayOption("exact")}
+                    className="w-4 h-4"
+                  />
+                  Exact amount
+                </label>
+                <Input 
+                  placeholder="e.g., $18.50" 
+                  value={payExactAmount}
+                  onChange={(e) => setPayExactAmount(e.target.value)}
+                  disabled={payOption !== "exact"} 
+                  className={`w-[150px] ${payOption !== "exact" ? "opacity-50" : ""}`} 
                 />
-                Omit pay
-              </label>
-              <div className={`text-sm ${payOption === "omit" ? "text-gray-600" : "text-gray-400"}`}>
+
+                <label className="flex items-center gap-2 text-[13px] text-gray-700 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="payOption"
+                    checked={payOption === "range"}
+                    onChange={() => setPayOption("range")}
+                    className="w-4 h-4"
+                  />
+                  Pay range
+                </label>
+                <div className="flex gap-2 items-center">
+                  <Input 
+                    placeholder="Min" 
+                    value={payRangeMin}
+                    onChange={(e) => setPayRangeMin(e.target.value)}
+                    disabled={payOption !== "range"} 
+                    className={`w-[150px] ${payOption !== "range" ? "opacity-50" : ""}`} 
+                  />
+                  <span className="text-gray-400">–</span>
+                  <Input 
+                    placeholder="Max" 
+                    value={payRangeMax}
+                    onChange={(e) => setPayRangeMax(e.target.value)}
+                    disabled={payOption !== "range"} 
+                    className={`w-[150px] ${payOption !== "range" ? "opacity-50" : ""}`} 
+                  />
+                </div>
+
+                <label className="flex items-center gap-2 text-[13px] text-gray-700 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="payOption"
+                    checked={payOption === "omit"}
+                    onChange={() => setPayOption("omit")}
+                    className="w-4 h-4"
+                  />
+                  Omit pay
+                </label>
+              </div>
+              <div className={`mt-2 text-sm ${payOption === "omit" ? "text-gray-600" : "text-gray-400"}`}>
                 {payOption === "omit" ? "Compensation information will not be displayed" : ""}
               </div>
             </Field>
