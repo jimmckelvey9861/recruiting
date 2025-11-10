@@ -1,6 +1,4 @@
-import { useState } from 'react';
 import JobFormSections from './JobFormSections';
-import MobilePreview from '../MobilePreview';
 import CompanyInformationSection from './CompanyInformationSection';
 
 const JOB_BASE_COLORS: Record<string, string> = {
@@ -27,7 +25,6 @@ interface AdvertisementManagerProps {
 }
 
 export default function AdvertisementManager({ selectedJobs, jobForms, setJobForms }: AdvertisementManagerProps) {
-  const [activeJobTab, setActiveJobTab] = useState(0);
 
   if (selectedJobs.length === 0) {
     // No jobs selected - show placeholder
@@ -42,76 +39,39 @@ export default function AdvertisementManager({ selectedJobs, jobForms, setJobFor
     );
   }
 
+  const activeJobForm = jobForms[0];
+
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 p-6">
       <div className="max-w-6xl mx-auto space-y-6">
         <CompanyInformationSection />
-        <div className="flex gap-6">
-          {/* Mobile Preview */}
-          <MobilePreview />
-          
-          {/* Form Content */}
-          <div className="flex-1">
-            {/* Job Tabs */}
-            <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-          {/* Job Tab Headers */}
-          <div className="border-b bg-gray-50 px-4 pt-3">
-            <div className="flex gap-2 overflow-x-auto">
-              {jobForms.map((job, index) => {
-                const jobColor = JOB_BASE_COLORS[job.role] || '#3498DB';
-                const isActive = activeJobTab === index;
-                
-                // Helper to convert hex to RGB and add alpha for lighter backgrounds
-                const hexToRgba = (hex: string, alpha: number) => {
-                  const r = parseInt(hex.slice(1, 3), 16);
-                  const g = parseInt(hex.slice(3, 5), 16);
-                  const b = parseInt(hex.slice(5, 7), 16);
-                  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-                };
-                
-                return (
-                  <button
-                    key={job.role}
-                    onClick={() => setActiveJobTab(index)}
-                    className={`
-                      px-4 py-2 rounded-t-lg font-medium text-sm transition-all flex items-center gap-2 whitespace-nowrap
-                      ${isActive
-                        ? 'text-white'
-                        : job.completed
-                          ? 'text-gray-800 hover:opacity-80 border border-b-0'
-                          : 'bg-white text-gray-700 hover:bg-gray-50 border border-b-0'
-                      }
-                    `}
-                    style={isActive ? { 
-                      backgroundColor: jobColor 
-                    } : job.completed ? {
-                      backgroundColor: hexToRgba(jobColor, 0.2)
-                    } : undefined}
-                  >
-                    <span>{job.role}</span>
-                    {job.completed && <span>✓</span>}
-                  </button>
-                );
-              })}
+        {activeJobForm && (
+          <div className="bg-white rounded-xl border shadow-sm">
+            <div className="border-b px-6 py-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-800">Job Advertisement</h2>
+                <p className="text-sm text-gray-500">Configure details for the selected role before publishing.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-500">Role:</span>
+                <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-sm">
+                  <span className="w-2.5 h-2.5 rounded-full" style={{ background: JOB_BASE_COLORS[activeJobForm.role] || '#2563eb' }} />
+                  {activeJobForm.role}
+                </span>
+              </div>
             </div>
-          </div>
-
-          {/* Active Job Content with Sub-tabs */}
-          <div className="p-6">
-            {jobForms[activeJobTab] && (
+            <div className="p-6">
               <JobFormSections
-                jobRole={jobForms[activeJobTab].role}
+                jobRole={activeJobForm.role}
                 onComplete={() => {
                   setJobForms(prev => prev.map((f, i) => 
-                    i === activeJobTab ? { ...f, completed: true } : f
+                    i === 0 ? { ...f, completed: true } : f
                   ));
                 }}
               />
-            )}
+            </div>
           </div>
-        </div>
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );
