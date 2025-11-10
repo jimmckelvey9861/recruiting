@@ -47,19 +47,6 @@ export default function AdvertisementManager({ selectedJobs, jobForms, setJobFor
         <CompanyInformationSection />
         {activeJobForm && (
           <div className="bg-white rounded-xl border shadow-sm">
-            <div className="border-b px-6 py-4 flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-gray-800">Job Advertisement</h2>
-                <p className="text-sm text-gray-500">Configure details for the selected role before publishing.</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-500">Role:</span>
-                <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-sm">
-                  <span className="w-2.5 h-2.5 rounded-full" style={{ background: JOB_BASE_COLORS[activeJobForm.role] || '#2563eb' }} />
-                  {activeJobForm.role}
-                </span>
-              </div>
-            </div>
             <div className="p-6">
               <JobFormSections
                 jobRole={activeJobForm.role}
