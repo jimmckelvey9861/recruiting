@@ -73,159 +73,124 @@ export default function CampaignControlPanel() {
 
   return (
     <div className="w-full bg-white border rounded-xl p-3">
-      <div className="grid grid-cols-12 gap-3">
-        {/* LEFT: campaigns list */}
-        <div className="col-span-12 lg:col-span-4">
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-sm font-semibold">Campaigns</div>
-            <button className="text-xs px-2 py-1 border rounded hover:bg-gray-50" onClick={()=>{
-              const nid = `C-${Math.floor(9000+Math.random()*999)}`;
-              const now = new Date();
-              const draft = {
-                id:nid, name:"Untitled", roles:["Role"], locations:["Location"], owner:"Owner",
-                created: fmtDate(now), status:"Pending", related:[], start: fmtDate(now), endPlanned: fmtDate(now),
-                endType:"date", endTarget: fmtDate(now), totalBudget:0, spent:0, dailyCap:0,
-                apps:0, hires:0, qIndex:0, predictedApps:0, predictedHires:0,
-              };
-              setRows([draft, ...rows]); setActiveId(nid);
-            }}>New</button>
+      {active && (
+        <div className="space-y-3">
+          {/* Row A: ID, Name, Owner, Status */}
+          <div className="grid grid-cols-12 gap-2 items-center">
+            <Field label="Campaign ID" className="col-span-3">
+              <input className={inputBase} value={active.id} onChange={(e)=>patch('id', e.target.value)} />
+            </Field>
+            <Field label="Campaign Name" className="col-span-5">
+              <input className={inputBase} value={active.name} onChange={(e)=>patch('name', e.target.value)} />
+            </Field>
+            <Field label="Owner" className="col-span-4">
+              <input className={inputBase} value={active.owner} onChange={(e)=>patch('owner', e.target.value)} />
+            </Field>
+            <Field label="Status" className="col-span-3">
+              <select className={inputBase} value={active.status} onChange={(e)=>patch('status', e.target.value)}>
+                {['Active','Paused','Completed','Pending','Archived'].map(s=> <option key={s} value={s}>{s}</option>)}
+              </select>
+            </Field>
+            <Field label="Job Role" className="col-span-9">
+              <select className={inputBase} value={(active.roles&&active.roles[0])||''}
+                      onChange={(e)=>patchArray('roles',[e.target.value])}>
+                {['Bartender','Line Cook','Server','Host'].map(opt=> <option key={opt} value={opt}>{opt}</option>)}
+              </select>
+            </Field>
           </div>
-          <div className="border rounded-md max-h-[420px] overflow-y-auto divide-y">
-            {rows.map(r=> (
-              <button key={r.id} onClick={()=>setActiveId(r.id)}
-                className={`w-full text-left px-2 py-2 flex items-center justify-between gap-2 ${r.id===activeId? 'bg-gray-50':''}`}>
-                <div className="min-w-0">
-                  <div className="text-sm font-medium truncate">{r.name}</div>
-                  <div className="text-[11px] text-gray-500 truncate">{r.id} • {fmtDate(r.created)}</div>
-                </div>
-                <span className={`text-[11px] px-1.5 py-0.5 rounded ${STATUS_COLORS[r.status]||'bg-slate-100 text-slate-600'}`}>{r.status}</span>
-              </button>
-            ))}
+
+          {/* Row B: Roles & Locations */}
+          <div className="grid grid-cols-12 gap-2 items-center">
+            <Field label="Related Campaigns" className="col-span-6">
+              <Chips value={active.related} onChange={(arr)=>patchArray('related', arr)} placeholder="Add Campaign ID" />
+            </Field>
+            <Field label="Location(s)" className="col-span-6">
+              <Chips value={active.locations} onChange={(arr)=>patchArray('locations', arr)} placeholder="Add location" />
+            </Field>
+          </div>
+
+          {/* Row C: Schedule / End Criterion */}
+          <div className="grid grid-cols-12 gap-2 items-center">
+            <Field label="Start Date" className="col-span-3">
+              <input type="date" className={inputBase} value={fmtDate(active.start)} onChange={(e)=>patch('start', e.target.value)} />
+            </Field>
+            <Field label="End Date (planned)" className="col-span-3">
+              <input type="date" className={inputBase} value={fmtDate(active.endPlanned)} onChange={(e)=>patch('endPlanned', e.target.value)} />
+            </Field>
+            <Field label="End Criterion" className="col-span-3">
+              <select className={inputBase} value={active.endType} onChange={(e)=>patch('endType', e.target.value)}>
+                <option value="budget">By Budget</option>
+                <option value="hires">By Hires</option>
+                <option value="date">By Date</option>
+              </select>
+            </Field>
+            <Field label="End Value" className="col-span-3">
+              {active.endType==='budget' && (
+                <input type="number" className={`${inputBase} text-right`} value={active.endTarget as number}
+                       onChange={(e)=>patch('endTarget', Math.max(0, Math.floor(Number(e.target.value||0))))} />
+              )}
+              {active.endType==='hires' && (
+                <input type="number" className={`${inputBase} text-right`} value={active.endTarget as number}
+                       onChange={(e)=>patch('endTarget', Math.max(0, Math.floor(Number(e.target.value||0))))} />
+              )}
+              {active.endType==='date' && (
+                <input type="date" className={inputBase} value={fmtDate(active.endTarget)}
+                       onChange={(e)=>patch('endTarget', e.target.value)} />
+              )}
+            </Field>
+          </div>
+
+          {/* Row D: Budget & Costs */}
+          <div className="grid grid-cols-12 gap-2 items-center">
+            <Field label="Total Budget ($)" className="col-span-3">
+              <input type="number" className={`${inputBase} text-right`} value={active.totalBudget}
+                     onChange={(e)=>patch('totalBudget', Math.max(0, Math.floor(Number(e.target.value||0))))} />
+            </Field>
+            <Field label="Budget Used ($)" className="col-span-3">
+              <div className="py-1 text-sm text-gray-900">{fmtMoney(active.spent)}</div>
+            </Field>
+            <Field label="Daily Cap ($)" className="col-span-3">
+              <input type="number" className={`${inputBase} text-right`} value={active.dailyCap}
+                     onChange={(e)=>patch('dailyCap', Math.max(0, Math.floor(Number(e.target.value||0))))} />
+            </Field>
+            <Field label="$/App (CPA)" className="col-span-3">
+              <div className={valueDisplay}>{fmtMoney2(cpa)}</div>
+            </Field>
+          </div>
+
+          {/* Row E: Funnel Metrics */}
+          <div className="grid grid-cols-12 gap-2 items-center">
+            <Field label="Applications" className="col-span-3">
+              <div className="py-1 text-sm text-gray-900">{fmtInt(active.apps)}</div>
+            </Field>
+            <Field label="Hires" className="col-span-3">
+              <div className="py-1 text-sm text-gray-900">{fmtInt(active.hires)}</div>
+            </Field>
+            <Field label="$/Hire" className="col-span-3">
+              <div className={valueDisplay}>{cph? fmtMoney2(cph) : "$0.00"}</div>
+            </Field>
+            <Field label="Applicant Quality" className="col-span-3">
+              <div className="py-1 text-sm text-gray-900">{Number.isFinite(active?.qIndex) ? (active.qIndex).toFixed(1) : '—'}</div>
+            </Field>
+          </div>
+
+          {/* Row F: Prediction vs Actual */}
+          <div className="grid grid-cols-12 gap-2 items-center">
+            <Field label="Predicted Applicants (vs. Actual)" className="col-span-6">
+              <div className="flex items-center gap-2 py-1 text-sm text-gray-900">
+                <span>Pred: {fmtInt(active.predictedApps)}</span>
+                <span>Actual: {fmtInt(active.apps)}</span>
+              </div>
+            </Field>
+            <Field label="Predicted Hires (vs. Actual)" className="col-span-6">
+              <div className="flex items-center gap-2 py-1 text-sm text-gray-900">
+                <span>Pred: {fmtInt(active.predictedHires)}</span>
+                <span>Actual: {fmtInt(active.hires)}</span>
+              </div>
+            </Field>
           </div>
         </div>
-
-        {/* RIGHT: compact form */}
-        <div className="col-span-12 lg:col-span-8">
-          {active && (
-            <div className="space-y-3">
-              {/* Row A: ID, Name, Owner, Status */}
-              <div className="grid grid-cols-12 gap-2 items-center">
-                <Field label="Campaign ID" className="col-span-3">
-                  <input className={inputBase} value={active.id} onChange={(e)=>patch('id', e.target.value)} />
-                </Field>
-                <Field label="Campaign Name" className="col-span-5">
-                  <input className={inputBase} value={active.name} onChange={(e)=>patch('name', e.target.value)} />
-                </Field>
-                <Field label="Created By / Owner" className="col-span-4">
-                  <input className={inputBase} value={active.owner} onChange={(e)=>patch('owner', e.target.value)} />
-                </Field>
-                <Field label="Status" className="col-span-3">
-                  <select className={inputBase} value={active.status} onChange={(e)=>patch('status', e.target.value)}>
-                    {['Active','Paused','Completed','Pending','Archived'].map(s=> <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </Field>
-                <Field label="Job Role" className="col-span-9">
-                  <select className={inputBase} value={(active.roles&&active.roles[0])||''}
-                          onChange={(e)=>patchArray('roles',[e.target.value])}>
-                    {['Bartender','Line Cook','Server','Host'].map(opt=> <option key={opt} value={opt}>{opt}</option>)}
-                  </select>
-                </Field>
-              </div>
-
-              {/* Row B: Roles & Locations */}
-              <div className="grid grid-cols-12 gap-2 items-center">
-                <Field label="Related Campaigns" className="col-span-6">
-                  <Chips value={active.related} onChange={(arr)=>patchArray('related', arr)} placeholder="Add Campaign ID" />
-                </Field>
-                <Field label="Location(s)" className="col-span-6">
-                  <Chips value={active.locations} onChange={(arr)=>patchArray('locations', arr)} placeholder="Add location" />
-                </Field>
-              </div>
-
-              {/* Row C: Schedule / End Criterion */}
-              <div className="grid grid-cols-12 gap-2 items-center">
-                <Field label="Start Date" className="col-span-3">
-                  <input type="date" className={inputBase} value={fmtDate(active.start)} onChange={(e)=>patch('start', e.target.value)} />
-                </Field>
-                <Field label="End Date (planned)" className="col-span-3">
-                  <input type="date" className={inputBase} value={fmtDate(active.endPlanned)} onChange={(e)=>patch('endPlanned', e.target.value)} />
-                </Field>
-                <Field label="End Criterion" className="col-span-3">
-                  <select className={inputBase} value={active.endType} onChange={(e)=>patch('endType', e.target.value)}>
-                    <option value="budget">By Budget</option>
-                    <option value="hires">By Hires</option>
-                    <option value="date">By Date</option>
-                  </select>
-                </Field>
-                <Field label="End Value" className="col-span-3">
-                  {active.endType==='budget' && (
-                    <input type="number" className={`${inputBase} text-right`} value={active.endTarget as number}
-                           onChange={(e)=>patch('endTarget', Math.max(0, Math.floor(Number(e.target.value||0))))} />
-                  )}
-                  {active.endType==='hires' && (
-                    <input type="number" className={`${inputBase} text-right`} value={active.endTarget as number}
-                           onChange={(e)=>patch('endTarget', Math.max(0, Math.floor(Number(e.target.value||0))))} />
-                  )}
-                  {active.endType==='date' && (
-                    <input type="date" className={inputBase} value={fmtDate(active.endTarget)}
-                           onChange={(e)=>patch('endTarget', e.target.value)} />
-                  )}
-                </Field>
-              </div>
-
-              {/* Row D: Budget & Costs */}
-              <div className="grid grid-cols-12 gap-2 items-center">
-                <Field label="Total Budget ($)" className="col-span-3">
-                  <input type="number" className={`${inputBase} text-right`} value={active.totalBudget}
-                         onChange={(e)=>patch('totalBudget', Math.max(0, Math.floor(Number(e.target.value||0))))} />
-                </Field>
-                <Field label="Budget Used ($)" className="col-span-3">
-                  <div className="py-1 text-sm text-gray-900">{fmtMoney(active.spent)}</div>
-                </Field>
-                <Field label="Daily Cap ($)" className="col-span-3">
-                  <input type="number" className={`${inputBase} text-right`} value={active.dailyCap}
-                         onChange={(e)=>patch('dailyCap', Math.max(0, Math.floor(Number(e.target.value||0))))} />
-                </Field>
-                <Field label="$/App (CPA)" className="col-span-3">
-                  <div className={valueDisplay}>{fmtMoney2(cpa)}</div>
-                </Field>
-              </div>
-
-              {/* Row E: Funnel Metrics */}
-              <div className="grid grid-cols-12 gap-2 items-center">
-                <Field label="Applications" className="col-span-3">
-                  <div className="py-1 text-sm text-gray-900">{fmtInt(active.apps)}</div>
-                </Field>
-                <Field label="Hires" className="col-span-3">
-                  <div className="py-1 text-sm text-gray-900">{fmtInt(active.hires)}</div>
-                </Field>
-                <Field label="$/Hire" className="col-span-3">
-                  <div className={valueDisplay}>{cph? fmtMoney2(cph) : "$0.00"}</div>
-                </Field>
-                <Field label="Applicant Quality" className="col-span-3">
-                  <div className="py-1 text-sm text-gray-900">{Number.isFinite(active?.qIndex) ? (active.qIndex).toFixed(1) : '—'}</div>
-                </Field>
-              </div>
-
-              {/* Row F: Prediction vs Actual */}
-              <div className="grid grid-cols-12 gap-2 items-center">
-                <Field label="Predicted Applicants (vs. Actual)" className="col-span-6">
-                  <div className="flex items-center gap-2 py-1 text-sm text-gray-900">
-                    <span>Pred: {fmtInt(active.predictedApps)}</span>
-                    <span>Actual: {fmtInt(active.apps)}</span>
-                  </div>
-                </Field>
-                <Field label="Predicted Hires (vs. Actual)" className="col-span-6">
-                  <div className="flex items-center gap-2 py-1 text-sm text-gray-900">
-                    <span>Pred: {fmtInt(active.predictedHires)}</span>
-                    <span>Actual: {fmtInt(active.hires)}</span>
-                  </div>
-                </Field>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+      )}
     </div>
   );
 }
