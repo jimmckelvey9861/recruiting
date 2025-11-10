@@ -91,7 +91,7 @@ export default function PasscomRecruitingApp() {
   const tabs: { id: Tab; label: string }[] = [
     { id: 'needs', label: 'Needs' },
     { id: 'campaign', label: 'Campaign' },
-    { id: 'advertisement', label: 'Advertisement' },
+    { id: 'advertisement', label: 'Posting' },
     { id: 'review', label: 'Review' },
     { id: 'company', label: 'Company' }
   ];
