@@ -150,7 +150,7 @@ export default function CampaignControlPanel() {
                 <Field label="End Date (planned)" className="col-span-3">
                   <input type="date" className={inputBase} value={fmtDate(active.endPlanned)} onChange={(e)=>patch('endPlanned', e.target.value)} />
                 </Field>
-                <Field label="End Criterion Type" className="col-span-3">
+                <Field label="End Criterion" className="col-span-3">
                   <select className={inputBase} value={active.endType} onChange={(e)=>patch('endType', e.target.value)}>
                     <option value="budget">By Budget</option>
                     <option value="hires">By Hires</option>
