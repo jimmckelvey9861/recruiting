@@ -3,7 +3,7 @@ import CampaignManager from './components/Campaign/CampaignManager';
 import AdvertisementManager from './components/Advertisement/AdvertisementManager';
 import CompanyInformationSection from './components/Advertisement/CompanyInformationSection';
 
-type Tab = 'campaign' | 'advertisement' | 'review' | 'company';
+type Tab = 'needs' | 'campaign' | 'advertisement' | 'review' | 'company';
 
 // Job base colors (matching CoverageHeatmap)
 const JOB_BASE_COLORS: Record<string, string> = {
@@ -23,11 +23,13 @@ interface JobFormData {
   data: any; // Store form data for each job
 }
 
+const VALID_TABS: Tab[] = ['needs', 'campaign', 'advertisement', 'review', 'company'];
+
 export default function PasscomRecruitingApp() {
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     // Load persisted tab from localStorage
     const saved = localStorage.getItem('passcom-recruiting-active-tab');
-    return (saved as Tab) || 'campaign';
+    return (VALID_TABS.includes(saved as Tab) ? (saved as Tab) : 'campaign');
   });
 
   const [selectedJobs, setSelectedJobs] = useState<string[]>([]);
@@ -88,6 +90,7 @@ export default function PasscomRecruitingApp() {
   };
 
   const tabs: { id: Tab; label: string }[] = [
+    { id: 'needs', label: 'Needs' },
     { id: 'campaign', label: 'Campaign' },
     { id: 'advertisement', label: 'Advertisement' },
     { id: 'review', label: 'Review' },
@@ -215,6 +218,67 @@ export default function PasscomRecruitingApp() {
 
       {/* Tab Content */}
       <div className="flex-1 overflow-hidden">
+        {activeTab === 'needs' && (
+          <div className="h-full overflow-auto bg-gray-50">
+            <div className="max-w-7xl mx-auto px-6 py-8">
+              <div className="mb-6">
+                <h2 className="text-2xl font-semibold text-gray-800">Hiring Needs Overview</h2>
+                <p className="text-gray-500 mt-1">
+                  Review current store selections and job targets before building campaigns.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+                <div className="bg-white border rounded-xl p-4 shadow-sm">
+                  <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wide">Locations Selected</h3>
+                  {selectedLocations.length === 0 ? (
+                    <p className="mt-3 text-gray-500 text-sm">No locations selected yet. Choose locations using the selector above.</p>
+                  ) : (
+                    <ul className="mt-3 space-y-2">
+                      {selectedLocations.map(loc => (
+                        <li key={loc} className="flex items-center gap-2 text-gray-700">
+                          <span className="inline-flex items-center justify-center w-6 h-6 text-xs font-semibold bg-blue-100 text-blue-600 rounded-full">
+                            {loc.slice(0, 2).toUpperCase()}
+                          </span>
+                          <span>{loc}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                <div className="bg-white border rounded-xl p-4 shadow-sm">
+                  <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wide">Job Focus</h3>
+                  {selectedJobs.length === 0 ? (
+                    <p className="mt-3 text-gray-500 text-sm">Select a job to recruit for using the selector above.</p>
+                  ) : (
+                    <div className="mt-3 flex items-center gap-3">
+                      <span
+                        className="inline-block w-8 h-8 rounded-full border"
+                        style={{ borderColor: JOB_BASE_COLORS[selectedJobs[0]] || '#3498DB', background: `${JOB_BASE_COLORS[selectedJobs[0]] || '#3498DB'}20` }}
+                      />
+                      <div>
+                        <p className="text-gray-800 font-semibold">{selectedJobs[0]}</p>
+                        <p className="text-xs text-gray-500">Primary role for current recruiting cycle</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-white border rounded-xl p-6 shadow-sm">
+                <h3 className="text-lg font-semibold text-gray-800 mb-3">Next Steps</h3>
+                <ol className="list-decimal list-inside text-gray-600 space-y-2 text-sm">
+                  <li>Confirm that the selected stores match your staffing needs.</li>
+                  <li>Verify the target role aligns with the demand forecast.</li>
+                  <li>Move to the Campaign tab to configure budgets, pacing, and sources.</li>
+                  <li>Use the Advertisement tab to build role-specific job ads.</li>
+                </ol>
+              </div>
+            </div>
+          </div>
+        )}
+
         {activeTab === 'campaign' && (
           <div className="h-full overflow-auto">
             <CampaignManager
