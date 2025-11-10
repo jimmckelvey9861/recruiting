@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import CampaignManager from './components/Campaign/CampaignManager';
 import AdvertisementManager from './components/Advertisement/AdvertisementManager';
-import CompanyInformationSection from './components/Advertisement/CompanyInformationSection';
 
 type Tab = 'needs' | 'campaign' | 'advertisement' | 'review' | 'company';
 
@@ -310,11 +309,12 @@ export default function PasscomRecruitingApp() {
         )}
         
         {activeTab === 'company' && (
-          <div className="h-full overflow-auto bg-gray-50">
-            <div className="min-h-screen bg-gray-50 text-gray-900 p-6">
-              <div className="max-w-6xl mx-auto">
-                <CompanyInformationSection />
-              </div>
+          <div className="h-full flex items-center justify-center bg-gray-50">
+            <div className="text-center px-6">
+              <h2 className="text-2xl font-semibold text-gray-700 mb-2">Company Information</h2>
+              <p className="text-gray-500 max-w-xl mx-auto">
+                Company details are now part of the Advertisement workflow so you can manage employer branding alongside job ads.
+              </p>
             </div>
           </div>
         )}

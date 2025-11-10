@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import JobFormSections from './JobFormSections';
 import MobilePreview from '../MobilePreview';
+import CompanyInformationSection from './CompanyInformationSection';
 
 const JOB_BASE_COLORS: Record<string, string> = {
   "Server": "#D72A4D",       // Red
@@ -43,7 +44,8 @@ export default function AdvertisementManager({ selectedJobs, jobForms, setJobFor
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 p-6">
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-6xl mx-auto space-y-6">
+        <CompanyInformationSection />
         <div className="flex gap-6">
           {/* Mobile Preview */}
           <MobilePreview />
