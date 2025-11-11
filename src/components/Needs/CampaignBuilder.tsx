@@ -39,9 +39,19 @@ export default function CampaignBuilder() {
             />
           </div>
 
-          <div className="flex items-center">
+          <div className="flex items-center gap-3">
             <span className="text-gray-700 text-sm font-medium">Daily Spend Target</span>
-            <div className="text-sm font-semibold text-gray-700 ml-auto">${dailyBudget}</div>
+            <div className="relative ml-auto w-24">
+              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+              <input
+                type="number"
+                value={dailyBudget}
+                onChange={(e) => setDailyBudget(Number(e.target.value))}
+                min="0"
+                max="1000"
+                className="w-full pl-5 pr-3 py-1.5 border border-gray-300 rounded-lg text-center text-sm font-semibold focus:outline-none focus:border-blue-500"
+              />
+            </div>
           </div>
 
           <div className="flex items-center gap-4">
@@ -58,14 +68,6 @@ export default function CampaignBuilder() {
               }}
             />
             <div className="text-xs text-gray-500">$1000</div>
-            <input
-              type="number"
-              value={dailyBudget}
-              onChange={(e) => setDailyBudget(Number(e.target.value))}
-              min="0"
-              max="1000"
-              className="w-24 px-3 py-1.5 border border-gray-300 rounded-lg text-center text-sm font-semibold focus:outline-none focus:border-blue-500"
-            />
           </div>
         </div>
 
