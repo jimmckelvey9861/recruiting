@@ -128,6 +128,9 @@ export default function CenterVisuals({ job }: { job: string }) {
   return (
     <div className="w-full bg-white border rounded-xl p-3">
       <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-semibold text-gray-700">
+          {view === "heatmap" ? `Weekly Coverage • ${role}` : `Demand & Supply • ${role}`}
+        </h3>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setView("lines")}
@@ -144,22 +147,24 @@ export default function CenterVisuals({ job }: { job: string }) {
             <IconHeatmap active={view === "heatmap"} />
           </button>
         </div>
-        <div className="flex items-center gap-3 w-64">
-          <span className="text-xs text-gray-500 w-16 text-right">Range</span>
-          <input
-            type="range"
-            min={0}
-            max={3}
-            value={rangeIdx}
-            onChange={(e) => setRangeIdx(Number(e.target.value))}
-            className="w-full"
-          />
-          <span className="text-xs text-gray-700 w-20 text-right">{RANGE_LABELS[rangeIdx]}</span>
-        </div>
       </div>
 
       {view === "lines" ? (
-        <LinesChart series={lineSeries} height={360} role={role} />
+        <>
+          <LinesChart series={lineSeries} height={360} role={role} />
+          <div className="mt-3 flex items-center gap-3 w-full">
+            <span className="text-xs text-gray-500 w-16 text-right">Range</span>
+            <input
+              type="range"
+              min={0}
+              max={3}
+              value={rangeIdx}
+              onChange={(e) => setRangeIdx(Number(e.target.value))}
+              className="flex-1"
+            />
+            <span className="text-xs text-gray-700 w-20 text-right">{RANGE_LABELS[rangeIdx]}</span>
+          </div>
+        </>
       ) : (
         <div>
           <WeekHeatmap grid={heatGrid} startHour={START_HOUR} rows={ROW_COUNT} rowHeight={11} role={role} />
@@ -296,11 +301,7 @@ function WeekHeatmap({
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-sm font-semibold text-gray-700">Weekly Coverage • {role}</span>
-        <span className="text-xs text-gray-500">Darker = undersupply, lighter = oversupply</span>
-      </div>
-      <div className="grid" style={{ gridTemplateColumns: "80px repeat(7, 1fr)" }}>
+      <div className="grid" style={{ gridTemplateColumns: "50px repeat(7, 1fr)" }}>
         <div className="h-6 text-xs text-gray-600 flex items-center justify-end pr-2">Time</div>
         {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
           <div key={d} className="h-6 text-xs text-gray-600 flex items-center justify-center border-l">
@@ -310,7 +311,7 @@ function WeekHeatmap({
       </div>
       <div className="border-t">
         {range(rows).map((r) => (
-          <div key={r} className="grid" style={{ gridTemplateColumns: "80px repeat(7, 1fr)" }}>
+          <div key={r} className="grid" style={{ gridTemplateColumns: "50px repeat(7, 1fr)" }}>
             <div className="flex items-center justify-end pr-2 text-[11px] text-gray-600" style={{ height: rowHeight }}>
               {labelForRow(r)}
             </div>
