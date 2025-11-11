@@ -141,7 +141,7 @@ export function genWeek(role: string, weekOffset = 0, withCampaign = false) {
     return factor
   })()
   
-  return Array.from({ length: 7 }, (_, d) => (
+  const weekData = Array.from({ length: 7 }, (_, d) => (
     Array.from({ length: 48 }, (_, s) => {
       const hour = Math.floor(s / 2)
       const open = isOpen(d, hour)
@@ -169,6 +169,29 @@ export function genWeek(role: string, weekOffset = 0, withCampaign = false) {
       return { demand, supply, closed: false }
     })
   ))
+
+  if (role === "Server" && weekOffset === 0) {
+    const dayIdx = 0
+    const injectionSlots: Array<{ slot: number; multiplier: number }> = [
+      { slot: 20, multiplier: 0.35 }, // ~ -3 level
+      { slot: 22, multiplier: 0.72 }, // ~ -2 level
+      { slot: 24, multiplier: 0.88 }, // ~ -1 level
+      { slot: 26, multiplier: 1.0 },  //  0 level
+      { slot: 28, multiplier: 1.12 }, // +1 level
+      { slot: 32, multiplier: 1.25 }, // +2 level
+      { slot: 36, multiplier: 1.4 }   // +3 level
+    ]
+
+    injectionSlots.forEach(({ slot, multiplier }) => {
+      const cell = weekData[dayIdx]?.[slot]
+      if (!cell || cell.closed) return
+      const demand = Math.max(cell.demand, 6)
+      const supply = Math.max(0, Math.round(demand * multiplier))
+      weekData[dayIdx][slot] = { demand, supply, closed: false }
+    })
+  }
+
+  return weekData
 }
 
 function mondayOf(offsetWeeks = 0) {
