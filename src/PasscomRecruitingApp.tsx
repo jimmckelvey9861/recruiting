@@ -283,8 +283,8 @@ export default function PasscomRecruitingApp() {
         {activeTab === 'needs' && (
           <div className="h-full bg-gray-50">
             <div className="h-full max-w-7xl mx-auto px-6 py-8">
-              <div className="h-full grid grid-cols-12 gap-6">
-                <section className="col-span-12 lg:col-span-3 bg-white border rounded-xl shadow-sm p-4 overflow-y-auto">
+              <div className="h-full grid gap-6 grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)_420px]">
+                <section className="bg-white border rounded-xl shadow-sm p-4 overflow-y-auto">
                   <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Jobs</h2>
                   <p className="text-xs text-gray-500 mt-1">
                     Coverage forecast for next quarter.
@@ -312,10 +312,10 @@ export default function PasscomRecruitingApp() {
                     ))}
                   </div>
                 </section>
-                <section className="col-span-12 lg:col-span-5 bg-white border rounded-xl shadow-sm p-4">
+                <section className="bg-white border rounded-xl shadow-sm p-4">
                   <div className="h-full w-full bg-gray-100 rounded-md border border-dashed border-gray-300" />
                 </section>
-                <section className="col-span-12 lg:col-span-4 bg-white border rounded-xl shadow-sm p-0 overflow-hidden">
+                <section className="bg-white border rounded-xl shadow-sm p-0 overflow-hidden">
                   <CampaignBuilder />
                 </section>
               </div>
