@@ -152,18 +152,7 @@ export default function CenterVisuals({ job }: { job: string }) {
       {view === "lines" ? (
         <>
           <LinesChart series={lineSeries} height={360} role={role} />
-          <div className="mt-3 flex items-center gap-3 w-full">
-            <span className="text-xs text-gray-500 w-16 text-right">Range</span>
-            <input
-              type="range"
-              min={0}
-              max={3}
-              value={rangeIdx}
-              onChange={(e) => setRangeIdx(Number(e.target.value))}
-              className="flex-1"
-            />
-            <span className="text-xs text-gray-700 w-20 text-right">{RANGE_LABELS[rangeIdx]}</span>
-          </div>
+          <RangeSelector value={rangeIdx} onChange={setRangeIdx} />
         </>
       ) : (
         <div>
@@ -217,8 +206,17 @@ function LinesChart({
   const X = (i: number) => PADL + (i / Math.max(1, series.length - 1)) * innerW;
   const Y = (v: number) => PADT + innerH - (v / maxY) * innerH;
 
-  const ticks = 6;
-  const yTicks = range(ticks + 1).map((t) => Math.round((t / ticks) * maxY));
+  const baseTicks = 8;
+  const yTicksFull = range(baseTicks + 1).map((t) => Math.round((t / baseTicks) * maxY));
+  const yStep = Math.max(1, Math.ceil(yTicksFull.length / 10));
+  const yTicks = yTicksFull.filter((_, idx) => idx % yStep === 0);
+
+  const maxXTicks = 10;
+  const stepDaysBase = 7;
+  let stepDays = stepDaysBase;
+  while (series.length / stepDays > maxXTicks) {
+    stepDays += stepDaysBase;
+  }
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-[360px]">
@@ -230,13 +228,13 @@ function LinesChart({
         return (
           <g key={i}>
             <line x1={PADL - 4} x2={W - PADR} y1={y} y2={y} stroke="#e5e7eb" />
-            <text x={PADL - 8} y={y + 3} fontSize="10" textAnchor="end" fill="#475569">
+            <text x={PADL - 10} y={y + 4} fontSize="12" textAnchor="end" fill="#334155">
               {v}
             </text>
           </g>
         );
       })}
-      <text x={12} y={PADT + innerH / 2} fontSize="11" fill="#475569" transform={`rotate(-90 12 ${PADT + innerH / 2})`}>
+      <text x={14} y={PADT + innerH / 2} fontSize="12" fill="#334155" transform={`rotate(-90 14 ${PADT + innerH / 2})`}>
         Avg. employees per slot
       </text>
 
@@ -259,23 +257,23 @@ function LinesChart({
         </g>
       ))}
 
-      {series.map((s, i) => i % 7 === 0 && (
+      {series.map((s, i) => i % stepDays === 0 && (
         <g key={`x${i}`}>
           <line x1={X(i)} x2={X(i)} y1={H - PADB} y2={H - PADB + 4} stroke="#94a3b8" />
-          <text x={X(i)} y={H - PADB + 14} fontSize="10" textAnchor="middle" fill="#475569">
+          <text x={X(i)} y={H - PADB + 16} fontSize="12" textAnchor="middle" fill="#334155">
             {s.date.slice(5)}
           </text>
         </g>
       ))}
 
       <g transform={`translate(${W - 200}, ${PADT + 8})`}>
-        <rect width="10" height="10" fill="#b91c1c" rx="2" />
-        <text x="14" y="9" fontSize="11" fill="#334155">Demand</text>
-        <rect x="90" width="10" height="10" fill="#1d4ed8" rx="2" />
-        <text x="104" y="9" fontSize="11" fill="#334155">Supply</text>
+        <rect width="12" height="12" fill="#b91c1c" rx="3" />
+        <text x="16" y="10" fontSize="12" fill="#1f2937">Demand</text>
+        <rect x="92" width="12" height="12" fill="#1d4ed8" rx="3" />
+        <text x="108" y="10" fontSize="12" fill="#1f2937">Supply</text>
       </g>
 
-      <text x={PADL} y={PADT - 4} fontSize="11" fill="#475569">{role}</text>
+      <text x={PADL} y={PADT - 4} fontSize="12" fill="#334155">{role}</text>
     </svg>
   );
 }
@@ -302,7 +300,7 @@ function WeekHeatmap({
   return (
     <div>
       <div className="grid" style={{ gridTemplateColumns: "50px repeat(7, 1fr)" }}>
-        <div className="h-6 text-xs text-gray-600 flex items-center justify-end pr-2">Time</div>
+        <div className="h-6 text-[11px] text-gray-600 flex items-center justify-end pr-1">Time</div>
         {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
           <div key={d} className="h-6 text-xs text-gray-600 flex items-center justify-center border-l">
             {d}
@@ -312,7 +310,7 @@ function WeekHeatmap({
       <div className="border-t">
         {range(rows).map((r) => (
           <div key={r} className="grid" style={{ gridTemplateColumns: "50px repeat(7, 1fr)" }}>
-            <div className="flex items-center justify-end pr-2 text-[11px] text-gray-600" style={{ height: rowHeight }}>
+            <div className="flex items-center justify-end pr-1 text-[11px] text-gray-600" style={{ height: rowHeight }}>
               {labelForRow(r)}
             </div>
             {range(7).map((c) => (
@@ -327,6 +325,36 @@ function WeekHeatmap({
             ))}
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function RangeSelector({ value, onChange }: { value: number; onChange: (idx: number) => void }) {
+  return (
+    <div className="mt-4">
+      <div className="relative px-4">
+        <div className="absolute left-6 right-6 top-3 h-[2px] bg-gray-300" />
+        <div className="relative flex justify-between">
+          {RANGE_LABELS.map((label, idx) => {
+            const active = value === idx;
+            return (
+              <button
+                key={label}
+                onClick={() => onChange(idx)}
+                className="flex flex-col items-center gap-1 text-xs focus:outline-none"
+                aria-label={`Select ${label}`}
+              >
+                <span
+                  className={`w-4 h-4 rounded-full border ${active ? "bg-gray-900 border-gray-900" : "bg-white border-gray-400"}`}
+                />
+                <span className={`${active ? "text-gray-900 font-medium" : "text-gray-500"}`}>
+                  {label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
