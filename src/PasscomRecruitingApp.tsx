@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import CampaignManager from './components/Campaign/CampaignManager';
 import AdvertisementManager from './components/Advertisement/AdvertisementManager';
 import CampaignBuilder from './components/Needs/CampaignBuilder';
+import CenterVisuals from './components/Needs/CenterVisuals';
 
 type Tab = 'needs' | 'campaign' | 'advertisement' | 'review' | 'company';
 
@@ -313,7 +314,7 @@ export default function PasscomRecruitingApp() {
                   </div>
                 </section>
                 <section className="bg-white border rounded-xl shadow-sm p-4">
-                  <div className="h-full w-full bg-gray-100 rounded-md border border-dashed border-gray-300" />
+                  <CenterVisuals job={selectedJobs[0] || AVAILABLE_JOBS[0]} />
                 </section>
                 <section className="bg-white border rounded-xl shadow-sm p-0 overflow-hidden">
                   <CampaignBuilder />

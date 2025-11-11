@@ -8,7 +8,7 @@ const HALF_HOUR_SLOTS = Array.from({ length: 48 }, (_, i) => {
 })
 
 // Base colors for each job role (exact colors from user specification)
-const JOB_BASE_COLORS: Record<string, string> = {
+export const JOB_BASE_COLORS: Record<string, string> = {
   "Server": "#D72A4D",       // Red
   "Cook": "#FB8331",         // Orange
   "Bartender": "#FFCB03",    // Yellow
@@ -117,7 +117,7 @@ function normalRandom(seed: number, d: number, s: number, mean: number = 0, stdD
   return mean + z0 * stdDev
 }
 
-function genWeek(role: string, weekOffset = 0, withCampaign = false) {
+export function genWeek(role: string, weekOffset = 0, withCampaign = false) {
   // Base demand levels for each role
   const baseMap: Record<string, number> = {
     "Server": 8,
