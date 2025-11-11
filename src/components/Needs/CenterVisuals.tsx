@@ -162,10 +162,7 @@ export default function CenterVisuals({ job, rangeIdx, onRangeChange }: { job: s
       </div>
 
       {view === "lines" ? (
-        <>
-          <LinesChart series={lineSeries} height={360} role={role} />
-          <RangeSelector value={rangeIdx} onChange={setRangeIdx} />
-        </>
+        <LinesChart series={lineSeries} height={360} role={role} />
       ) : (
         <div>
           <WeekHeatmap grid={heatGrid} startHour={START_HOUR} rows={ROW_COUNT} rowHeight={11} role={role} />
