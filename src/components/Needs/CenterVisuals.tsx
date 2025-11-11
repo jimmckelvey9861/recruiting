@@ -9,8 +9,8 @@ const addDays = (date: Date, delta: number) => {
 };
 const formatISO = (date: Date) => date.toISOString().slice(0, 10);
 
-const RANGE_LABELS = ["Month", "Quarter", "Six Months", "Year"];
-const RANGE_WEEKS = [4, 13, 26, 52];
+export const RANGE_LABELS = ["Month", "Quarter", "Six Months", "Year"];
+export const RANGE_WEEKS = [4, 13, 26, 52];
 const START_HOUR = 8;
 const ROW_COUNT = 32;
 const range = (n: number) => Array.from({ length: n }, (_, i) => i);
@@ -99,16 +99,15 @@ function IconHeatmap({ active }: { active?: boolean }) {
   );
 }
 
-export default function CenterVisuals({ job }: { job: string }) {
+export default function CenterVisuals({ job, rangeIdx, onRangeChange }: { job: string; rangeIdx: number; onRangeChange: (idx: number) => void }) {
   const role = job || "Server";
   const [view, setView] = useState<"lines" | "heatmap">("lines");
-  const [rangeIdx, setRangeIdx] = useState<number>(1);
   const weeks = RANGE_WEEKS[rangeIdx];
   const days = weeks * 7;
 
   const lineSeries = useMemo(() => buildLineSeries(role, weeks), [role, weeks]);
 
-  const heatWeeks = Math.min(13, weeks);
+  const heatWeeks = weeks;
   const [weekIndex, setWeekIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const safeWeekIndex = heatWeeks > 0 ? Math.min(weekIndex, heatWeeks - 1) : 0;
@@ -131,6 +130,19 @@ export default function CenterVisuals({ job }: { job: string }) {
         <h3 className="text-sm font-semibold text-gray-700">
           {view === "heatmap" ? `Weekly Coverage • ${role}` : `Demand & Supply • ${role}`}
         </h3>
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-gray-600" htmlFor={`range-select-${role}`}>Range</label>
+          <select
+            id={`range-select-${role}`}
+            value={rangeIdx}
+            onChange={(e) => onRangeChange(Number(e.target.value))}
+            className="text-xs border border-gray-300 rounded px-2 py-1 text-gray-700 focus:outline-none focus:border-blue-500"
+          >
+            {RANGE_LABELS.map((label, idx) => (
+              <option key={label} value={idx}>{label}</option>
+            ))}
+          </select>
+        </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setView("lines")}
@@ -325,36 +337,6 @@ function WeekHeatmap({
             ))}
           </div>
         ))}
-      </div>
-    </div>
-  );
-}
-
-function RangeSelector({ value, onChange }: { value: number; onChange: (idx: number) => void }) {
-  return (
-    <div className="mt-4">
-      <div className="relative px-4">
-        <div className="absolute left-6 right-6 top-3 h-[2px] bg-gray-300" />
-        <div className="relative flex justify-between">
-          {RANGE_LABELS.map((label, idx) => {
-            const active = value === idx;
-            return (
-              <button
-                key={label}
-                onClick={() => onChange(idx)}
-                className="flex flex-col items-center gap-1 text-xs focus:outline-none"
-                aria-label={`Select ${label}`}
-              >
-                <span
-                  className={`w-4 h-4 rounded-full border ${active ? "bg-gray-900 border-gray-900" : "bg-white border-gray-400"}`}
-                />
-                <span className={`${active ? "text-gray-900 font-medium" : "text-gray-500"}`}>
-                  {label}
-                </span>
-              </button>
-            );
-          })}
-        </div>
       </div>
     </div>
   );

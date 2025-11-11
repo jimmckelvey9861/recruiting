@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import CampaignManager from './components/Campaign/CampaignManager';
 import AdvertisementManager from './components/Advertisement/AdvertisementManager';
 import CampaignBuilder from './components/Needs/CampaignBuilder';
-import CenterVisuals from './components/Needs/CenterVisuals';
+import CenterVisuals, { RANGE_WEEKS as NEEDS_RANGE_WEEKS, RANGE_LABELS as NEEDS_RANGE_LABELS } from './components/Needs/CenterVisuals';
 
 type Tab = 'needs' | 'campaign' | 'advertisement' | 'review' | 'company';
 
@@ -33,7 +33,6 @@ const JOB_REQUIREMENT_BASE: Record<string, number> = {
 };
 
 const HALF_HOURS_PER_DAY = 48;
-const FORECAST_DAYS = 90; // approximately a quarter
 
 function createSeeder(job: string) {
   let seed = 0;
@@ -53,13 +52,14 @@ function seededRandom(seed: number) {
   };
 }
 
-function calculateQuarterCoverage(job: string): number {
+function calculateCoverage(job: string, weeks: number): number {
   const baseRequirement = JOB_REQUIREMENT_BASE[job] ?? 6;
   const rand = seededRandom(createSeeder(job) + 2031);
+  const days = Math.max(1, weeks * 7);
   let totalCoverage = 0;
   let count = 0;
 
-  for (let day = 0; day < FORECAST_DAYS; day++) {
+  for (let day = 0; day < days; day++) {
     for (let slot = 0; slot < HALF_HOURS_PER_DAY; slot++) {
       const demandVariation = 0.4 * (rand() - 0.5); // ±20%
       const required = Math.max(1, Math.round(baseRequirement * (1 + demandVariation)));
@@ -94,6 +94,7 @@ export default function PasscomRecruitingApp() {
   const [selectedJobs, setSelectedJobs] = useState<string[]>([]);
   const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
   const [jobForms, setJobForms] = useState<JobFormData[]>([]);
+  const [needsRangeIdx, setNeedsRangeIdx] = useState<number>(1);
   
   // Dropdown states
   const [showLocationDropdown, setShowLocationDropdown] = useState(false);
@@ -144,13 +145,14 @@ export default function PasscomRecruitingApp() {
     setShowJobDropdown(false);
   };
 
-  const jobCoverageData = useMemo(() =>
-    AVAILABLE_JOBS.map(job => ({
+  const jobCoverageData = useMemo(() => {
+    const weeks = NEEDS_RANGE_WEEKS[needsRangeIdx] ?? NEEDS_RANGE_WEEKS[1];
+    return AVAILABLE_JOBS.map(job => ({
       job,
       color: JOB_BASE_COLORS[job] || '#2563eb',
-      coverage: calculateQuarterCoverage(job)
-    }))
-  , []);
+      coverage: calculateCoverage(job, weeks)
+    }));
+  }, [needsRangeIdx]);
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'needs', label: 'Needs' },
@@ -288,7 +290,7 @@ export default function PasscomRecruitingApp() {
                 <section className="bg-white border rounded-xl shadow-sm p-4 overflow-y-auto">
                   <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Jobs</h2>
                   <p className="text-xs text-gray-500 mt-1">
-                    Coverage forecast for next quarter.
+                    Coverage forecast for the next {NEEDS_RANGE_LABELS[needsRangeIdx].toLowerCase()}.
                   </p>
                   <div className="mt-4 space-y-3">
                     {jobCoverageData.map(({ job, color, coverage }) => (
@@ -314,7 +316,11 @@ export default function PasscomRecruitingApp() {
                   </div>
                 </section>
                 <section className="bg-white border rounded-xl shadow-sm p-4">
-                  <CenterVisuals job={selectedJobs[0] || AVAILABLE_JOBS[0]} />
+                  <CenterVisuals
+                    job={selectedJobs[0] || AVAILABLE_JOBS[0]}
+                    rangeIdx={needsRangeIdx}
+                    onRangeChange={setNeedsRangeIdx}
+                  />
                 </section>
                 <section className="bg-white border rounded-xl shadow-sm p-0 overflow-hidden">
                   <CampaignBuilder />
