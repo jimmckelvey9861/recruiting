@@ -11,8 +11,9 @@ const formatISO = (date: Date) => date.toISOString().slice(0, 10);
 
 export const RANGE_LABELS = ["Month", "Quarter", "Six Months", "Year"];
 export const RANGE_WEEKS = [4, 13, 26, 52];
-const START_HOUR = 8;
-const ROW_COUNT = 32;
+const DISPLAY_START_HOUR = 7;
+const DISPLAY_END_HOUR = 23;
+const ROW_COUNT = (DISPLAY_END_HOUR - DISPLAY_START_HOUR) * 2;
 const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 
 function buildLineSeries(job: string, weeks: number) {
@@ -46,18 +47,18 @@ function buildLineSeries(job: string, weeks: number) {
   return series;
 }
 
-function buildHeatGrid(job: string, weekOffset: number, startHour = START_HOUR, rows = ROW_COUNT) {
+function buildHeatGrid(job: string, weekOffset: number) {
   const weekMatrix = genWeek(job, weekOffset, false);
-  const startSlot = startHour * 2;
-  const grid: number[][] = [];
+  const startSlot = DISPLAY_START_HOUR * 2;
+  const endSlot = DISPLAY_END_HOUR * 2;
+  const grid: (number | null)[][] = [];
 
-  for (let r = 0; r < rows; r++) {
-    const slotIdx = startSlot + r;
-    const row: number[] = [];
+  for (let slotIdx = startSlot; slotIdx < endSlot; slotIdx++) {
+    const row: (number | null)[] = [];
     for (let day = 0; day < 7; day++) {
-      const cell = weekMatrix[day][slotIdx];
+      const cell = weekMatrix[day]?.[slotIdx];
       if (!cell || cell.closed || cell.demand <= 0) {
-        row.push(0);
+        row.push(null);
       } else {
         const ratio = (cell.supply - cell.demand) / Math.max(1, cell.demand);
         row.push(clamp(ratio, -1, 1));
@@ -165,7 +166,7 @@ export default function CenterVisuals({ job, rangeIdx, onRangeChange }: { job: s
         <LinesChart series={lineSeries} height={360} role={role} />
       ) : (
         <div>
-          <WeekHeatmap grid={heatGrid} startHour={START_HOUR} rows={ROW_COUNT} rowHeight={11} role={role} />
+          <WeekHeatmap grid={heatGrid} rowHeight={11} role={role} />
           <div className="mt-3 flex items-center gap-3">
             <button
               className="text-xs px-2 py-1 border rounded w-20 text-center"
@@ -313,20 +314,17 @@ function LinesChart({
 
 function WeekHeatmap({
   grid,
-  startHour = START_HOUR,
-  rows = ROW_COUNT,
   rowHeight = 11,
   role
 }: {
-  grid: number[][];
-  startHour?: number;
-  rows?: number;
+  grid: (number | null)[][];
   rowHeight?: number;
   role: string;
 }) {
   const labelForRow = (r: number) => {
-    if (r % 2 === 1) return "";
-    const hour = startHour + Math.floor(r / 2);
+    const slotIdx = DISPLAY_START_HOUR * 2 + r;
+    if (slotIdx % 2 === 1) return "";
+    const hour = Math.floor(slotIdx / 2);
     return `${String(hour).padStart(2, "0")}:00`;
   };
 
@@ -340,8 +338,8 @@ function WeekHeatmap({
           </div>
         ))}
       </div>
-      <div className="border-t">
-        {range(rows).map((r) => (
+      <div className="border-t max-h-[520px] overflow-auto">
+        {range(grid.length).map((r) => (
           <div key={r} className="grid" style={{ gridTemplateColumns: "50px repeat(7, 1fr)" }}>
             <div className="flex items-center justify-end pr-1 text-[11px] text-gray-600" style={{ height: rowHeight }}>
               {labelForRow(r)}
@@ -352,7 +350,7 @@ function WeekHeatmap({
                 className="border-l border-t"
                 style={{
                   height: rowHeight,
-                  background: cellColor(grid[r][c])
+                  background: grid[r][c] === null ? '#e5e7eb' : cellColor(grid[r][c]!)
                 }}
               />
             ))}

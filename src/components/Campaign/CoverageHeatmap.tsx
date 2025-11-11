@@ -29,6 +29,9 @@ const COLORS = {
   closed: "#e5e7eb"
 }
 
+const DISPLAY_START_HOUR = 7
+const DISPLAY_END_HOUR = 23
+
 // Helper to convert hex to RGB
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
@@ -149,13 +152,18 @@ export function genWeek(role: string, weekOffset = 0, withCampaign = false) {
       const phase = 1 + 0.03 * Math.sin((weekOffset * 7 + d + s / 48) * 0.9)
       const demand = Math.round(base * phase * (0.25 + 1.2 * (0.7 * lunch + 1.0 * dinner)) * weekend)
       const startHour = d <= 4 ? 8 : 10
-      let multiplier = 1.2
-      if (hour < startHour + 1 || hour >= startHour + 11) multiplier = 1.0
-      else if (hour >= startHour + 5 && hour < startHour + 7) multiplier = 1.1
-      if (!["Server", "Cook", "Bartender"].includes(role)) multiplier = 1.05
 
-      const variability = 1 + noise(weekOffset + 3, d, s) * 0.1
-      const supplyMultiplier = Math.max(0, multiplier * attrFactor * variability)
+      let baselineMultiplier = ["Server", "Cook", "Bartender"].includes(role) ? 1.2 : 1.05
+      const hourFromOpen = hour - startHour
+      if (hourFromOpen < 1 || hourFromOpen >= 12) baselineMultiplier = 1.0
+      else if (hourFromOpen >= 2 && hourFromOpen < 4) baselineMultiplier = 1.15
+      else if (hourFromOpen >= 4 && hourFromOpen < 6) baselineMultiplier = 0.9
+      else if (hourFromOpen >= 6 && hourFromOpen < 8) baselineMultiplier = 1.05
+      else if (hourFromOpen >= 8 && hourFromOpen < 10) baselineMultiplier = 0.85
+      else if (hourFromOpen >= 10 && hourFromOpen < 11) baselineMultiplier = 1.05
+
+      const variability = 1 + noise(weekOffset + 3, d, s) * 0.08
+      const supplyMultiplier = Math.max(0, baselineMultiplier * attrFactor * variability)
       const supply = Math.max(0, Math.round(demand * supplyMultiplier))
 
       return { demand, supply, closed: false }
@@ -342,6 +350,10 @@ export default function CoverageHeatmap({ selectedJobs }: CoverageHeatmapProps) 
 }
 
 function WeekGrid({ weekMatrix, jobRole }: { weekMatrix: { demand: number; supply: number; closed: boolean }[][], jobRole: string }) {
+  const startSlot = DISPLAY_START_HOUR * 2
+  const endSlot = DISPLAY_END_HOUR * 2
+  const slotIndices = Array.from({ length: endSlot - startSlot }, (_, i) => startSlot + i)
+
   return (
     <div className="min-w-[720px]">
       <div className="grid" style={{ gridTemplateColumns: `60px repeat(7, 1fr)`, columnGap: '2px' }}>
@@ -351,13 +363,14 @@ function WeekGrid({ weekMatrix, jobRole }: { weekMatrix: { demand: number; suppl
         ))}
       </div>
       <div className="max-h-[520px] overflow-auto">
-        {HALF_HOUR_SLOTS.map((t, rowIdx) => {
-          const hour = Math.floor(rowIdx / 2)
-          const isFullHour = rowIdx % 2 === 0
-          const showLabel = isFullHour && (hour % 2 === 0)
-          const hourLabel = `${hour.toString().padStart(2,'0')}:00`
+        {slotIndices.map((slotIdx) => {
+          const hour = Math.floor(slotIdx / 2)
+          const minutes = slotIdx % 2 === 0 ? "00" : "30"
+          const isFullHour = minutes === "00"
+          const showLabel = isFullHour
+          const hourLabel = `${hour.toString().padStart(2,'0')}:${minutes}`
           return (
-            <div key={t}>
+            <div key={slotIdx}>
               <div className="grid" style={{ gridTemplateColumns: `60px repeat(7, 1fr)`, columnGap: '2px' }}>
                 <div className="relative h-[18px] sticky left-0 bg-white">
                   {showLabel && (
@@ -366,9 +379,12 @@ function WeekGrid({ weekMatrix, jobRole }: { weekMatrix: { demand: number; suppl
                 </div>
                 {/* For each day column */}
                 {Array.from({ length: 7 }).map((_, dayIdx) => {
-                  const { demand, supply, closed } = weekMatrix[dayIdx][rowIdx]
+                  const slot = weekMatrix[dayIdx]?.[slotIdx]
+                  const closed = !slot || slot.closed
+                  const demand = slot?.demand ?? 0
+                  const supply = slot?.supply ?? 0
                   const bg = closed ? COLORS.closed : cellColor(demand, supply, jobRole)
-                  const delta = getDeltaDisplay(demand, supply)
+                  const delta = closed ? "" : getDeltaDisplay(demand, supply)
                   const isUndersupply = !closed && (supply - demand) < 0
                   
                   return (
