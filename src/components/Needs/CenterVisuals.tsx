@@ -166,9 +166,9 @@ export default function CenterVisuals({ job, rangeIdx, onRangeChange }: { job: s
       ) : (
         <div>
           <WeekHeatmap grid={heatGrid} startHour={START_HOUR} rows={ROW_COUNT} rowHeight={11} role={role} />
-          <div className="mt-3 flex items-center gap-2">
+          <div className="mt-3 flex items-center gap-3">
             <button
-              className="text-xs px-2 py-1 border rounded"
+              className="text-xs px-2 py-1 border rounded w-20 text-center"
               onClick={() => setPlaying((p) => !p)}
               disabled={heatWeeks <= 1}
             >
@@ -180,14 +180,38 @@ export default function CenterVisuals({ job, rangeIdx, onRangeChange }: { job: s
               max={Math.max(0, heatWeeks - 1)}
               value={safeWeekIndex}
               onChange={(e) => setWeekIndex(Number(e.target.value))}
-              className="w-full"
+              className="flex-1"
             />
-            <span className="text-xs text-gray-600 w-20 text-right">
+            <RangeLegend />
+            <span className="text-xs text-gray-600 w-16 text-right">
               Week {heatWeeks > 0 ? safeWeekIndex + 1 : 0}/{heatWeeks}
             </span>
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function RangeLegend() {
+  const steps = [
+    { label: "+30%", color: "#15803d" },
+    { label: "+20%", color: "#22c55e" },
+    { label: "+10%", color: "#4ade80" },
+    { label: "0%", color: "#facc15" },
+    { label: "-10%", color: "#f97316" },
+    { label: "-20%", color: "#f87171" },
+    { label: "-30%", color: "#dc2626" }
+  ];
+
+  return (
+    <div className="flex items-center gap-1">
+      {steps.map(step => (
+        <div key={step.label} className="flex flex-col items-center">
+          <span className="w-4 h-4 rounded-full" style={{ background: step.color }} />
+          <span className="text-[9px] text-gray-500 mt-1">{step.label}</span>
+        </div>
+      ))}
     </div>
   );
 }
