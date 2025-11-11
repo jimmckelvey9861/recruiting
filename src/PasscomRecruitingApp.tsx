@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import CampaignManager from './components/Campaign/CampaignManager';
 import AdvertisementManager from './components/Advertisement/AdvertisementManager';
+import { genWeek } from './components/Campaign/CoverageHeatmap';
 import CampaignBuilder from './components/Needs/CampaignBuilder';
 import CenterVisuals, { RANGE_WEEKS as NEEDS_RANGE_WEEKS, RANGE_LABELS as NEEDS_RANGE_LABELS } from './components/Needs/CenterVisuals';
 
@@ -34,46 +35,22 @@ const JOB_REQUIREMENT_BASE: Record<string, number> = {
 
 const HALF_HOURS_PER_DAY = 48;
 
-function createSeeder(job: string) {
-  let seed = 0;
-  for (let i = 0; i < job.length; i++) {
-    seed = (seed << 5) - seed + job.charCodeAt(i);
-    seed |= 0;
-  }
-  return Math.abs(seed) || 1;
-}
-
-function seededRandom(seed: number) {
-  let value = seed % 2147483647;
-  if (value <= 0) value += 2147483646;
-  return () => {
-    value = (value * 16807) % 2147483647;
-    return (value - 1) / 2147483646;
-  };
-}
-
 function calculateCoverage(job: string, weeks: number): number {
-  const baseRequirement = JOB_REQUIREMENT_BASE[job] ?? 6;
-  const rand = seededRandom(createSeeder(job) + 2031);
-  const days = Math.max(1, weeks * 7);
-  let totalCoverage = 0;
+  let total = 0;
   let count = 0;
-
-  for (let day = 0; day < days; day++) {
-    for (let slot = 0; slot < HALF_HOURS_PER_DAY; slot++) {
-      const demandVariation = 0.4 * (rand() - 0.5); // ±20%
-      const required = Math.max(1, Math.round(baseRequirement * (1 + demandVariation)));
-      const supplyVariation = 0.8 * (rand() - 0.4); // approx -40% to +40%
-      const available = Math.max(0, required * (1 + supplyVariation));
-      const ratio = available / required;
-      const cappedRatio = Math.min(ratio, 1); // clamp to 100% coverage per requirements
-      totalCoverage += cappedRatio * 100;
-      count++;
+  for (let w = 0; w < weeks; w++) {
+    const matrix = genWeek(job, w, false);
+    for (const day of matrix) {
+      for (const slot of day) {
+        if (slot.closed || slot.demand <= 0) continue;
+        const ratio = Math.min(slot.supply / Math.max(1, slot.demand), 1);
+        total += ratio * 100;
+        count++;
+      }
     }
   }
-
-  const averageCoverage = count > 0 ? totalCoverage / count : 0;
-  return Math.min(Math.max(Math.round(averageCoverage), 0), 150);
+  if (count === 0) return 0;
+  return Math.round(total / count);
 }
 
 interface JobFormData {

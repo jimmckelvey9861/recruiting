@@ -19,6 +19,12 @@ export const JOB_BASE_COLORS: Record<string, string> = {
   "Barista": "#8855D0"       // Purple
 }
 
+const JOB_ATTRITION: Record<string, { base: number, lossEveryWeeks: number, lossAmount: number }> = {
+  "Server": { base: 30, lossEveryWeeks: 1, lossAmount: 1 },
+  "Cook": { base: 5, lossEveryWeeks: 2, lossAmount: 1 },
+  "Bartender": { base: 10, lossEveryWeeks: 1, lossAmount: 1 }
+}
+
 const COLORS = {
   closed: "#e5e7eb"
 }
@@ -95,7 +101,7 @@ function getDeltaDisplay(demand: number, supply: number): string {
 }
 
 function isOpen(dayIdx: number, hour: number) {
-  if (dayIdx <= 4) return hour >= 9 && hour < 21
+  if (dayIdx <= 4) return hour >= 8 && hour < 20
   return hour >= 10 && hour < 22
 }
 
@@ -105,18 +111,6 @@ function noise(seed: number, d: number, s: number) {
 }
 
 // Box-Muller transform to generate normally distributed random numbers
-function normalRandom(seed: number, d: number, s: number, mean: number = 0, stdDev: number = 1.5): number {
-  // Generate two uniform random numbers using different seeds
-  const x1 = Math.sin((seed + 1) * 9301 + d * 49297 + s * 233280) * 43758.5453
-  const u1 = x1 - Math.floor(x1)
-  const x2 = Math.sin((seed + 2) * 9301 + d * 49297 + (s + 1) * 233280) * 43758.5453
-  const u2 = x2 - Math.floor(x2)
-  
-  // Box-Muller transform
-  const z0 = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2)
-  return mean + z0 * stdDev
-}
-
 export function genWeek(role: string, weekOffset = 0, withCampaign = false) {
   // Base demand levels for each role
   const baseMap: Record<string, number> = {
@@ -131,17 +125,18 @@ export function genWeek(role: string, weekOffset = 0, withCampaign = false) {
   }
   
   const base = baseMap[role] || 5
-  
-  // Trend from +2 (20% oversupply) at week 0 to -3 (30% undersupply) at week 40 (10 months)
-  // Linear trend: -5 levels over 40 weeks = -0.125 levels per week
-  let trendMean = 2 - (weekOffset * 0.125)
-  
-  // If campaign is active, assume 1 hire per week offsets some of the decline
-  // 1 hire per week = approximately +0.10 levels per week improvement
-  if (withCampaign && weekOffset > 0) {
-    // Campaign impact: +0.10 levels per week (offsetting most of the -0.125 decline)
-    trendMean = trendMean + (weekOffset * 0.10)
-  }
+  const attr = JOB_ATTRITION[role]
+
+  const attrFactor = (() => {
+    if (!attr) return 1
+    const losses = Math.floor(weekOffset / attr.lossEveryWeeks) * attr.lossAmount
+    const available = Math.max(attr.base - losses, 0)
+    let factor = attr.base > 0 ? available / attr.base : 1
+    if (withCampaign) {
+      factor = clamp(factor + 0.1, 0, 1.25)
+    }
+    return factor
+  })()
   
   return Array.from({ length: 7 }, (_, d) => (
     Array.from({ length: 48 }, (_, s) => {
@@ -153,19 +148,16 @@ export function genWeek(role: string, weekOffset = 0, withCampaign = false) {
       const weekend = (d >= 5 ? 1.25 : 1.0)
       const phase = 1 + 0.03 * Math.sin((weekOffset * 7 + d + s / 48) * 0.9)
       const demand = Math.round(base * phase * (0.25 + 1.2 * (0.7 * lunch + 1.0 * dinner)) * weekend)
-      
-      // Generate supply using normal distribution with trending mean
-      // StdDev = 1.2 gives spread while maintaining the trend
-      // trendMean shifts from +2 (current) to -3 (10 months out)
-      const normalValue = normalRandom(weekOffset, d, s, trendMean, 1.2)
-      
-      // Convert normal value (which is already in staffing level units) to percentage delta
-      // Each level = 10%, so multiply by 0.10
-      const percentDelta = normalValue * 0.10
-      
-      // Calculate supply based on demand + percentage delta
-      const supply = Math.max(0, Math.round(demand * (1 + percentDelta)))
-      
+      const startHour = d <= 4 ? 8 : 10
+      let multiplier = 1.2
+      if (hour < startHour + 1 || hour >= startHour + 11) multiplier = 1.0
+      else if (hour >= startHour + 5 && hour < startHour + 7) multiplier = 1.1
+      if (!["Server", "Cook", "Bartender"].includes(role)) multiplier = 1.05
+
+      const variability = 1 + noise(weekOffset + 3, d, s) * 0.1
+      const supplyMultiplier = Math.max(0, multiplier * attrFactor * variability)
+      const supply = Math.max(0, Math.round(demand * supplyMultiplier))
+
       return { demand, supply, closed: false }
     })
   ))
