@@ -1,261 +1,179 @@
-import { useMemo } from 'react';
-import { SOURCE_COLORS, SOURCE_LABELS } from '../../constants/sourceColors';
+import { useMemo } from 'react'
 
-type SankeyStep = {
-  id: string;
-  name: string;
-  passRate: number; // percentage 0-100, ignored for final stage
-};
+export interface SankeySource {
+  key: string
+  label: string
+  color: string
+}
 
-type SankeySource = {
-  key: string;
-  label: string;
-  count: number;
-};
+export interface SankeyStage {
+  key: string
+  label: string
+  total: number
+}
+
+export interface SankeyOptions {
+  width?: number
+  height?: number
+  columnWidth?: number
+  columnGap?: number
+  paddingTop?: number
+  paddingBottom?: number
+  showConversionRates?: boolean
+  showRejectBar?: boolean
+  rejectLabel?: string
+}
+
+interface ColumnDimensions {
+  x: number
+  y: number
+  h: number
+  w: number
+  label: string
+  total: number
+}
+
+interface StackLayout {
+  tops: number[]
+  heights: number[]
+  amounts: number[]
+}
 
 interface SankeyDiagramProps {
-  sources: SankeySource[];
-  steps: SankeyStep[];
+  sources: SankeySource[]
+  stages: SankeyStage[]
+  flowData: number[][]
+  options?: SankeyOptions
 }
 
-interface ColumnNode {
-  value: number;
-  y0: number;
-  y1: number;
-}
+export default function SankeyDiagram({ sources, stages, flowData, options = {} }: SankeyDiagramProps) {
+  const {
+    width = 1000,
+    height = 420,
+    columnWidth = 120,
+    columnGap = 160,
+    paddingTop = 20,
+    paddingBottom = 40,
+    showConversionRates = true,
+    showRejectBar = true,
+    rejectLabel = 'Rejected',
+  } = options
 
-const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+  const innerHeight = height - paddingTop - paddingBottom
 
-export default function SankeyDiagram({ sources, steps }: SankeyDiagramProps) {
-  const limitedSources = useMemo(() => sources.slice(0, 10), [sources]);
-
-  const hasData = limitedSources.some((s) => s.count > 0);
-
-  const { columnValues, columnLayouts, totalsByColumn } = useMemo(() => {
-    const sanitizedSources = limitedSources.map((source) => ({
-      ...source,
-      count: Math.max(0, Math.round(source.count)),
-    }));
-
-    const baseCounts = sanitizedSources.map((s) => s.count);
-    const columnValuesInternal: number[][] = [baseCounts];
-
-    let stageCounts = baseCounts;
-    steps.forEach((step, idx) => {
-      columnValuesInternal.push(stageCounts);
-      if (idx < steps.length - 1) {
-        const rate = clamp(step.passRate, 0, 100) / 100;
-        stageCounts = stageCounts.map((value) => Math.max(0, Math.round(value * rate)));
-      }
-    });
-
-    const margins = { top: 48, bottom: 36 };
-    const height = 400;
-    const availableHeight = height - margins.top - margins.bottom;
-    const nodePad = 14;
-
-    const columnLayoutsInternal: ColumnNode[][] = columnValuesInternal.map((values) => {
-      const total = values.reduce((sum, v) => sum + v, 0);
-      if (total <= 0) {
-        const slotHeight = values.length > 0 ? (availableHeight - nodePad * (values.length - 1)) / values.length : 0;
-        let y = margins.top;
-        return values.map(() => {
-          const h = Math.max(0, slotHeight);
-          const node = { value: 0, y0: y, y1: y + h };
-          y += h + nodePad;
-          return node;
-        });
-      }
-
-      const scale = (availableHeight - nodePad * (values.length - 1)) / total;
-      let y = margins.top;
-      return values.map((value) => {
-        const size = clamp(value * scale, 0, availableHeight);
-        const node = { value, y0: y, y1: y + size };
-        y += size + nodePad;
-        return node;
-      });
-    });
-
-    const totals = columnValuesInternal.map((values) => values.reduce((sum, v) => sum + v, 0));
-
-    return {
-      columnValues: columnValuesInternal,
-      columnLayouts: columnLayoutsInternal,
-      totalsByColumn: totals,
-    };
-  }, [limitedSources, steps]);
-
-  if (!hasData || columnValues[0].reduce((sum, value) => sum + value, 0) === 0) {
-    return (
-      <div className="border border-dashed border-gray-300 rounded-xl py-16 text-center text-gray-500">
-        Add applicants to visualize candidate flow.
-      </div>
-    );
+  const ribbonPath = (x1: number, y1Top: number, y1Bot: number, x2: number, y2Top: number, y2Bot: number) => {
+    const cx1 = x1 + (x2 - x1) * 0.45
+    const cx2 = x2 - (x2 - x1) * 0.45
+    return [
+      `M ${x1} ${y1Top}`,
+      `C ${cx1} ${y1Top}, ${cx2} ${y2Top}, ${x2} ${y2Top}`,
+      `L ${x2} ${y2Bot}`,
+      `C ${cx2} ${y2Bot}, ${cx1} ${y1Bot}, ${x1} ${y1Bot}`,
+      'Z',
+    ].join(' ')
   }
 
-  const width = 960;
-  const height = 400;
-  const marginLeft = 160;
-  const marginRight = 120;
-  const marginTop = 48;
-  const marginBottom = 36;
-  const nodeWidth = 18;
+  const { colDims, stacks, conversionRates } = useMemo(() => {
+    const maxStage = Math.max(1, ...stages.map((s) => s.total))
+    const scaleY = (value: number) => (value / maxStage) * (innerHeight * 0.82)
+    const colX = (index: number) => 40 + index * columnGap
 
-  const columnCount = columnValues.length;
-  const columnGap = columnCount > 1 ? (width - marginLeft - marginRight) / (columnCount - 1) : 0;
-  const columnX = (index: number) => marginLeft + index * columnGap;
-  const nodeLeft = (index: number) => columnX(index) - nodeWidth / 2;
-  const nodeRight = (index: number) => columnX(index) + nodeWidth / 2;
-  const curveOffset = columnGap * 0.45;
+    const columnDimensions: ColumnDimensions[] = stages.map((stage, index) => {
+      const scaledHeight = scaleY(stage.total)
+      const heightValue = Math.max(28, Number.isFinite(scaledHeight) ? scaledHeight : 0)
+      const y = paddingTop + (innerHeight - heightValue) / 2
+      const x = colX(index)
+      return { x, y, h: heightValue, w: columnWidth, label: stage.label, total: stage.total }
+    })
 
-  const columnTitles = ['Sources', ...steps.map((step) => step.name)];
+    const stackLayouts: StackLayout[] = columnDimensions.map((column, stageIdx) => {
+      const stageTotals = stages[stageIdx]?.total ?? 0
+      const amounts = sources.map((_, sourceIdx) => flowData[stageIdx]?.[sourceIdx] ?? 0)
+      const heights = stageTotals > 0
+        ? amounts.map((amount) => (amount / stageTotals) * column.h)
+        : amounts.map(() => 0)
+      const tops: number[] = []
+      let accumulator = 0
+      for (let k = 0; k < heights.length; k++) {
+        tops.push(column.y + accumulator)
+        accumulator += heights[k]
+      }
+      return { tops, heights, amounts }
+    })
 
-  const totalApplicants = columnValues[0].reduce((sum, val) => sum + val, 0);
+    const conversionSeries = stages.slice(0, -1).map((stage, index) => {
+      const current = stage.total
+      const next = stages[index + 1]?.total ?? 0
+      if (current <= 0) return 0
+      return next / current
+    })
+
+    return { colDims: columnDimensions, stacks: stackLayouts, conversionRates: conversionSeries }
+  }, [stages, sources, flowData, innerHeight, columnGap, columnWidth, paddingTop])
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h3 className="text-lg font-semibold text-gray-800">Candidate Flow Overview</h3>
-          <p className="text-sm text-gray-500">{totalApplicants.toLocaleString()} candidates across {limitedSources.length} source{limitedSources.length === 1 ? '' : 's'}.</p>
-        </div>
-        <div className="flex flex-wrap gap-3 text-xs">
-          {limitedSources.map((source) => (
-            <span key={source.key} className="inline-flex items-center gap-2 px-3 py-1 border border-gray-200 rounded-full bg-white shadow-sm">
-              <span className="inline-block w-3 h-3 rounded-full" style={{ background: SOURCE_COLORS[source.key] || '#94a3b8' }} />
-              <span className="font-medium text-gray-700">{SOURCE_LABELS[source.key] || source.label}</span>
-              <span className="text-gray-500">{source.count.toLocaleString()}</span>
-            </span>
-          ))}
-        </div>
-      </div>
+    <svg viewBox={`0 0 ${width} ${height}`} className="w-full" style={{ height: `${height}px` }}>
+      {/* Ribbons */}
+      {stages.slice(0, -1).map((_, stageIdx) => {
+        const leftColumn = colDims[stageIdx]
+        const rightColumn = colDims[stageIdx + 1]
+        const leftStack = stacks[stageIdx]
+        const rightStack = stacks[stageIdx + 1]
+        if (!leftColumn || !rightColumn || !leftStack || !rightStack) return null
 
-      <div className="bg-slate-50 border border-slate-200 rounded-xl">
-        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-[400px]">
-          <defs>
-            <linearGradient id="sankeyShadow" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#000" stopOpacity="0.08" />
-              <stop offset="100%" stopColor="#000" stopOpacity="0.0" />
-            </linearGradient>
-          </defs>
+        return sources.map((source, sourceIdx) => {
+          const lTop = leftStack.tops[sourceIdx] ?? leftColumn.y
+          const lBot = lTop + (leftStack.heights[sourceIdx] ?? 0)
+          const rTop = rightStack.tops[sourceIdx] ?? rightColumn.y
+          const rBot = rTop + (rightStack.heights[sourceIdx] ?? 0)
+          const d = ribbonPath(leftColumn.x + leftColumn.w, lTop, lBot, rightColumn.x, rTop, rBot)
+          return <path key={`${stageIdx}-${source.key}`} d={d} fill={source.color} opacity={0.88} />
+        })
+      })}
 
-          {columnTitles.map((title, index) => (
-            <text
-              key={title}
-              x={columnX(index)}
-              y={marginTop - 22}
-              textAnchor="middle"
-              className="text-[12px] font-semibold fill-gray-600"
-            >
-              {title}
-            </text>
-          ))}
+      {/* Stage blocks + labels */}
+      {colDims.map((column, index) => (
+        <g key={column.label} transform={`translate(${column.x},${column.y})`}>
+          <rect width={column.w} height={column.h} rx={10} fill="#f8fafc" stroke="#cbd5e1" />
+          <text x={12} y={20} fontSize={13} fontWeight={600} fill="#111827">{column.label}</text>
+          <text x={12} y={44} fontSize={26} fontWeight={700} fill="#111827">{column.total.toLocaleString()}</text>
+        </g>
+      ))}
 
-          {columnLayouts.map((column, colIndex) => (
-            <g key={colIndex}>
-              {column.map((node, sourceIndex) => {
-                const sourceKey = limitedSources[sourceIndex]?.key ?? String(sourceIndex);
-                const fill = colIndex === 0 ? SOURCE_COLORS[sourceKey] || '#94a3b8' : '#e2e8f0';
-                const opacity = colIndex === 0 ? 0.85 : 0.35;
-                const heightValue = node.y1 - node.y0;
-                if (heightValue <= 0) {
-                  return null;
-                }
+      {/* Conversion rate labels */}
+      {showConversionRates && stages.slice(0, -1).map((_, index) => {
+        const leftColumn = colDims[index]
+        const rightColumn = colDims[index + 1]
+        const percentage = Math.round((conversionRates[index] ?? 0) * 100)
+        const x1 = leftColumn.x + leftColumn.w
+        const x2 = rightColumn.x
+        const y = Math.min(leftColumn.y, rightColumn.y) - 6
+        return (
+          <text key={`conversion-${index}`} x={(x1 + x2) / 2} y={y} fontSize={12} textAnchor="middle" fill="#334155">
+            {Number.isFinite(percentage) ? `${percentage}%` : '—'}
+          </text>
+        )
+      })}
 
-                return (
-                  <g key={`${colIndex}-${sourceIndex}`}>
-                    <rect
-                      x={nodeLeft(colIndex)}
-                      y={node.y0}
-                      width={nodeWidth}
-                      height={heightValue}
-                      fill={fill}
-                      fillOpacity={opacity}
-                      stroke={colIndex === 0 ? 'rgba(15, 23, 42, 0.35)' : 'rgba(148, 163, 184, 0.4)'}
-                      strokeWidth={colIndex === 0 ? 0.6 : 0.4}
-                      rx={colIndex === 0 ? 3 : 6}
-                    />
-                    {colIndex === 0 && (
-                      <text
-                        x={nodeLeft(colIndex) - 12}
-                        y={(node.y0 + node.y1) / 2}
-                        textAnchor="end"
-                        alignmentBaseline="middle"
-                        className="text-[11px] fill-slate-700"
-                      >
-                        {limitedSources[sourceIndex].label}
-                      </text>
-                    )}
-                    <text
-                      x={nodeRight(colIndex) + 10}
-                      y={(node.y0 + node.y1) / 2}
-                      textAnchor="start"
-                      alignmentBaseline="middle"
-                      className="text-[10px] fill-slate-500"
-                    >
-                      {node.value.toLocaleString()}
-                    </text>
-                  </g>
-                );
-              })}
+      {/* Legend */}
+      <g transform={`translate(${width - 220}, ${paddingTop})`}>
+        {sources.map((source, index) => (
+          <g key={source.key} transform={`translate(0, ${index * 18})`}>
+            <rect width={12} height={12} rx={2} fill={source.color} />
+            <text x={18} y={10} fontSize={12} fill="#334155">{source.label}</text>
+          </g>
+        ))}
+      </g>
 
-              <text
-                x={columnX(colIndex)}
-                y={height - marginBottom + 18}
-                textAnchor="middle"
-                className="text-[11px] fill-slate-500"
-              >
-                {totalsByColumn[colIndex].toLocaleString()} candidates
-              </text>
-            </g>
-          ))}
-
-          {columnLayouts.slice(0, -1).map((column, colIndex) => (
-            <g key={`links-${colIndex}`}>
-              {column.map((node, sourceIndex) => {
-                const nextNode = columnLayouts[colIndex + 1]?.[sourceIndex];
-                if (!nextNode) return null;
-                const startHeight = node.y1 - node.y0;
-                const endHeight = nextNode.y1 - nextNode.y0;
-                if (startHeight <= 0 && endHeight <= 0) return null;
-                const sourceKey = limitedSources[sourceIndex]?.key ?? String(sourceIndex);
-                const color = SOURCE_COLORS[sourceKey] || '#94a3b8';
-                const opacity = 0.55;
-
-                const x0 = nodeRight(colIndex);
-                const x1 = nodeLeft(colIndex + 1);
-                const y0Top = node.y0;
-                const y0Bottom = node.y1;
-                const y1Top = nextNode.y0;
-                const y1Bottom = nextNode.y1;
-
-                const d = [
-                  `M ${x0},${y0Top}`,
-                  `C ${x0 + curveOffset},${y0Top} ${x1 - curveOffset},${y1Top} ${x1},${y1Top}`,
-                  `L ${x1},${y1Bottom}`,
-                  `C ${x1 - curveOffset},${y1Bottom} ${x0 + curveOffset},${y0Bottom} ${x0},${y0Bottom}`,
-                  'Z',
-                ].join(' ');
-
-                return (
-                  <path
-                    key={`${colIndex}-${sourceIndex}`}
-                    d={d}
-                    fill={color}
-                    fillOpacity={opacity}
-                    stroke={color}
-                    strokeOpacity={0.4}
-                    strokeWidth={0.6}
-                  />
-                );
-              })}
-            </g>
-          ))}
-        </svg>
-      </div>
-    </div>
-  );
+      {/* Reject bar */}
+      {showRejectBar && (
+        <g transform={`translate(40, ${height - 28})`}>
+          <rect width={width - 80} height={16} rx={8} fill="#e5e7eb" />
+          <text x={(width - 80) / 2} y={12} fontSize={12} textAnchor="middle" fill="#334155">
+            {rejectLabel}
+          </text>
+        </g>
+      )}
+    </svg>
+  )
 }
-
-export type { SankeySource, SankeyStep };

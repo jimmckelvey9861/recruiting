@@ -16,6 +16,7 @@ export const SOURCE_OPTIONS: SourceOption[] = [
   { key: 'instagram', label: 'Instagram', color: '#db2777', baseCount: 20 },
   { key: 'jobfair', label: 'Job Fairs', color: '#f97316', baseCount: 16 },
   { key: 'walkins', label: 'Walk-ins', color: '#14b8a6', baseCount: 19 },
+  { key: 'job_boards', label: 'Job Boards', color: '#fbbf24', baseCount: 24 },
 ];
 
 export const SOURCE_COLORS: Record<string, string> = SOURCE_OPTIONS.reduce((acc, option) => {
