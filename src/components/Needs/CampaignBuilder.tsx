@@ -23,7 +23,7 @@ export default function CampaignBuilder() {
   };
 
   return (
-    <div className="h-full overflow-auto bg-white max-w-[420px]">
+    <div className="h-full overflow-auto bg-white max-w-[320px]">
       <div className="p-5 space-y-5">
         <h2 className="text-lg font-semibold text-gray-800">Campaign Planner</h2>
         

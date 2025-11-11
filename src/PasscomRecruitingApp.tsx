@@ -283,7 +283,7 @@ export default function PasscomRecruitingApp() {
         {activeTab === 'needs' && (
           <div className="h-full bg-gray-50">
             <div className="h-full max-w-7xl mx-auto px-6 py-8">
-              <div className="h-full grid gap-6 grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)_420px]">
+              <div className="h-full grid gap-6 grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)_320px]">
                 <section className="bg-white border rounded-xl shadow-sm p-4 overflow-y-auto">
                   <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Jobs</h2>
                   <p className="text-xs text-gray-500 mt-1">
