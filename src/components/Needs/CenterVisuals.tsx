@@ -29,15 +29,17 @@ function buildLineSeries(job: string, weeks: number) {
     for (let day = 0; day < 7; day++) {
       if (dayOffset >= weeks * 7) break;
 
-      const slots = weekMatrix[day];
-      const demandTotal = slots.reduce((sum, slot) => slot.closed ? sum : sum + slot.demand, 0);
-      const supplyTotal = slots.reduce((sum, slot) => slot.closed ? sum : sum + slot.supply, 0);
+      const daySlots = weekMatrix[day] || [];
+      const slots = daySlots.filter(slot => !slot.closed && slot.demand > 0);
+      const slotCount = Math.max(slots.length, 1);
+      const demandTotal = slots.reduce((sum, slot) => sum + slot.demand, 0);
+      const supplyTotal = slots.reduce((sum, slot) => sum + slot.supply, 0);
 
       const date = addDays(start, dayOffset);
       series.push({
         date: formatISO(date),
-        demand: demandTotal / slots.length,
-        supply: supplyTotal / slots.length
+        demand: Math.round(demandTotal / slotCount),
+        supply: Math.round(supplyTotal / slotCount)
       });
 
       dayOffset++;
@@ -56,7 +58,8 @@ function buildHeatGrid(job: string, weekOffset: number) {
   for (let slotIdx = startSlot; slotIdx < endSlot; slotIdx++) {
     const row: (number | null)[] = [];
     for (let day = 0; day < 7; day++) {
-      const cell = weekMatrix[day]?.[slotIdx];
+      const daySlots = weekMatrix[day] || [];
+      const cell = daySlots[slotIdx];
       if (!cell || cell.closed || cell.demand <= 0) {
         row.push(null);
       } else {
@@ -275,19 +278,19 @@ function LinesChart({
       <polyline
         fill="none"
         stroke="#b91c1c"
-        strokeWidth={2.25}
+        strokeWidth={3.5}
         points={series.map((s, i) => `${X(i)},${Y(s.demand)}`).join(" ")}
       />
       <polyline
         fill="none"
         stroke="#1d4ed8"
-        strokeWidth={2.25}
+        strokeWidth={3.5}
         points={series.map((s, i) => `${X(i)},${Y(s.supply)}`).join(" ")}
       />
       {series.map((s, i) => (
         <g key={i}>
-          <circle cx={X(i)} cy={Y(s.demand)} r={1.8} fill="#b91c1c" />
-          <circle cx={X(i)} cy={Y(s.supply)} r={1.8} fill="#1d4ed8" />
+          <circle cx={X(i)} cy={Y(s.demand)} r={2.4} fill="#b91c1c" />
+          <circle cx={X(i)} cy={Y(s.supply)} r={2.4} fill="#1d4ed8" />
         </g>
       ))}
 
