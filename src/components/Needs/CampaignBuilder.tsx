@@ -24,23 +24,23 @@ export default function CampaignBuilder() {
 
   return (
     <div className="h-full overflow-auto bg-white">
-      <div className="p-6 space-y-6">
-        <h2 className="text-xl font-semibold text-gray-800">Campaign Planner</h2>
+      <div className="p-5 space-y-5">
+        <h2 className="text-lg font-semibold text-gray-800">Campaign Planner</h2>
         
         {/* Start Date */}
         <div>
-          <label className="block text-gray-700 font-medium mb-2">Start Date</label>
+          <label className="block text-gray-700 text-sm font-medium mb-1.5">Start Date</label>
           <input
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+            className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 text-sm"
           />
         </div>
 
         {/* Daily Budget Slider */}
         <div>
-          <label className="block text-gray-700 font-medium mb-2">Daily Spend Target</label>
+          <label className="block text-gray-700 text-sm font-medium mb-1.5">Daily Spend Target</label>
           <div className="flex items-center gap-4">
             <input
               type="range"
@@ -49,13 +49,13 @@ export default function CampaignBuilder() {
               step="10"
               value={dailyBudget}
               onChange={(e) => setDailyBudget(Number(e.target.value))}
-              className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+              className="flex-1 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer"
               style={{
                 background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${dailyBudget / 10}%, #e5e7eb ${dailyBudget / 10}%, #e5e7eb 100%)`
               }}
             />
-            <div className="text-sm text-gray-500">$1000</div>
-            <div className="relative w-28">
+            <div className="text-xs text-gray-500">$1000</div>
+            <div className="relative w-24">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
               <input
                 type="number"
@@ -63,7 +63,7 @@ export default function CampaignBuilder() {
                 onChange={(e) => setDailyBudget(Number(e.target.value))}
                 min="0"
                 max="1000"
-                className="w-full pl-7 pr-4 py-2 border-2 border-gray-300 rounded-lg text-center font-semibold focus:outline-none focus:border-blue-500"
+                className="w-full pl-6 pr-3 py-1.5 border border-gray-300 rounded-lg text-center text-sm font-semibold focus:outline-none focus:border-blue-500"
               />
             </div>
           </div>
@@ -71,47 +71,47 @@ export default function CampaignBuilder() {
 
         {/* End Goal */}
         <div>
-          <label className="block text-gray-700 font-medium mb-3">End Goal</label>
+          <label className="block text-gray-700 text-sm font-medium mb-2.5">End Goal</label>
           
           {/* Hires Option */}
-          <div className="flex items-center gap-3 mb-3">
+          <div className="flex items-center gap-3 mb-2.5">
             <input
               type="radio"
               id="hires"
               name="endGoal"
               checked={endGoalType === 'hires'}
               onChange={() => setEndGoalType('hires')}
-              className="w-5 h-5 cursor-pointer"
+              className="w-4 h-4 cursor-pointer"
             />
-            <label htmlFor="hires" className="text-gray-700 cursor-pointer">Hires</label>
+            <label htmlFor="hires" className="text-gray-700 text-sm cursor-pointer">Hires</label>
             <input
               type="number"
               value={hiresTarget}
               onChange={(e) => setHiresTarget(Number(e.target.value))}
               disabled={endGoalType !== 'hires'}
-              className={`ml-auto w-32 px-4 py-2 border-2 border-gray-300 rounded-lg text-center font-semibold focus:outline-none focus:border-blue-500 ${
+              className={`ml-auto w-28 px-3 py-1.5 border border-gray-300 rounded-lg text-center text-sm font-semibold focus:outline-none focus:border-blue-500 ${
                 endGoalType !== 'hires' ? 'bg-gray-100 text-gray-400' : ''
               }`}
             />
           </div>
 
           {/* Date Option */}
-          <div className="flex items-center gap-3 mb-3">
+          <div className="flex items-center gap-3 mb-2.5">
             <input
               type="radio"
               id="date"
               name="endGoal"
               checked={endGoalType === 'date'}
               onChange={() => setEndGoalType('date')}
-              className="w-5 h-5 cursor-pointer"
+              className="w-4 h-4 cursor-pointer"
             />
-            <label htmlFor="date" className="text-gray-700 cursor-pointer">Date</label>
+            <label htmlFor="date" className="text-gray-700 text-sm cursor-pointer">Date</label>
             <input
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
               disabled={endGoalType !== 'date'}
-              className={`ml-auto px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 ${
+              className={`ml-auto px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-blue-500 ${
                 endGoalType !== 'date' ? 'bg-gray-100 text-gray-400' : ''
               }`}
             />
@@ -125,17 +125,17 @@ export default function CampaignBuilder() {
               name="endGoal"
               checked={endGoalType === 'budget'}
               onChange={() => setEndGoalType('budget')}
-              className="w-5 h-5 cursor-pointer"
+              className="w-4 h-4 cursor-pointer"
             />
-            <label htmlFor="budget" className="text-gray-700 cursor-pointer">Budget</label>
-            <div className="relative ml-auto w-32">
+            <label htmlFor="budget" className="text-gray-700 text-sm cursor-pointer">Budget</label>
+            <div className="relative ml-auto w-28">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
               <input
                 type="number"
                 value={totalBudget}
                 onChange={(e) => setTotalBudget(Number(e.target.value))}
                 disabled={endGoalType !== 'budget'}
-                className={`w-full pl-7 pr-4 py-2 border-2 border-gray-300 rounded-lg text-center font-semibold focus:outline-none focus:border-blue-500 ${
+                className={`w-full pl-6 pr-3 py-1.5 border border-gray-300 rounded-lg text-center text-sm font-semibold focus:outline-none focus:border-blue-500 ${
                   endGoalType !== 'budget' ? 'bg-gray-100 text-gray-400' : ''
                 }`}
               />
@@ -146,7 +146,7 @@ export default function CampaignBuilder() {
         {/* Build Campaign Button */}
         <button
           onClick={handleBuildCampaign}
-          className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 text-base"
+          className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 text-sm"
         >
           Build Campaign
         </button>
@@ -154,8 +154,8 @@ export default function CampaignBuilder() {
         <style>{`
           input[type='range']::-webkit-slider-thumb {
             appearance: none;
-            width: 20px;
-            height: 20px;
+            width: 16px;
+            height: 16px;
             border-radius: 50%;
             background: #3b82f6;
             cursor: pointer;
@@ -164,8 +164,8 @@ export default function CampaignBuilder() {
           }
 
           input[type='range']::-moz-range-thumb {
-            width: 20px;
-            height: 20px;
+            width: 16px;
+            height: 16px;
             border-radius: 50%;
             background: #3b82f6;
             cursor: pointer;

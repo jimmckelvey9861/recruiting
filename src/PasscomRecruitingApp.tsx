@@ -285,9 +285,9 @@ export default function PasscomRecruitingApp() {
             <div className="h-full max-w-7xl mx-auto px-6 py-8">
               <div className="h-full grid grid-cols-12 gap-6">
                 <section className="col-span-12 lg:col-span-3 bg-white border rounded-xl shadow-sm p-4 overflow-y-auto">
-                  <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Job Roles</h2>
+                  <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Jobs</h2>
                   <p className="text-xs text-gray-500 mt-1">
-                    Average coverage forecast for the next quarter.
+                    Coverage forecast for next quarter.
                   </p>
                   <div className="mt-4 space-y-3">
                     {jobCoverageData.map(({ job, color, coverage }) => (
