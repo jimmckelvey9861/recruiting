@@ -4,6 +4,7 @@ import AdvertisementManager from './components/Advertisement/AdvertisementManage
 import { genWeek } from './components/Campaign/CoverageHeatmap';
 import CampaignBuilder from './components/Needs/CampaignBuilder';
 import CenterVisuals, { RANGE_WEEKS as NEEDS_RANGE_WEEKS, RANGE_LABELS as NEEDS_RANGE_LABELS } from './components/Needs/CenterVisuals';
+import ReviewPanel from './components/Review/ReviewPanel';
 
 type Tab = 'needs' | 'campaign' | 'advertisement' | 'review' | 'company';
 
@@ -329,12 +330,7 @@ export default function PasscomRecruitingApp() {
         )}
         
         {activeTab === 'review' && (
-          <div className="h-full flex items-center justify-center">
-            <div className="text-center">
-              <h2 className="text-2xl font-semibold text-gray-700 mb-2">Review</h2>
-              <p className="text-gray-500">Coming soon...</p>
-            </div>
-          </div>
+          <ReviewPanel selectedJobs={selectedJobs} selectedLocations={selectedLocations} />
         )}
         
         {activeTab === 'company' && (

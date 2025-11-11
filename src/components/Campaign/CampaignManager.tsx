@@ -1,19 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
 import CoverageHeatmap from './CoverageHeatmap';
 import CampaignControlPanel from './CampaignControlPanel';
+import { SOURCE_COLORS } from '../../constants/sourceColors';
 
 // ===============================
 // Campaign Manager – compact, robust single file (JSX only)
 // ===============================
 
 // ---- helpers
-const SRC_COLOR: Record<string, string> = {
-  indeed: '#2563eb',
-  facebook: '#16a34a',
-  craigslist: '#f59e0b',
-  referrals: '#7c3aed',
-  qr_posters: '#dc2626',
-};
 const round2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
 const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
 const sum = (arr: number[]) => arr.reduce((a, b) => a + b, 0);
@@ -216,7 +210,7 @@ export default function CampaignManager({ selectedLocations, setSelectedLocation
               {(current?.sources||[]).map((s)=> (
                 <div key={s.key} className="grid grid-cols-12 items-center text-sm py-0.5 border-b last:border-b-0">
                   <div className="col-span-4 capitalize">
-                    <span className="inline-block w-3 h-3 rounded-full mr-2" style={{background:SRC_COLOR[s.key]}}></span>
+                    <span className="inline-block w-3 h-3 rounded-full mr-2" style={{background:SOURCE_COLORS[s.key]}}></span>
                     {s.key.replace('_',' ')} <span className="text-gray-500">(CPA ${s.cpa.toFixed(2)})</span>
                   </div>
                   <div className="col-span-2">
@@ -701,7 +695,7 @@ function AreaSection({ series, sources, showPoints }: AreaSectionProps){
         const upper = stack.map((r,i)=>({x:X(i), y:Y(r.layers[si].y1)}));
         const lower = stack.map((r,i)=>({x:X(i), y:Y(r.layers[si].y0)})).reverse();
         const d = buildAreaPath(upper, lower);
-        return <path key={s.key} d={d} fill={SRC_COLOR[s.key]} opacity={0.65} stroke="#000" strokeWidth={0.5}/>;
+        return <path key={s.key} d={d} fill={SOURCE_COLORS[s.key]} opacity={0.65} stroke="#000" strokeWidth={0.5}/>;
       })}
 
       {showPoints !== false && enabled.map((s,si)=> stack.map((r,i)=>{
