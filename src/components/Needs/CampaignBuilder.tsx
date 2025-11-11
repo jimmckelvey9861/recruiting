@@ -27,20 +27,23 @@ export default function CampaignBuilder() {
       <div className="p-5 space-y-5">
         <h2 className="text-lg font-semibold text-gray-800">Campaign Planner</h2>
         
-        {/* Start Date */}
-        <div>
-          <label className="block text-gray-700 text-sm font-medium mb-1.5">Start Date</label>
-          <input
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 text-sm"
-          />
-        </div>
+        {/* Start Date + Daily Spend */}
+        <div className="space-y-3">
+          <div className="flex items-center">
+            <span className="text-gray-700 text-sm font-medium">Start Date</span>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="ml-auto w-40 px-3 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 text-sm"
+            />
+          </div>
 
-        {/* Daily Budget Slider */}
-        <div>
-          <label className="block text-gray-700 text-sm font-medium mb-1.5">Daily Spend Target</label>
+          <div className="flex items-center">
+            <span className="text-gray-700 text-sm font-medium">Daily Spend Target</span>
+            <div className="text-sm font-semibold text-gray-700 ml-auto">${dailyBudget}</div>
+          </div>
+
           <div className="flex items-center gap-4">
             <input
               type="range"
@@ -55,17 +58,14 @@ export default function CampaignBuilder() {
               }}
             />
             <div className="text-xs text-gray-500">$1000</div>
-            <div className="relative w-24">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
-              <input
-                type="number"
-                value={dailyBudget}
-                onChange={(e) => setDailyBudget(Number(e.target.value))}
-                min="0"
-                max="1000"
-                className="w-full pl-6 pr-3 py-1.5 border border-gray-300 rounded-lg text-center text-sm font-semibold focus:outline-none focus:border-blue-500"
-              />
-            </div>
+            <input
+              type="number"
+              value={dailyBudget}
+              onChange={(e) => setDailyBudget(Number(e.target.value))}
+              min="0"
+              max="1000"
+              className="w-24 px-3 py-1.5 border border-gray-300 rounded-lg text-center text-sm font-semibold focus:outline-none focus:border-blue-500"
+            />
           </div>
         </div>
 
