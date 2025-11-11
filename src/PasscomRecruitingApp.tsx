@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import CampaignManager from './components/Campaign/CampaignManager';
 import AdvertisementManager from './components/Advertisement/AdvertisementManager';
+import CampaignBuilder from './components/Needs/CampaignBuilder';
 
 type Tab = 'needs' | 'campaign' | 'advertisement' | 'review' | 'company';
 
@@ -15,6 +16,64 @@ const JOB_BASE_COLORS: Record<string, string> = {
   "Cleaner": "#3967D6",      // Dark Blue
   "Barista": "#8855D0"       // Purple
 };
+
+const AVAILABLE_LOCATIONS = ['BOS', 'LGA', 'DCA', 'ORD'];
+const AVAILABLE_JOBS = ['Server', 'Cook', 'Bartender', 'Security', 'Dishwasher', 'Manager', 'Cleaner', 'Barista'];
+
+const JOB_REQUIREMENT_BASE: Record<string, number> = {
+  "Server": 8,
+  "Cook": 10,
+  "Bartender": 6,
+  "Security": 4,
+  "Dishwasher": 7,
+  "Manager": 3,
+  "Cleaner": 5,
+  "Barista": 6
+};
+
+const HALF_HOURS_PER_DAY = 48;
+const FORECAST_DAYS = 90; // approximately a quarter
+
+function createSeeder(job: string) {
+  let seed = 0;
+  for (let i = 0; i < job.length; i++) {
+    seed = (seed << 5) - seed + job.charCodeAt(i);
+    seed |= 0;
+  }
+  return Math.abs(seed) || 1;
+}
+
+function seededRandom(seed: number) {
+  let value = seed % 2147483647;
+  if (value <= 0) value += 2147483646;
+  return () => {
+    value = (value * 16807) % 2147483647;
+    return (value - 1) / 2147483646;
+  };
+}
+
+function calculateQuarterCoverage(job: string): number {
+  const baseRequirement = JOB_REQUIREMENT_BASE[job] ?? 6;
+  const rand = seededRandom(createSeeder(job) + 2031);
+  let totalCoverage = 0;
+  let count = 0;
+
+  for (let day = 0; day < FORECAST_DAYS; day++) {
+    for (let slot = 0; slot < HALF_HOURS_PER_DAY; slot++) {
+      const demandVariation = 0.4 * (rand() - 0.5); // ±20%
+      const required = Math.max(1, Math.round(baseRequirement * (1 + demandVariation)));
+      const supplyVariation = 0.8 * (rand() - 0.4); // approx -40% to +40%
+      const available = Math.max(0, required * (1 + supplyVariation));
+      const ratio = available / required;
+      const cappedRatio = Math.min(ratio, 1); // clamp to 100% coverage per requirements
+      totalCoverage += cappedRatio * 100;
+      count++;
+    }
+  }
+
+  const averageCoverage = count > 0 ? totalCoverage / count : 0;
+  return Math.min(Math.max(Math.round(averageCoverage), 0), 150);
+}
 
 interface JobFormData {
   role: string;
@@ -41,10 +100,6 @@ export default function PasscomRecruitingApp() {
   const locationDropdownRef = useRef<HTMLDivElement>(null);
   const jobDropdownRef = useRef<HTMLDivElement>(null);
   
-  // Available options
-  const availableLocations = ['BOS', 'LGA', 'DCA', 'ORD'];
-  const availableJobs = ['Server', 'Cook', 'Bartender', 'Security', 'Dishwasher', 'Manager', 'Cleaner', 'Barista'];
-
   // Update job forms when selected jobs change
   useEffect(() => {
     setJobForms(prev => {
@@ -87,6 +142,14 @@ export default function PasscomRecruitingApp() {
     setSelectedJobs([job]);
     setShowJobDropdown(false);
   };
+
+  const jobCoverageData = useMemo(() =>
+    AVAILABLE_JOBS.map(job => ({
+      job,
+      color: JOB_BASE_COLORS[job] || '#2563eb',
+      coverage: calculateQuarterCoverage(job)
+    }))
+  , []);
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'needs', label: 'Needs' },
@@ -148,7 +211,7 @@ export default function PasscomRecruitingApp() {
                 
                 {showLocationDropdown && (
                   <div className="absolute right-0 z-10 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg w-48">
-                    {availableLocations.map((location) => (
+                    {AVAILABLE_LOCATIONS.map((location) => (
                       <label
                         key={location}
                         className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer"
@@ -186,7 +249,7 @@ export default function PasscomRecruitingApp() {
                 
                 {showJobDropdown && (
                   <div className="absolute right-0 z-10 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg w-48">
-                    {availableJobs.map((job) => (
+                    {AVAILABLE_JOBS.map((job) => (
                       <label
                         key={job}
                         className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer"
@@ -221,14 +284,39 @@ export default function PasscomRecruitingApp() {
           <div className="h-full bg-gray-50">
             <div className="h-full max-w-7xl mx-auto px-6 py-8">
               <div className="h-full grid grid-cols-12 gap-6">
-                <section className="col-span-12 lg:col-span-3 bg-white border rounded-xl shadow-sm p-4">
-                  <div className="h-full w-full bg-gray-100 rounded-md border border-dashed border-gray-300" />
+                <section className="col-span-12 lg:col-span-3 bg-white border rounded-xl shadow-sm p-4 overflow-y-auto">
+                  <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Job Roles</h2>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Average coverage forecast for the next quarter.
+                  </p>
+                  <div className="mt-4 space-y-3">
+                    {jobCoverageData.map(({ job, color, coverage }) => (
+                      <div key={job} className="border border-gray-200 rounded-lg p-3">
+                        <div className="flex items-center justify-between text-sm font-medium text-gray-700">
+                          <span className="flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded-full" style={{ background: color }} />
+                            {job}
+                          </span>
+                          <span>{coverage}%</span>
+                        </div>
+                        <div className="mt-2 h-2.5 rounded-full bg-gray-200 overflow-hidden">
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              width: `${Math.min(coverage, 150) / 150 * 100}%`,
+                              background: color
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </section>
                 <section className="col-span-12 lg:col-span-5 bg-white border rounded-xl shadow-sm p-4">
                   <div className="h-full w-full bg-gray-100 rounded-md border border-dashed border-gray-300" />
                 </section>
-                <section className="col-span-12 lg:col-span-4 bg-white border rounded-xl shadow-sm p-4">
-                  <div className="h-full w-full bg-gray-100 rounded-md border border-dashed border-gray-300" />
+                <section className="col-span-12 lg:col-span-4 bg-white border rounded-xl shadow-sm p-0 overflow-hidden">
+                  <CampaignBuilder />
                 </section>
               </div>
             </div>
