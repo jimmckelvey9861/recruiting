@@ -272,13 +272,13 @@ function LinesChart({
         return (
           <g key={i}>
             <line x1={PADL - 4} x2={W - PADR} y1={y} y2={y} stroke="#e5e7eb" />
-            <text x={PADL - 10} y={y + 4} fontSize="12" textAnchor="end" fill="#334155">
+            <text x={PADL - 10} y={y + 4} fontSize="14" fontWeight={600} textAnchor="end" fill="#1f2937">
               {v}
             </text>
           </g>
         );
       })}
-      <text x={14} y={PADT + innerH / 2} fontSize="12" fill="#334155" transform={`rotate(-90 14 ${PADT + innerH / 2})`}>
+      <text x={14} y={PADT + innerH / 2} fontSize="14" fontWeight={600} fill="#1f2937" transform={`rotate(-90 14 ${PADT + innerH / 2})`}>
         Avg. employees per slot
       </text>
 
@@ -304,7 +304,7 @@ function LinesChart({
       {series.map((s, i) => i % stepDays === 0 && (
         <g key={`x${i}`}>
           <line x1={X(i)} x2={X(i)} y1={H - PADB} y2={H - PADB + 4} stroke="#94a3b8" />
-          <text x={X(i)} y={H - PADB + 16} fontSize="12" textAnchor="middle" fill="#334155">
+          <text x={X(i)} y={H - PADB + 16} fontSize="14" fontWeight={600} textAnchor="middle" fill="#1f2937">
             {s.date.slice(5)}
           </text>
         </g>
@@ -317,7 +317,6 @@ function LinesChart({
         <text x="108" y="10" fontSize="12" fill="#1f2937">Supply</text>
       </g>
 
-      <text x={PADL} y={PADT - 4} fontSize="12" fill="#334155">{role}</text>
     </svg>
   );
 }
