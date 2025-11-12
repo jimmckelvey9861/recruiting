@@ -246,6 +246,14 @@ export default function AdSourcesPanel() {
         <div className="border rounded-md divide-y max-h-[520px] overflow-y-auto">
           {sources.map((source) => {
             const kpis = deriveKpis(source);
+            const appsValue = source.apps_override != null ? source.apps_override : kpis.apps;
+            const hiresPerDay = appsValue * 0.25;
+            const referralSpend =
+              source.spend_model === "referral" && source.referral_bonus_per_hire != null
+                ? source.referral_bonus_per_hire * hiresPerDay
+                : null;
+            const spendUsed = referralSpend != null ? referralSpend : kpis.spendDay;
+            const cpaValue = appsValue > 0 ? (spendUsed != null ? spendUsed / appsValue : null) : null;
             return (
               <div
                 key={source.id}
@@ -271,13 +279,13 @@ export default function AdSourcesPanel() {
                   </div>
                   <div className="mt-1 text-[11px] text-gray-600 flex items-center gap-4">
                     <span>
-                      Apps/day: <b>{int0(Math.round(kpis.apps))}</b>
+                      Apps/day: <b>{int0(Math.round(appsValue))}</b>
                     </span>
                     <span>
-                      CPA: <b>{money0(kpis.cpa)}</b>
+                      CPA: <b>{money0(cpaValue)}</b>
                     </span>
                     <span>
-                      Spend/day: <b>{money0(kpis.spendDay)}</b>
+                      Spend/day: <b>{money0(spendUsed)}</b>
                     </span>
                   </div>
                 </button>
