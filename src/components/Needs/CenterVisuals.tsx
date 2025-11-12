@@ -76,13 +76,13 @@ function buildHeatGrid(job: string, weekOffset: number) {
 
 function cellColor(v: number) {
   if (Number.isNaN(v)) return "#e2e8f0";
-  if (v >= 0.3) return "#a61107"; // +30%
-  if (v >= 0.2) return "#ed3e32"; // +20%
-  if (v >= 0.1) return "#f57c73"; // +10%
-  if (v > -0.1) return "#f7ee86"; // 0%
-  if (v > -0.2) return "#c4f786"; // -10%
-  if (v > -0.3) return "#67a61b"; // -20%
-  return "#457d01"; // -30% or less
+  if (v >= 0.3) return "#2e5202"; // +30%
+  if (v >= 0.2) return "#5fab02"; // +20%
+  if (v >= 0.1) return "#b4ed6d"; // +10%
+  if (v > -0.1) return "#f5f547"; // 0%
+  if (v > -0.2) return "#f5676c"; // -10%
+  if (v > -0.3) return "#b81a1f"; // -20%
+  return "#7d0105"; // -30% or less
 }
 
 function IconLines({ active }: { active?: boolean }) {
@@ -206,13 +206,13 @@ export default function CenterVisuals({ job, rangeIdx, onRangeChange }: { job: s
 
 function RangeLegend() {
   const steps = [
-    { label: "+30%", color: "#a61107" },
-    { label: "+20%", color: "#ed3e32" },
-    { label: "+10%", color: "#f57c73" },
-    { label: "0%", color: "#f7ee86" },
-    { label: "-10%", color: "#c4f786" },
-    { label: "-20%", color: "#67a61b" },
-    { label: "-30%", color: "#457d01" }
+    { label: "+30%", color: "#2e5202" },
+    { label: "+20%", color: "#5fab02" },
+    { label: "+10%", color: "#b4ed6d" },
+    { label: "0%", color: "#f5f547" },
+    { label: "-10%", color: "#f5676c" },
+    { label: "-20%", color: "#b81a1f" },
+    { label: "-30%", color: "#7d0105" }
   ];
 
   return (
