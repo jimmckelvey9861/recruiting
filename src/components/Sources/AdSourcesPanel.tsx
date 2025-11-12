@@ -341,182 +341,197 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
   };
 
   return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-12 gap-2 items-center">
-        <FieldBox label="Source Name" className="col-span-6">
-          <input className={input} value={s.name} onChange={(event) => set({ name: event.target.value })} />
-        </FieldBox>
-        <FieldBox label="Color" className="col-span-6">
-          <div className="flex items-center gap-2">
+    <div className="space-y-4">
+      <section className="space-y-3">
+        <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wide">Name</h3>
+        <div className="grid grid-cols-12 gap-3 items-center">
+          <FieldBox label="Source Name" className="col-span-8">
+            <input className={input} value={s.name} onChange={(event) => set({ name: event.target.value })} />
+          </FieldBox>
+          <FieldBox label="Color" className="col-span-4">
+            <div className="flex items-center gap-2">
+              <input
+                type="color"
+                className="w-10 h-8 border rounded"
+                value={s.color}
+                onChange={(event) => set({ color: event.target.value })}
+              />
+              <span className="text-sm">{s.color}</span>
+            </div>
+          </FieldBox>
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wide">Timing</h3>
+        <div className="grid grid-cols-12 gap-3 items-center">
+          <FieldBox label="Start Date" className="col-span-4">
             <input
-              type="color"
-              className="w-10 h-8 border rounded"
-              value={s.color}
-              onChange={(event) => set({ color: event.target.value })}
+              type="date"
+              className={input}
+              value={s.schedule?.start ?? ""}
+              onChange={(event) => set({ schedule: { start: event.target.value || null } })}
             />
-            <span className="text-sm">{s.color}</span>
-          </div>
-        </FieldBox>
-      </div>
+          </FieldBox>
 
-      <div className="grid grid-cols-12 gap-2 items-center">
-        <FieldBox label="Start Date" className="col-span-5">
-          <input
-            type="date"
-            className={input}
-            value={s.schedule?.start ?? ""}
-            onChange={(event) => set({ schedule: { start: event.target.value || null } })}
-          />
-        </FieldBox>
+          <FieldBox label="End Criterion" className="col-span-8">
+            <div className="grid grid-cols-12 gap-2 items-center">
+              <label className="col-span-4 flex items-center gap-2">
+                <input
+                  type="radio"
+                  name={`end-${s.id}`}
+                  checked={s.end_type === "date"}
+                  onChange={() => set({ end_type: "date" })}
+                />
+                <span className="text-sm">Date</span>
+              </label>
+              <div className="col-span-8">
+                <input
+                  type="date"
+                  className={`${input} disabled:opacity-50`}
+                  disabled={s.end_type !== "date"}
+                  value={s.end_date ?? ""}
+                  onChange={(event) => set({ end_date: event.target.value || null })}
+                />
+              </div>
 
-        <FieldBox label="End Criterion" className="col-span-7">
-          <div className="grid grid-cols-12 gap-2 items-center">
-            <label className="col-span-4 flex items-center gap-2">
-              <input
-                type="radio"
-                name={`end-${s.id}`}
-                checked={s.end_type === "date"}
-                onChange={() => set({ end_type: "date" })}
-              />
-              <span className="text-sm">Date</span>
-            </label>
-            <div className="col-span-8">
-              <input
-                type="date"
-                className={`${input} disabled:opacity-50`}
-                disabled={s.end_type !== "date"}
-                value={s.end_date ?? ""}
-                onChange={(event) => set({ end_date: event.target.value || null })}
-              />
+              <label className="col-span-4 flex items-center gap-2">
+                <input
+                  type="radio"
+                  name={`end-${s.id}`}
+                  checked={s.end_type === "hires"}
+                  onChange={() => set({ end_type: "hires" })}
+                />
+                <span className="text-sm">Hires</span>
+              </label>
+              <div className="col-span-8">
+                <input
+                  type="number"
+                  className={`${input} text-right disabled:opacity-50`}
+                  disabled={s.end_type !== "hires"}
+                  value={s.end_hires ?? ""}
+                  onChange={setNum("end_hires")}
+                />
+              </div>
+
+              <label className="col-span-4 flex items-center gap-2">
+                <input
+                  type="radio"
+                  name={`end-${s.id}`}
+                  checked={s.end_type === "budget"}
+                  onChange={() => set({ end_type: "budget" })}
+                />
+                <span className="text-sm">Budget</span>
+              </label>
+              <div className="col-span-8">
+                <input
+                  type="number"
+                  className={`${input} text-right disabled:opacity-50`}
+                  disabled={s.end_type !== "budget"}
+                  value={s.end_budget ?? ""}
+                  onChange={setNum("end_budget")}
+                />
+              </div>
             </div>
+          </FieldBox>
+        </div>
+      </section>
 
-            <label className="col-span-4 flex items-center gap-2">
-              <input
-                type="radio"
-                name={`end-${s.id}`}
-                checked={s.end_type === "hires"}
-                onChange={() => set({ end_type: "hires" })}
-              />
-              <span className="text-sm">Hires</span>
-            </label>
-            <div className="col-span-8">
-              <input
-                type="number"
-                className={`${input} text-right disabled:opacity-50`}
-                disabled={s.end_type !== "hires"}
-                value={s.end_hires ?? ""}
-                onChange={setNum("end_hires")}
-              />
-            </div>
+      <section className="space-y-3">
+        <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wide">Cost</h3>
+        <div className="grid grid-cols-12 gap-3 items-center">
+          <FieldBox label="Spend Model" className="col-span-4">
+            <select
+              className={input}
+              value={s.spend_model}
+              onChange={(event) => set({ spend_model: event.target.value as SpendModel })}
+            >
+              <option value="organic">Organic</option>
+              <option value="daily_budget">Daily_Budget</option>
+              <option value="cpc">$ / Click</option>
+              <option value="cpm">$ / 1000 views</option>
+              <option value="cpa">$ / Application</option>
+              <option value="referral">Referral</option>
+            </select>
+          </FieldBox>
 
-            <label className="col-span-4 flex items-center gap-2">
-              <input
-                type="radio"
-                name={`end-${s.id}`}
-                checked={s.end_type === "budget"}
-                onChange={() => set({ end_type: "budget" })}
-              />
-              <span className="text-sm">Budget</span>
-            </label>
-            <div className="col-span-8">
-              <input
-                type="number"
-                className={`${input} text-right disabled:opacity-50`}
-                disabled={s.end_type !== "budget"}
-                value={s.end_budget ?? ""}
-                onChange={setNum("end_budget")}
-              />
-            </div>
-          </div>
-        </FieldBox>
-      </div>
-
-      <div className="grid grid-cols-12 gap-2 items-center">
-        <FieldBox label="Spend Model" className="col-span-5">
-          <select
-            className={input}
-            value={s.spend_model}
-            onChange={(event) => set({ spend_model: event.target.value as SpendModel })}
-          >
-            <option value="organic">Organic</option>
-            <option value="daily_budget">Daily_Budget</option>
-            <option value="cpc">$ / Click</option>
-            <option value="cpm">$ / 1000 views</option>
-            <option value="cpa">$ / Application</option>
-            <option value="referral">Referral</option>
-          </select>
-        </FieldBox>
-
-        <FieldBox label="Daily Cap (apps/day)" className="col-span-3">
-          <input
-            type="number"
-            className={`${input} text-right`}
-            value={s.daily_cap_apps ?? 0}
-            onChange={setNum("daily_cap_apps")}
-          />
-          <div className="text-xs text-gray-500">0 = unlimited</div>
-        </FieldBox>
-      </div>
-
-      <div className="grid grid-cols-12 gap-2 items-center">
-        {show.dailyBudget && (
           <FieldBox label="Daily Budget ($/day)" className="col-span-4">
             <input
               type="number"
               className={`${input} text-right`}
               value={s.daily_budget ?? ""}
               onChange={setNum("daily_budget")}
+              disabled={!show.dailyBudget}
             />
           </FieldBox>
-        )}
-        {show.cpc && (
-          <FieldBox label="$ / Click" className="col-span-4">
-            <input type="number" className={`${input} text-right`} value={s.cpc ?? ""} onChange={setNum("cpc")} />
-          </FieldBox>
-        )}
-        {show.cpm && (
-          <FieldBox label="$ / 1000 views" className="col-span-4">
-            <input type="number" className={`${input} text-right`} value={s.cpm ?? ""} onChange={setNum("cpm")} />
-          </FieldBox>
-        )}
-        {show.cpaBid && (
-          <FieldBox label="$ / Application" className="col-span-4">
-            <input type="number" className={`${input} text-right`} value={s.cpa_bid ?? ""} onChange={setNum("cpa_bid")} />
-          </FieldBox>
-        )}
-        {show.referral && (
-          <FieldBox label="Bounty per Hire ($)" className="col-span-4">
-            <input
-              type="number"
-              className={`${input} text-right`}
-              value={s.referral_bonus_per_hire ?? ""}
-              onChange={setNum("referral_bonus_per_hire")}
-            />
-          </FieldBox>
-        )}
-        {show.organic && (
-          <FieldBox label="Organic Apps/day" className="col-span-4">
-            <input
-              type="number"
-              className={`${input} text-right`}
-              value={s.organic_per_day ?? ""}
-              onChange={setNum("organic_per_day")}
-            />
-          </FieldBox>
-        )}
-      </div>
 
-      <div className="grid grid-cols-12 gap-2 items-center">
-        <FieldBox label="Apps/day (est)" className="col-span-4">
-          <div className="py-1 text-sm">{int0(Math.round(kpis.apps))}</div>
-        </FieldBox>
-        <FieldBox label="CPA (est)" className="col-span-4">
-          <div className="py-1 text-sm">{money0(kpis.cpa)}</div>
-        </FieldBox>
-        <FieldBox label="Spend/day" className="col-span-4">
-          <div className="py-1 text-sm">{money0(kpis.spendDay)}</div>
-        </FieldBox>
-      </div>
+          <FieldBox label="Daily Applicant Cap" className="col-span-4">
+            <input
+              type="number"
+              className={`${input} text-right`}
+              value={s.daily_cap_apps ?? 0}
+              onChange={setNum("daily_cap_apps")}
+            />
+            <div className="text-xs text-gray-500">0 = unlimited</div>
+          </FieldBox>
+        </div>
+
+        <div className="grid grid-cols-12 gap-3 items-center">
+          {show.cpc && (
+            <FieldBox label="$ / Click" className="col-span-4">
+              <input type="number" className={`${input} text-right`} value={s.cpc ?? ""} onChange={setNum("cpc")} />
+            </FieldBox>
+          )}
+          {show.cpm && (
+            <FieldBox label="$ / 1000 views" className="col-span-4">
+              <input type="number" className={`${input} text-right`} value={s.cpm ?? ""} onChange={setNum("cpm")} />
+            </FieldBox>
+          )}
+          {show.cpaBid && (
+            <FieldBox label="$ / Application" className="col-span-4">
+              <input type="number" className={`${input} text-right`} value={s.cpa_bid ?? ""} onChange={setNum("cpa_bid")} />
+            </FieldBox>
+          )}
+          {show.referral && (
+            <FieldBox label="Bounty per Hire ($)" className="col-span-4">
+              <input
+                type="number"
+                className={`${input} text-right`}
+                value={s.referral_bonus_per_hire ?? ""}
+                onChange={setNum("referral_bonus_per_hire")}
+              />
+            </FieldBox>
+          )}
+          {show.organic && (
+            <FieldBox label="Organic Apps/day" className="col-span-4">
+              <input
+                type="number"
+                className={`${input} text-right`}
+                value={s.organic_per_day ?? ""}
+                onChange={setNum("organic_per_day")}
+              />
+            </FieldBox>
+          )}
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wide">Performance</h3>
+        <div className="grid grid-cols-12 gap-3 items-center">
+          <FieldBox label="Apps/day" className="col-span-3">
+            <div className="py-1 text-sm">{int0(Math.round(kpis.apps))}</div>
+          </FieldBox>
+          <FieldBox label="Quality (%)" className="col-span-3">
+            <div className="py-1 text-sm">75%</div>
+          </FieldBox>
+          <FieldBox label="Actual Spend" className="col-span-3">
+            <div className="py-1 text-sm">{money0(kpis.spendDay)}</div>
+          </FieldBox>
+          <FieldBox label="Cost per App" className="col-span-3">
+            <div className="py-1 text-sm">{money0(kpis.cpa)}</div>
+          </FieldBox>
+        </div>
+      </section>
     </div>
   );
 }
