@@ -75,9 +75,14 @@ function buildHeatGrid(job: string, weekOffset: number) {
 }
 
 function cellColor(v: number) {
-  if (v < -0.1) return "#ef4444";
-  if (v < 0.1) return "#f59e0b";
-  return "#22c55e";
+  if (Number.isNaN(v)) return "#e2e8f0";
+  if (v <= -0.3) return "#991b1b"; // dark red
+  if (v <= -0.2) return "#dc2626"; // red
+  if (v <= -0.1) return "#fca5a5"; // light red
+  if (v < 0.1) return "#facc15"; // balanced (yellow)
+  if (v < 0.2) return "#a7f3d0"; // light green
+  if (v < 0.3) return "#22c55e"; // green
+  return "#166534"; // dark green for ≥ 30%
 }
 
 function IconLines({ active }: { active?: boolean }) {
