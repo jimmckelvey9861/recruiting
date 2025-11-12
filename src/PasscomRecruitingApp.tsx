@@ -7,8 +7,9 @@ import CenterVisuals, { RANGE_WEEKS as NEEDS_RANGE_WEEKS, RANGE_LABELS as NEEDS_
 import ReviewPanel from './components/Review/ReviewPanel';
 import DataInspector from './components/Data/DataInspector';
 import { useOverrideVersion } from './state/dataOverrides';
+import AdSourcesPanel from './components/Sources/AdSourcesPanel';
 
-type Tab = 'needs' | 'campaign' | 'advertisement' | 'review' | 'company' | 'data';
+type Tab = 'needs' | 'campaign' | 'advertisement' | 'review' | 'sources' | 'data';
 
 // Job base colors (matching CoverageHeatmap)
 const JOB_BASE_COLORS: Record<string, string> = {
@@ -62,7 +63,7 @@ interface JobFormData {
   data: any; // Store form data for each job
 }
 
-const VALID_TABS: Tab[] = ['needs', 'campaign', 'advertisement', 'review', 'company', 'data'];
+const VALID_TABS: Tab[] = ['needs', 'campaign', 'advertisement', 'review', 'sources', 'data'];
 
 export default function PasscomRecruitingApp() {
   const [activeTab, setActiveTab] = useState<Tab>(() => {
@@ -147,7 +148,7 @@ export default function PasscomRecruitingApp() {
     { id: 'campaign', label: 'Campaign' },
     { id: 'advertisement', label: 'Posting' },
     { id: 'review', label: 'Review' },
-    { id: 'company', label: 'Company' },
+    { id: 'sources', label: 'Sources' },
     { id: 'data', label: 'Data' }
   ];
 
@@ -344,13 +345,10 @@ export default function PasscomRecruitingApp() {
           <ReviewPanel selectedJobs={selectedJobs} selectedLocations={selectedLocations} />
         )}
         
-        {activeTab === 'company' && (
-          <div className="h-full flex items-center justify-center bg-gray-50">
-            <div className="text-center px-6">
-              <h2 className="text-2xl font-semibold text-gray-700 mb-2">Company Information</h2>
-              <p className="text-gray-500 max-w-xl mx-auto">
-                Company details are now part of the Advertisement workflow so you can manage employer branding alongside job ads.
-              </p>
+        {activeTab === 'sources' && (
+          <div className="h-full bg-gray-50 overflow-auto">
+            <div className="max-w-7xl mx-auto px-6 py-8">
+              <AdSourcesPanel />
             </div>
           </div>
         )}
