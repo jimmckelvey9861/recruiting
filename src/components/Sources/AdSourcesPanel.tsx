@@ -358,7 +358,12 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
   const appsValue = s.apps_override != null ? s.apps_override : kpis.apps;
   const qualityValue = s.quality_percent != null ? s.quality_percent : 75;
   const hiresPerDay = appsValue * 0.25;
-  const cpaValue = kpis.spendDay == null || appsValue <= 0 ? null : kpis.spendDay / appsValue;
+  const referralSpend =
+    s.spend_model === "referral" && s.referral_bonus_per_hire != null
+      ? s.referral_bonus_per_hire * hiresPerDay
+      : null;
+  const spendUsed = referralSpend != null ? referralSpend : kpis.spendDay;
+  const cpaValue = appsValue > 0 ? (spendUsed != null ? spendUsed / appsValue : null) : null;
   const input = "w-full bg-transparent border border-gray-200 rounded-md px-2 py-1 text-sm";
 
   const show = {
@@ -552,7 +557,7 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
             </div>
           </FieldBox>
           <FieldBox label="Actual Spend" className="col-span-3">
-            <div className="py-1 px-2 text-sm text-right text-blue-600 bg-slate-100 rounded-md">{money0(kpis.spendDay)}</div>
+            <div className="py-1 px-2 text-sm text-right text-blue-600 bg-slate-100 rounded-md">{money0(spendUsed)}</div>
           </FieldBox>
         </div>
         <div className="grid grid-cols-12 gap-3 items-center">
