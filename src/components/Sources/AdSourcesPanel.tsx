@@ -456,17 +456,6 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
           />
           <div className="text-xs text-gray-500">0 = unlimited</div>
         </FieldBox>
-
-        <FieldBox label="Status" className="col-span-4">
-          <button
-            className={`px-3 py-1.5 text-sm border rounded ${
-              s.active ? "bg-green-50 border-green-300" : "bg-yellow-50 border-yellow-300"
-            }`}
-            onClick={() => set({ active: !s.active })}
-          >
-            {s.active ? "Active" : "Paused"}
-          </button>
-        </FieldBox>
       </div>
 
       <div className="grid grid-cols-12 gap-2 items-center">
