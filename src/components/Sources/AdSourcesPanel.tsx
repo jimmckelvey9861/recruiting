@@ -33,6 +33,8 @@ type AdSource = {
   cpa_bid?: number | null;
   referral_bonus_per_hire?: number | null;
   organic_per_day?: number | null;
+  apps_override?: number | null;
+  quality_percent?: number | null;
   daily_cap_apps?: number | null;
   schedule?: Schedule;
   end_type?: EndCriterionType;
@@ -130,6 +132,8 @@ function seed(): AdSource[] {
       end_budget: 12000,
       end_hires: null,
       end_date: null,
+      apps_override: null,
+      quality_percent: 78,
     },
     {
       id: "src_fb_001",
@@ -146,6 +150,8 @@ function seed(): AdSource[] {
       end_date: todayISO(),
       end_budget: null,
       end_hires: null,
+      apps_override: null,
+      quality_percent: 74,
     },
     {
       id: "src_ref_001",
@@ -162,6 +168,8 @@ function seed(): AdSource[] {
       end_budget: null,
       end_date: null,
       organic_per_day: 1.5,
+      apps_override: 5,
+      quality_percent: 88,
     },
     {
       id: "src_org_001",
@@ -177,6 +185,8 @@ function seed(): AdSource[] {
       end_date: todayISO(),
       end_budget: null,
       end_hires: null,
+      apps_override: 3,
+      quality_percent: 82,
     },
   ];
 }
@@ -329,6 +339,10 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
     set({ [key]: event.target.value === "" ? null : Number(event.target.value) } as Partial<AdSource>);
 
   const kpis = deriveKpis(s);
+  const appsValue = s.apps_override != null ? s.apps_override : kpis.apps;
+  const qualityValue = s.quality_percent != null ? s.quality_percent : 75;
+  const hiresPerDay = appsValue * 0.25;
+  const cpaValue = kpis.spendDay == null || appsValue <= 0 ? null : kpis.spendDay / appsValue;
   const input = "w-full bg-transparent border border-gray-200 rounded-md px-2 py-1 text-sm";
 
   const show = {
@@ -497,14 +511,28 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
         <p className="text-xs text-slate-500">Blue values are computed from actual results.</p>
         <div className="grid grid-cols-12 gap-3 items-center">
           <FieldBox label="Apps/day" className="col-span-3">
-            <div className="py-1 text-sm text-right">{int0(Math.round(kpis.apps))}</div>
+            <input
+              type="number"
+              step="0.1"
+              className={`${input} text-right`}
+              value={appsValue ?? 0}
+              onChange={setNum("apps_override")}
+            />
           </FieldBox>
           <FieldBox label="Quality (%)" className="col-span-3">
-            <div className="py-1 text-sm text-right">75%</div>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step="0.1"
+              className={`${input} text-right`}
+              value={qualityValue ?? 0}
+              onChange={setNum("quality_percent")}
+            />
           </FieldBox>
           <FieldBox label="Hires/day" className="col-span-3">
             <div className="py-1 text-sm text-right text-blue-600 bg-slate-100 rounded-md px-2">
-              {(kpis.apps * 0.25).toFixed(2)}
+              {hiresPerDay.toFixed(2)}
             </div>
           </FieldBox>
           <FieldBox label="Actual Spend" className="col-span-3">
@@ -513,7 +541,7 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
         </div>
         <div className="grid grid-cols-12 gap-3 items-center">
           <FieldBox label="Cost per App" className="col-span-3">
-            <div className="py-1 px-2 text-sm text-right text-blue-600 bg-slate-100 rounded-md">{money0(kpis.cpa)}</div>
+            <div className="py-1 px-2 text-sm text-right text-blue-600 bg-slate-100 rounded-md">{money0(cpaValue)}</div>
           </FieldBox>
           <FieldBox label="90-Day Retention" className="col-span-3">
             <div className="py-1 px-2 text-sm text-right text-blue-600 bg-slate-100 rounded-md">82%</div>
