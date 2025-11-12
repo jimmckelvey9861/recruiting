@@ -290,10 +290,22 @@ export default function AdSourcesPanel() {
                     {source.active ? "Pause" : "Resume"}
                   </button>
                   <button
-                    className="text-xs px-2 py-1 border rounded text-red-600"
+                    className="px-2 py-1 border rounded text-red-600 hover:bg-red-50"
                     onClick={() => remove(source.id)}
+                    title="Delete source"
                   >
-                    Delete
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                      className="w-4 h-4"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M8.75 3a1.25 1.25 0 00-1.2.93l-.112.447H5a.75.75 0 000 1.5h.278l.606 8.49A2.25 2.25 0 008.129 16h3.742a2.25 2.25 0 002.245-2.133l.606-8.49H15a.75.75 0 000-1.5h-2.438l-.112-.447A1.25 1.25 0 0011.25 3h-2.5zm-1 3.75a.75.75 0 00-1.5.06l.3 6a.75.75 0 001.5-.06l-.3-6zm3.5-.75a.75.75 0 00-.75.75v6a.75.75 0 001.5 0v-6a.75.75 0 00-.75-.75z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
                   </button>
                 </div>
               </div>
