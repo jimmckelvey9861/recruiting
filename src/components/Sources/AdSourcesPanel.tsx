@@ -464,16 +464,6 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
               disabled={!show.dailyBudget}
             />
           </FieldBox>
-
-          <FieldBox label="Daily Applicant Cap" className="col-span-4">
-            <input
-              type="number"
-              className={`${input} text-right`}
-              value={s.daily_cap_apps ?? 0}
-              onChange={setNum("daily_cap_apps")}
-            />
-            <div className="text-xs text-gray-500">0 = unlimited</div>
-          </FieldBox>
         </div>
 
         <div className="grid grid-cols-12 gap-3 items-center">
@@ -517,18 +507,23 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
 
       <section className="space-y-3">
         <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wide">Performance</h3>
+        <p className="text-xs text-slate-500">Blue values are computed from actual results.</p>
         <div className="grid grid-cols-12 gap-3 items-center">
           <FieldBox label="Apps/day" className="col-span-3">
-            <div className="py-1 text-sm">{int0(Math.round(kpis.apps))}</div>
+            <div className="py-1 text-sm text-right">{int0(Math.round(kpis.apps))}</div>
           </FieldBox>
           <FieldBox label="Quality (%)" className="col-span-3">
-            <div className="py-1 text-sm">75%</div>
+            <div className="py-1 text-sm text-right">75%</div>
           </FieldBox>
           <FieldBox label="Actual Spend" className="col-span-3">
-            <div className="py-1 text-sm">{money0(kpis.spendDay)}</div>
+            <div className="py-1 px-2 text-sm text-right text-blue-600 bg-slate-100 rounded-md">
+              {money0(kpis.spendDay)}
+            </div>
           </FieldBox>
           <FieldBox label="Cost per App" className="col-span-3">
-            <div className="py-1 text-sm">{money0(kpis.cpa)}</div>
+            <div className="py-1 px-2 text-sm text-right text-blue-600 bg-slate-100 rounded-md">
+              {money0(kpis.cpa)}
+            </div>
           </FieldBox>
         </div>
       </section>
