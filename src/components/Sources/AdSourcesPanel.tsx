@@ -464,9 +464,7 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
               disabled={!show.dailyBudget}
             />
           </FieldBox>
-        </div>
 
-        <div className="grid grid-cols-12 gap-3 items-center">
           {show.cpc && (
             <FieldBox label="$ / Click" className="col-span-4">
               <input type="number" className={`${input} text-right`} value={s.cpc ?? ""} onChange={setNum("cpc")} />
@@ -515,15 +513,21 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
           <FieldBox label="Quality (%)" className="col-span-3">
             <div className="py-1 text-sm text-right">75%</div>
           </FieldBox>
-          <FieldBox label="Actual Spend" className="col-span-3">
-            <div className="py-1 px-2 text-sm text-right text-blue-600 bg-slate-100 rounded-md">
-              {money0(kpis.spendDay)}
+          <FieldBox label="Hires/day" className="col-span-3">
+            <div className="py-1 text-sm text-right text-blue-600 bg-slate-100 rounded-md px-2">
+              {(kpis.apps * 0.25).toFixed(2)}
             </div>
           </FieldBox>
+          <FieldBox label="Actual Spend" className="col-span-3">
+            <div className="py-1 px-2 text-sm text-right text-blue-600 bg-slate-100 rounded-md">{money0(kpis.spendDay)}</div>
+          </FieldBox>
+        </div>
+        <div className="grid grid-cols-12 gap-3 items-center">
           <FieldBox label="Cost per App" className="col-span-3">
-            <div className="py-1 px-2 text-sm text-right text-blue-600 bg-slate-100 rounded-md">
-              {money0(kpis.cpa)}
-            </div>
+            <div className="py-1 px-2 text-sm text-right text-blue-600 bg-slate-100 rounded-md">{money0(kpis.cpa)}</div>
+          </FieldBox>
+          <FieldBox label="90-Day Retention" className="col-span-3">
+            <div className="py-1 px-2 text-sm text-right text-blue-600 bg-slate-100 rounded-md">82%</div>
           </FieldBox>
         </div>
       </section>
