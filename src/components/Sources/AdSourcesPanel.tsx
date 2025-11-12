@@ -337,7 +337,6 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
     cpm: s.spend_model === "cpm",
     cpaBid: s.spend_model === "cpa",
     referral: s.spend_model === "referral",
-    organic: s.spend_model === "organic",
   };
 
   return (
@@ -487,16 +486,6 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
                 className={`${input} text-right`}
                 value={s.referral_bonus_per_hire ?? ""}
                 onChange={setNum("referral_bonus_per_hire")}
-              />
-            </FieldBox>
-          )}
-          {show.organic && (
-            <FieldBox label="Organic Apps/day" className="col-span-4">
-              <input
-                type="number"
-                className={`${input} text-right`}
-                value={s.organic_per_day ?? ""}
-                onChange={setNum("organic_per_day")}
               />
             </FieldBox>
           )}
