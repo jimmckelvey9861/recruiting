@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react"
+import { getOverride, useOverrideVersion } from "../../state/dataOverrides"
 
-const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
+export const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
 const HALF_HOUR_SLOTS = Array.from({ length: 48 }, (_, i) => {
   const h = Math.floor(i / 2)
   const m = i % 2 === 0 ? "00" : "30"
@@ -29,8 +30,8 @@ const COLORS = {
   closed: "#e5e7eb"
 }
 
-const DISPLAY_START_HOUR = 7
-const DISPLAY_END_HOUR = 23
+export const DISPLAY_START_HOUR = 7
+export const DISPLAY_END_HOUR = 23
 
 // Helper to convert hex to RGB
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
@@ -150,7 +151,7 @@ export function genWeek(role: string, weekOffset = 0, withCampaign = false) {
       const dinner = Math.exp(-Math.pow((hour - 19) / 2, 2))
       const weekend = (d >= 5 ? 1.25 : 1.0)
       const phase = 1 + 0.03 * Math.sin((weekOffset * 7 + d + s / 48) * 0.9)
-      const demand = Math.round(base * phase * (0.25 + 1.2 * (0.7 * lunch + 1.0 * dinner)) * weekend)
+      let demand = Math.round(base * phase * (0.25 + 1.2 * (0.7 * lunch + 1.0 * dinner)) * weekend)
       const startHour = d <= 4 ? 8 : 10
 
       let baselineMultiplier = ["Server", "Cook", "Bartender"].includes(role) ? 1.2 : 1.05
@@ -164,7 +165,13 @@ export function genWeek(role: string, weekOffset = 0, withCampaign = false) {
 
       const variability = 1 + noise(weekOffset + 3, d, s) * 0.08
       const supplyMultiplier = Math.max(0, baselineMultiplier * attrFactor * variability)
-      const supply = Math.max(0, Math.round(demand * supplyMultiplier))
+      let supply = Math.max(0, Math.round(demand * supplyMultiplier))
+
+      const override = getOverride(role, weekOffset, d, s)
+      if (override) {
+        demand = Math.max(0, override.demand)
+        supply = Math.max(0, override.supply)
+      }
 
       return { demand, supply, closed: false }
     })
@@ -231,12 +238,13 @@ export default function CoverageHeatmap({ selectedJobs }: CoverageHeatmapProps) 
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear())
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth())
   const [showWithCampaign, setShowWithCampaign] = useState(false)
+  const overrideVersion = useOverrideVersion()
 
   // Generate week matrix for the selected job
   const selectedJob = selectedJobs.length > 0 ? selectedJobs[0] : null;
-  const weekMatrix = useMemo(() => 
+  const weekMatrix = useMemo(() =>
     selectedJob ? genWeek(selectedJob, weekOffset, showWithCampaign) : [],
-    [selectedJob, weekOffset, showWithCampaign]
+    [selectedJob, weekOffset, showWithCampaign, overrideVersion]
   )
   
   const weekStart = useMemo(() => mondayOf(weekOffset), [weekOffset])
@@ -347,7 +355,7 @@ export default function CoverageHeatmap({ selectedJobs }: CoverageHeatmapProps) 
 
       <div className="overflow-auto max-h-[400px]">
         {viewMode === 'week' && (
-          <WeekGrid weekMatrix={weekMatrix} jobRole={selectedJob} />
+          <WeekGrid weekMatrix={weekMatrix} jobRole={selectedJob} weekStart={weekStart} />
         )}
         {viewMode === 'month' && (
           <MonthGrid
@@ -372,7 +380,7 @@ export default function CoverageHeatmap({ selectedJobs }: CoverageHeatmapProps) 
   )
 }
 
-function WeekGrid({ weekMatrix, jobRole }: { weekMatrix: { demand: number; supply: number; closed: boolean }[][], jobRole: string }) {
+function WeekGrid({ weekMatrix, jobRole, weekStart }: { weekMatrix: { demand: number; supply: number; closed: boolean }[][], jobRole: string, weekStart: Date }) {
   const startSlot = DISPLAY_START_HOUR * 2
   const endSlot = DISPLAY_END_HOUR * 2
   const slotIndices = Array.from({ length: endSlot - startSlot }, (_, i) => startSlot + i)
@@ -381,9 +389,18 @@ function WeekGrid({ weekMatrix, jobRole }: { weekMatrix: { demand: number; suppl
     <div className="min-w-[720px]">
       <div className="grid" style={{ gridTemplateColumns: `60px repeat(7, 1fr)`, columnGap: '2px' }}>
         <div className="text-[10px] text-gray-500 p-1"></div>
-        {DAYS.map(d => (
-          <div key={d} className="text-[11px] font-medium text-center p-1 sticky top-0 bg-white border-b">{d}</div>
-        ))}
+        {DAYS.map((d, dayIdx) => {
+          const dateObj = addDays(weekStart, dayIdx)
+          const monthLabel = dateObj.toLocaleString(undefined, { month: 'short' }).replace('.', '').toUpperCase()
+          const dayLabel = dateObj.getDate().toString().padStart(2, '0')
+          const dateLabel = `${monthLabel}${dayLabel}`
+          return (
+            <div key={d} className="text-[11px] font-medium text-center p-1 sticky top-0 bg-white border-b">
+              <div>{d}</div>
+              <div className="text-[9px] text-slate-400 mt-[2px]">{dateLabel}</div>
+            </div>
+          )
+        })}
       </div>
       <div className="max-h-[520px] overflow-auto">
         {slotIndices.map((slotIdx) => {

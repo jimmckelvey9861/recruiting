@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { genWeek } from "../Campaign/CoverageHeatmap";
+import { useOverrideVersion } from '../../state/dataOverrides'
 
 const clamp = (n: number, a: number, b: number) => Math.max(a, Math.min(b, n));
 const addDays = (date: Date, delta: number) => {
@@ -108,14 +109,15 @@ export default function CenterVisuals({ job, rangeIdx, onRangeChange }: { job: s
   const [view, setView] = useState<"lines" | "heatmap">("lines");
   const weeks = RANGE_WEEKS[rangeIdx];
   const days = weeks * 7;
+  const overrideVersion = useOverrideVersion();
 
-  const lineSeries = useMemo(() => buildLineSeries(role, weeks), [role, weeks]);
+  const lineSeries = useMemo(() => buildLineSeries(role, weeks), [role, weeks, overrideVersion]);
 
   const heatWeeks = weeks;
   const [weekIndex, setWeekIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const safeWeekIndex = heatWeeks > 0 ? Math.min(weekIndex, heatWeeks - 1) : 0;
-  const heatGrid = useMemo(() => buildHeatGrid(role, safeWeekIndex), [role, safeWeekIndex]);
+  const heatGrid = useMemo(() => buildHeatGrid(role, safeWeekIndex), [role, safeWeekIndex, overrideVersion]);
 
   useEffect(() => {
     setWeekIndex(0);

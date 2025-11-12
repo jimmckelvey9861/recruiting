@@ -5,8 +5,10 @@ import { genWeek } from './components/Campaign/CoverageHeatmap';
 import CampaignBuilder from './components/Needs/CampaignBuilder';
 import CenterVisuals, { RANGE_WEEKS as NEEDS_RANGE_WEEKS, RANGE_LABELS as NEEDS_RANGE_LABELS } from './components/Needs/CenterVisuals';
 import ReviewPanel from './components/Review/ReviewPanel';
+import DataInspector from './components/Data/DataInspector';
+import { useOverrideVersion } from './state/dataOverrides';
 
-type Tab = 'needs' | 'campaign' | 'advertisement' | 'review' | 'company';
+type Tab = 'needs' | 'campaign' | 'advertisement' | 'review' | 'company' | 'data';
 
 // Job base colors (matching CoverageHeatmap)
 const JOB_BASE_COLORS: Record<string, string> = {
@@ -60,7 +62,7 @@ interface JobFormData {
   data: any; // Store form data for each job
 }
 
-const VALID_TABS: Tab[] = ['needs', 'campaign', 'advertisement', 'review', 'company'];
+const VALID_TABS: Tab[] = ['needs', 'campaign', 'advertisement', 'review', 'company', 'data'];
 
 export default function PasscomRecruitingApp() {
   const [activeTab, setActiveTab] = useState<Tab>(() => {
@@ -73,6 +75,8 @@ export default function PasscomRecruitingApp() {
   const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
   const [jobForms, setJobForms] = useState<JobFormData[]>([]);
   const [needsRangeIdx, setNeedsRangeIdx] = useState<number>(1);
+  const [dataInspectorJob, setDataInspectorJob] = useState<string>(AVAILABLE_JOBS[0]);
+  const overrideVersion = useOverrideVersion();
   
   // Dropdown states
   const [showLocationDropdown, setShowLocationDropdown] = useState(false);
@@ -89,6 +93,12 @@ export default function PasscomRecruitingApp() {
       });
       return newForms;
     });
+  }, [selectedJobs]);
+
+  useEffect(() => {
+    if (selectedJobs.length > 0) {
+      setDataInspectorJob(selectedJobs[0]);
+    }
   }, [selectedJobs]);
 
   // Persist tab selection
@@ -130,14 +140,15 @@ export default function PasscomRecruitingApp() {
       color: JOB_BASE_COLORS[job] || '#2563eb',
       coverage: calculateCoverage(job, weeks)
     }));
-  }, [needsRangeIdx]);
+  }, [needsRangeIdx, overrideVersion]);
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'needs', label: 'Needs' },
     { id: 'campaign', label: 'Campaign' },
     { id: 'advertisement', label: 'Posting' },
     { id: 'review', label: 'Review' },
-    { id: 'company', label: 'Company' }
+    { id: 'company', label: 'Company' },
+    { id: 'data', label: 'Data' }
   ];
 
   return (
@@ -340,6 +351,56 @@ export default function PasscomRecruitingApp() {
               <p className="text-gray-500 max-w-xl mx-auto">
                 Company details are now part of the Advertisement workflow so you can manage employer branding alongside job ads.
               </p>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'data' && (
+          <div className="h-full bg-gray-50">
+            <div className="h-full max-w-7xl mx-auto px-6 py-8">
+              <div className="h-full grid gap-6 grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)]">
+                <section className="bg-white border rounded-xl shadow-sm p-4 overflow-y-auto">
+                  <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Jobs</h2>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Select a role to inspect and override raw demand/supply values.
+                  </p>
+                  <div className="mt-4 space-y-3">
+                    {jobCoverageData.map(({ job, color, coverage }) => {
+                      const active = job === dataInspectorJob;
+                      return (
+                        <button
+                          key={job}
+                          onClick={() => setDataInspectorJob(job)}
+                          className={`w-full text-left border rounded-lg p-3 transition-colors ${
+                            active ? 'border-blue-400 bg-blue-50' : 'border-gray-200 hover:border-blue-200'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between text-sm font-medium text-gray-700">
+                            <span className="flex items-center gap-2">
+                              <span className="w-2.5 h-2.5 rounded-full" style={{ background: color }} />
+                              {job}
+                            </span>
+                            <span>{coverage}%</span>
+                          </div>
+                          <div className="mt-2 h-2 rounded-full bg-gray-200 overflow-hidden">
+                            <div
+                              className="h-full rounded-full"
+                              style={{
+                                width: `${Math.min(coverage, 150) / 150 * 100}%`,
+                                background: color
+                              }}
+                            />
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+
+                <section className="h-full">
+                  <DataInspector job={dataInspectorJob} />
+                </section>
+              </div>
             </div>
           </div>
         )}
