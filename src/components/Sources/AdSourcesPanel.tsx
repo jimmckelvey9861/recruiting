@@ -1,5 +1,6 @@
 import { useMemo, useState, ChangeEvent } from "react";
 import { setSourcesSnapshot } from '../../state/campaignPlan';
+import { getStateSnapshot } from '../../state/campaignPlan';
 
 type SpendModel =
   | "organic"
@@ -401,6 +402,39 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
     referral: s.spend_model === "referral",
   };
 
+  // Derived end-criterion values for this source only
+  const conversion = getStateSnapshot().conversionRate || 0;
+  const appsPerDay = (s.apps_override != null ? Math.max(0, Number(s.apps_override)) : Math.max(0, Number(kpis.apps || 0)));
+  const hiresPerDay = appsPerDay * conversion;
+  const spendPerDay = kpis.spendDay || 0; // organic already normalized to daily in deriveKpis
+  const daysBetween = (startISO?: string | null, endISO?: string | null) => {
+    if (!startISO || !endISO) return 0;
+    const a = new Date(startISO); a.setHours(0,0,0,0);
+    const b = new Date(endISO); b.setHours(0,0,0,0);
+    return Math.max(0, Math.floor((b.getTime()-a.getTime())/(1000*60*60*24)));
+  };
+  const addDaysISO = (startISO?: string | null, d?: number | null) => {
+    if (!startISO || d == null) return null;
+    const a = new Date(startISO); a.setDate(a.getDate() + Math.round(Math.max(0, d)));
+    return a.toISOString().slice(0,10);
+  };
+  let derivedDays = 0, derivedBudget = 0, derivedHires = 0, derivedEndISO: string | null = null;
+  if (s.end_type === 'date') {
+    derivedDays = daysBetween(s.schedule?.start, s.end_date || undefined);
+    derivedBudget = spendPerDay * derivedDays;
+    derivedHires = hiresPerDay * derivedDays;
+  } else if (s.end_type === 'hires') {
+    derivedDays = hiresPerDay > 0 ? Math.max(0, Number(s.end_hires||0) / hiresPerDay) : 0;
+    derivedBudget = spendPerDay * derivedDays;
+    derivedHires = Math.max(0, Number(s.end_hires||0));
+    derivedEndISO = addDaysISO(s.schedule?.start, derivedDays);
+  } else if (s.end_type === 'budget') {
+    derivedDays = spendPerDay > 0 ? Math.max(0, Number(s.end_budget||0) / spendPerDay) : 0;
+    derivedBudget = Math.max(0, Number(s.end_budget||0));
+    derivedHires = hiresPerDay * derivedDays;
+    derivedEndISO = addDaysISO(s.schedule?.start, derivedDays);
+  }
+
   return (
     <div className="space-y-4">
       <section className="space-y-3">
@@ -493,6 +527,32 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
                   onChange={setNum("end_budget")}
                 />
               </div>
+
+              {/* Derived summary (read-only) */}
+              {s.end_type === 'date' && (
+                <>
+                  <div className="col-span-4 text-xs text-slate-600">Derived Hires</div>
+                  <div className="col-span-8 text-right bg-slate-100 rounded px-2 py-1 text-sm font-medium">{Math.round(derivedHires).toLocaleString()}</div>
+                  <div className="col-span-4 text-xs text-slate-600">Derived Budget</div>
+                  <div className="col-span-8 text-right bg-slate-100 rounded px-2 py-1 text-sm font-medium">${Math.round(derivedBudget).toLocaleString()}</div>
+                </>
+              )}
+              {s.end_type === 'hires' && (
+                <>
+                  <div className="col-span-4 text-xs text-slate-600">Derived End Date</div>
+                  <div className="col-span-8 text-right bg-slate-100 rounded px-2 py-1 text-sm font-medium">{derivedEndISO || '-'}</div>
+                  <div className="col-span-4 text-xs text-slate-600">Derived Budget</div>
+                  <div className="col-span-8 text-right bg-slate-100 rounded px-2 py-1 text-sm font-medium">${Math.round(derivedBudget).toLocaleString()}</div>
+                </>
+              )}
+              {s.end_type === 'budget' && (
+                <>
+                  <div className="col-span-4 text-xs text-slate-600">Derived End Date</div>
+                  <div className="col-span-8 text-right bg-slate-100 rounded px-2 py-1 text-sm font-medium">{derivedEndISO || '-'}</div>
+                  <div className="col-span-4 text-xs text-slate-600">Derived Hires</div>
+                  <div className="col-span-8 text-right bg-slate-100 rounded px-2 py-1 text-sm font-medium">{Math.round(derivedHires).toLocaleString()}</div>
+                </>
+              )}
             </div>
           </FieldBox>
         </div>

@@ -1,4 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { setPlanner } from '../../state/campaignPlan';
+import { setLiveView } from '../../state/campaignPlan';
+import { getDerivedFromCriterion } from '../../state/campaignPlan';
 
 export default function CampaignBuilder() {
   const [startDate, setStartDate] = useState('2025-11-05');
@@ -7,6 +10,27 @@ export default function CampaignBuilder() {
   const [hiresTarget, setHiresTarget] = useState(25);
   const [endDate, setEndDate] = useState('2025-11-30');
   const [totalBudget, setTotalBudget] = useState(7000);
+  const [liveView, setLive] = useState(true);
+
+  useEffect(() => {
+    setPlanner({ startDate, dailySpend: dailyBudget, endType: endGoalType, endValue: endGoalType==='budget'? totalBudget : (endGoalType==='hires'? hiresTarget : null) })
+  }, [startDate, dailyBudget, endGoalType, hiresTarget, endDate, totalBudget]);
+
+  useEffect(() => { setLiveView(liveView) }, [liveView]);
+
+  const daysFromStart = (() => {
+    if (!startDate || !endDate) return 0;
+    const sd = new Date(startDate); sd.setHours(0,0,0,0);
+    const ed = new Date(endDate); ed.setHours(0,0,0,0);
+    return Math.max(0, Math.floor((ed.getTime() - sd.getTime()) / (1000*60*60*24)));
+  })();
+
+  const derived = getDerivedFromCriterion({
+    startISO: startDate,
+    endType: endGoalType,
+    endValue: endGoalType==='date' ? daysFromStart : (endGoalType==='hires' ? hiresTarget : totalBudget),
+    dailySpend: dailyBudget
+  });
 
   const handleBuildCampaign = () => {
     const data = {
@@ -145,7 +169,42 @@ export default function CampaignBuilder() {
           </div>
         </div>
 
+        {/* Derived outputs (read-only) */}
+        <div className="mt-3 grid grid-cols-12 gap-2 items-center text-sm">
+          {endGoalType === 'date' && (
+            <>
+              <div className="col-span-6 text-gray-600">Derived Hires</div>
+              <div className="col-span-6 text-right bg-slate-100 rounded px-2 py-1 font-medium">{Math.round(derived.hires).toLocaleString()}</div>
+              <div className="col-span-6 text-gray-600">Derived Budget</div>
+              <div className="col-span-6 text-right bg-slate-100 rounded px-2 py-1 font-medium">${Math.round(derived.budget).toLocaleString()}</div>
+            </>
+          )}
+          {endGoalType === 'hires' && (
+            <>
+              <div className="col-span-6 text-gray-600">Derived End Date</div>
+              <div className="col-span-6 text-right bg-slate-100 rounded px-2 py-1 font-medium">{derived.endDate || '-'}</div>
+              <div className="col-span-6 text-gray-600">Derived Budget</div>
+              <div className="col-span-6 text-right bg-slate-100 rounded px-2 py-1 font-medium">${Math.round(derived.budget).toLocaleString()}</div>
+            </>
+          )}
+          {endGoalType === 'budget' && (
+            <>
+              <div className="col-span-6 text-gray-600">Derived End Date</div>
+              <div className="col-span-6 text-right bg-slate-100 rounded px-2 py-1 font-medium">{derived.endDate || '-'}</div>
+              <div className="col-span-6 text-gray-600">Derived Hires</div>
+              <div className="col-span-6 text-right bg-slate-100 rounded px-2 py-1 font-medium">{Math.round(derived.hires).toLocaleString()}</div>
+            </>
+          )}
+        </div>
+
         {/* Build Campaign Button */}
+        <div className="flex items-center justify-between">
+          <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+            <input type="checkbox" checked={liveView} onChange={(e)=> setLive(e.target.checked)} />
+            <span>Merge new hires</span>
+          </label>
+        </div>
+
         <button
           onClick={handleBuildCampaign}
           className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 text-sm"
