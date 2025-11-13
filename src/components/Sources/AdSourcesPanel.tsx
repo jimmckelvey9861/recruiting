@@ -385,10 +385,10 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
   const kpis = deriveKpis(s);
   const appsValue = s.apps_override != null ? s.apps_override : kpis.apps;
   const qualityValue = s.quality_percent != null ? s.quality_percent : 75;
-  const hiresPerDay = appsValue * 0.25;
+  const hiresPerDayKpi = appsValue * 0.25;
   const referralSpend =
     s.spend_model === "referral" && s.referral_bonus_per_hire != null
-      ? s.referral_bonus_per_hire * hiresPerDay
+      ? s.referral_bonus_per_hire * hiresPerDayKpi
       : null;
   const spendUsed = referralSpend != null ? referralSpend : kpis.spendDay;
   const cpaValue = appsValue > 0 ? (spendUsed != null ? spendUsed / appsValue : null) : null;
@@ -485,7 +485,7 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
                   type="date"
                   className={`${input} disabled:opacity-50`}
                   disabled={s.end_type !== "date"}
-                  value={s.end_date ?? ""}
+                  value={s.end_type === 'date' ? (s.end_date ?? '') : (derivedEndISO || '')}
                   onChange={(event) => set({ end_date: event.target.value || null })}
                 />
               </div>
@@ -504,7 +504,7 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
                   type="number"
                   className={`${input} text-right disabled:opacity-50`}
                   disabled={s.end_type !== "hires"}
-                  value={s.end_hires ?? ""}
+                  value={s.end_type === 'hires' ? (s.end_hires ?? '') : Math.round(derivedHires)}
                   onChange={setNum("end_hires")}
                 />
               </div>
@@ -523,36 +523,10 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
                   type="number"
                   className={`${input} text-right disabled:opacity-50`}
                   disabled={s.end_type !== "budget"}
-                  value={s.end_budget ?? ""}
+                  value={s.end_type === 'budget' ? (s.end_budget ?? '') : Math.round(derivedBudget)}
                   onChange={setNum("end_budget")}
                 />
               </div>
-
-              {/* Derived summary (read-only) */}
-              {s.end_type === 'date' && (
-                <>
-                  <div className="col-span-4 text-xs text-slate-600">Derived Hires</div>
-                  <div className="col-span-8 text-right bg-slate-100 rounded px-2 py-1 text-sm font-medium">{Math.round(derivedHires).toLocaleString()}</div>
-                  <div className="col-span-4 text-xs text-slate-600">Derived Budget</div>
-                  <div className="col-span-8 text-right bg-slate-100 rounded px-2 py-1 text-sm font-medium">${Math.round(derivedBudget).toLocaleString()}</div>
-                </>
-              )}
-              {s.end_type === 'hires' && (
-                <>
-                  <div className="col-span-4 text-xs text-slate-600">Derived End Date</div>
-                  <div className="col-span-8 text-right bg-slate-100 rounded px-2 py-1 text-sm font-medium">{derivedEndISO || '-'}</div>
-                  <div className="col-span-4 text-xs text-slate-600">Derived Budget</div>
-                  <div className="col-span-8 text-right bg-slate-100 rounded px-2 py-1 text-sm font-medium">${Math.round(derivedBudget).toLocaleString()}</div>
-                </>
-              )}
-              {s.end_type === 'budget' && (
-                <>
-                  <div className="col-span-4 text-xs text-slate-600">Derived End Date</div>
-                  <div className="col-span-8 text-right bg-slate-100 rounded px-2 py-1 text-sm font-medium">{derivedEndISO || '-'}</div>
-                  <div className="col-span-4 text-xs text-slate-600">Derived Hires</div>
-                  <div className="col-span-8 text-right bg-slate-100 rounded px-2 py-1 text-sm font-medium">{Math.round(derivedHires).toLocaleString()}</div>
-                </>
-              )}
             </div>
           </FieldBox>
         </div>
@@ -652,7 +626,7 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
           </FieldBox>
           <FieldBox label="Hires/day" className="col-span-3">
             <div className="py-1 text-sm text-right text-blue-600 bg-slate-100 rounded-md px-2">
-              {hiresPerDay.toFixed(2)}
+              {hiresPerDayKpi.toFixed(2)}
             </div>
           </FieldBox>
           <FieldBox label="Actual Spend" className="col-span-3">

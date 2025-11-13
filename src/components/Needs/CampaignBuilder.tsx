@@ -112,7 +112,7 @@ export default function CampaignBuilder() {
             <label htmlFor="hires" className="text-gray-700 text-sm cursor-pointer">Hires</label>
             <input
               type="number"
-              value={hiresTarget}
+              value={endGoalType === 'hires' ? hiresTarget : Math.round(derived.hires)}
               onChange={(e) => setHiresTarget(Number(e.target.value))}
               disabled={endGoalType !== 'hires'}
               className={`ml-auto w-28 px-3 py-1.5 border border-gray-300 rounded-lg text-center text-sm font-semibold focus:outline-none focus:border-blue-500 ${
@@ -134,7 +134,7 @@ export default function CampaignBuilder() {
             <label htmlFor="date" className="text-gray-700 text-sm cursor-pointer">Date</label>
             <input
               type="date"
-              value={endDate}
+              value={endGoalType === 'date' ? endDate : (derived.endDate || '')}
               onChange={(e) => setEndDate(e.target.value)}
               disabled={endGoalType !== 'date'}
               className={`ml-auto px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-blue-500 ${
@@ -158,7 +158,7 @@ export default function CampaignBuilder() {
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
               <input
                 type="number"
-                value={totalBudget}
+                value={endGoalType === 'budget' ? totalBudget : Math.round(derived.budget)}
                 onChange={(e) => setTotalBudget(Number(e.target.value))}
                 disabled={endGoalType !== 'budget'}
                 className={`w-full pl-6 pr-3 py-1.5 border border-gray-300 rounded-lg text-center text-sm font-semibold focus:outline-none focus:border-blue-500 ${
@@ -167,34 +167,6 @@ export default function CampaignBuilder() {
               />
             </div>
           </div>
-        </div>
-
-        {/* Derived outputs (read-only) */}
-        <div className="mt-3 grid grid-cols-12 gap-2 items-center text-sm">
-          {endGoalType === 'date' && (
-            <>
-              <div className="col-span-6 text-gray-600">Derived Hires</div>
-              <div className="col-span-6 text-right bg-slate-100 rounded px-2 py-1 font-medium">{Math.round(derived.hires).toLocaleString()}</div>
-              <div className="col-span-6 text-gray-600">Derived Budget</div>
-              <div className="col-span-6 text-right bg-slate-100 rounded px-2 py-1 font-medium">${Math.round(derived.budget).toLocaleString()}</div>
-            </>
-          )}
-          {endGoalType === 'hires' && (
-            <>
-              <div className="col-span-6 text-gray-600">Derived End Date</div>
-              <div className="col-span-6 text-right bg-slate-100 rounded px-2 py-1 font-medium">{derived.endDate || '-'}</div>
-              <div className="col-span-6 text-gray-600">Derived Budget</div>
-              <div className="col-span-6 text-right bg-slate-100 rounded px-2 py-1 font-medium">${Math.round(derived.budget).toLocaleString()}</div>
-            </>
-          )}
-          {endGoalType === 'budget' && (
-            <>
-              <div className="col-span-6 text-gray-600">Derived End Date</div>
-              <div className="col-span-6 text-right bg-slate-100 rounded px-2 py-1 font-medium">{derived.endDate || '-'}</div>
-              <div className="col-span-6 text-gray-600">Derived Hires</div>
-              <div className="col-span-6 text-right bg-slate-100 rounded px-2 py-1 font-medium">{Math.round(derived.hires).toLocaleString()}</div>
-            </>
-          )}
         </div>
 
         {/* Build Campaign Button */}
