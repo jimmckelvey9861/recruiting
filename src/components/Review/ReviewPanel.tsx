@@ -30,14 +30,45 @@ export default function ReviewPanel({ selectedJobs, selectedLocations }: ReviewP
   const planVersion = useCampaignPlanVersion()
   const liveSources = useMemo(() => getStateSnapshot().sources, [planVersion])
 
-  // Daily Spend Limit slider
-  const suggestedLimit = useMemo(() => {
-    const sum = liveSources
-      .filter((s) => s.active && typeof s.daily_budget === 'number' && (s.daily_budget || 0) > 0)
-      .reduce((acc, s) => acc + Math.max(0, Number(s.daily_budget || 0)), 0)
-    return Math.min(1000, Math.round(sum) || 500)
-  }, [liveSources])
+  const overallConvForCaps = useMemo(() => clamp(
+    DEFAULT_CONVERSION_RATES.toInterview * DEFAULT_CONVERSION_RATES.toOffer * DEFAULT_CONVERSION_RATES.toBackground * DEFAULT_CONVERSION_RATES.toHire,
+    0, 1
+  ), [])
+
+  // Compute theoretical max spend from active sources' caps
+  const maxSpendCapRaw = useMemo(() => {
+    let cap = 0
+    let hasInfinite = false
+    for (const s of liveSources) {
+      if (!s.active) continue
+      if (s.spend_model === 'organic') continue
+      if (s.spend_model === 'referral') {
+        const bounty = Math.max(0, Number(s.referral_bonus_per_hire || 0))
+        const apps = Math.max(0, Number(s.apps_override || 0))
+        const conv = Math.max(0, overallConvForCaps)
+        cap += bounty * apps * conv
+      } else if (s.spend_model === 'daily_budget') {
+        cap += Math.max(0, Number(s.daily_budget || 0))
+      } else {
+        // scalable; cap to per-source daily_budget if present, else assume unbounded
+        if (Number.isFinite(Number(s.daily_budget)) && Number(s.daily_budget) > 0) {
+          cap += Math.max(0, Number(s.daily_budget))
+        } else {
+          hasInfinite = true
+        }
+      }
+    }
+    return hasInfinite ? Infinity : cap
+  }, [liveSources, overallConvForCaps])
+
+  const sliderMax = useMemo(() => {
+    const max = Number.isFinite(maxSpendCapRaw) ? Math.round(maxSpendCapRaw) : 1000
+    return clamp(max, 0, 1000)
+  }, [maxSpendCapRaw])
+
+  const suggestedLimit = useMemo(() => Math.min(sliderMax, 500), [sliderMax])
   const [dailyLimit, setDailyLimit] = useState<number>(suggestedLimit)
+  useEffect(() => { if (dailyLimit > sliderMax) setDailyLimit(sliderMax) }, [sliderMax])
 
   // Effective CPA for scalable sources (heuristics match Sources KPIs)
   const APPLY_CPC = 0.12
@@ -189,12 +220,17 @@ export default function ReviewPanel({ selectedJobs, selectedLocations }: ReviewP
                 <input
                   type="range"
                   min={0}
-                  max={1000}
+                  max={sliderMax}
                   step={10}
                   value={dailyLimit}
                   onChange={(e) => setDailyLimit(Number(e.target.value))}
                   className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"
                 />
+                {dailyLimit >= sliderMax && sliderMax < 1000 && (
+                  <div className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                    Maximum spend limit. To increase, add more sources.
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2">
