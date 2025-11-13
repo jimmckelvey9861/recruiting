@@ -111,13 +111,11 @@ export default function CampaignBuilder() {
             />
             <label htmlFor="hires" className="text-gray-700 text-sm cursor-pointer">Hires</label>
             <input
-              type="number"
+              type={endGoalType === 'hires' ? 'number' : 'text'}
               value={endGoalType === 'hires' ? hiresTarget : Math.round(derived.hires)}
               onChange={(e) => setHiresTarget(Number(e.target.value))}
-              disabled={endGoalType !== 'hires'}
-              className={`ml-auto w-28 px-3 py-1.5 border border-gray-300 rounded-lg text-right text-sm font-semibold focus:outline-none focus:border-blue-500 ${
-                endGoalType !== 'hires' ? 'bg-slate-100 text-blue-600' : ''
-              }`}
+              readOnly={endGoalType !== 'hires'}
+              className={`ml-auto w-28 px-3 py-1.5 border border-gray-300 rounded-lg text-right text-sm font-semibold focus:outline-none focus:border-blue-500 ${endGoalType !== 'hires' ? 'bg-slate-100 text-blue-600' : ''}`}
             />
           </div>
 
@@ -133,13 +131,11 @@ export default function CampaignBuilder() {
             />
             <label htmlFor="date" className="text-gray-700 text-sm cursor-pointer">Date</label>
             <input
-              type="date"
+              type={endGoalType === 'date' ? 'date' : 'text'}
               value={endGoalType === 'date' ? endDate : (derived.endDate || '')}
               onChange={(e) => setEndDate(e.target.value)}
-              disabled={endGoalType !== 'date'}
-              className={`ml-auto px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-right focus:outline-none focus:border-blue-500 ${
-                endGoalType !== 'date' ? 'bg-slate-100 text-blue-600' : ''
-              }`}
+              readOnly={endGoalType !== 'date'}
+              className={`ml-auto px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-right focus:outline-none focus:border-blue-500 ${endGoalType !== 'date' ? 'bg-slate-100 text-blue-600' : ''}`}
             />
           </div>
 
@@ -157,13 +153,11 @@ export default function CampaignBuilder() {
             <div className="relative ml-auto w-28">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
               <input
-                type="number"
+                type={endGoalType === 'budget' ? 'number' : 'text'}
                 value={endGoalType === 'budget' ? totalBudget : Math.round(derived.budget)}
                 onChange={(e) => setTotalBudget(Number(e.target.value))}
-                disabled={endGoalType !== 'budget'}
-                className={`w-full pl-6 pr-3 py-1.5 border border-gray-300 rounded-lg text-right text-sm font-semibold focus:outline-none focus:border-blue-500 ${
-                  endGoalType !== 'budget' ? 'bg-slate-100 text-blue-600' : ''
-                }`}
+                readOnly={endGoalType !== 'budget'}
+                className={`w-full pl-6 pr-3 py-1.5 border border-gray-300 rounded-lg text-right text-sm font-semibold focus:outline-none focus:border-blue-500 ${endGoalType !== 'budget' ? 'bg-slate-100 text-blue-600' : ''}`}
               />
             </div>
           </div>

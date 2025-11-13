@@ -482,9 +482,9 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
               </label>
               <div className="col-span-8">
                 <input
-                  type="date"
-                  className={`${input} text-right`}
-                  disabled={s.end_type !== "date"}
+                  type={s.end_type === 'date' ? 'date' : 'text'}
+                  className={`${input} text-right ${s.end_type !== 'date' ? 'bg-slate-100 text-blue-600' : ''}`}
+                  readOnly={s.end_type !== "date"}
                   value={s.end_type === 'date' ? (s.end_date ?? '') : (derivedEndISO || '')}
                   onChange={(event) => set({ end_date: event.target.value || null })}
                 />
@@ -501,9 +501,9 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
               </label>
               <div className="col-span-8">
                 <input
-                  type="number"
+                  type={s.end_type === 'hires' ? 'number' : 'text'}
                   className={`${input} text-right ${s.end_type !== 'hires' ? 'bg-slate-100 text-blue-600' : ''}`}
-                  disabled={s.end_type !== "hires"}
+                  readOnly={s.end_type !== "hires"}
                   value={s.end_type === 'hires' ? (s.end_hires ?? '') : Math.round(derivedHires)}
                   onChange={setNum("end_hires")}
                 />
@@ -520,9 +520,9 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
               </label>
               <div className="col-span-8">
                 <input
-                  type="number"
+                  type={s.end_type === 'budget' ? 'number' : 'text'}
                   className={`${input} text-right ${s.end_type !== 'budget' ? 'bg-slate-100 text-blue-600' : ''}`}
-                  disabled={s.end_type !== "budget"}
+                  readOnly={s.end_type !== "budget"}
                   value={s.end_type === 'budget' ? (s.end_budget ?? '') : Math.round(derivedBudget)}
                   onChange={setNum("end_budget")}
                 />
