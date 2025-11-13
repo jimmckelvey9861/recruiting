@@ -61,6 +61,11 @@ function deriveKpis(source: AdSource) {
   let spendDay: number | null = null;
   let apps = 0;
 
+  // Assumptions aligning with Review/allocator logic
+  const APPLY_CPC = 0.12; // CPC apply rate
+  const APPLY_DAILY = 0.10; // Daily_Budget apply rate
+  const CTR = 0.015; // CPM click-through
+
   switch (source.spend_model) {
     case "organic": {
       const monthly = nonNeg(source.daily_budget ?? 0); // reuse daily_budget as monthly storage for organic
@@ -72,41 +77,72 @@ function deriveKpis(source: AdSource) {
     case "daily_budget": {
       const budget = nonNeg(source.daily_budget ?? 0);
       const impliedCpc = Math.max(0.0001, nonNeg(source.cpc ?? 2));
-      const clicks = budget / impliedCpc;
-      const applyRate = 0.1;
-      apps = clicks * applyRate;
-      spendDay = budget;
+      const effCPA = impliedCpc / APPLY_DAILY;
+      if (source.apps_override != null) {
+        const desiredApps = Math.max(0, Number(source.apps_override));
+        const desiredSpend = desiredApps * effCPA;
+        spendDay = Math.min(budget, desiredSpend);
+        apps = desiredApps;
+      } else {
+        const clicks = budget / impliedCpc;
+        const applyRate = APPLY_DAILY;
+        apps = clicks * applyRate;
+        spendDay = budget;
+      }
       break;
     }
     case "cpc": {
       const budget = nonNeg(source.daily_budget ?? 0);
-      const cpc = Math.max(0.0001, nonNeg(source.cpc ?? 0));
-      const clicks = budget / cpc;
-      const applyRate = 0.12;
-      apps = clicks * applyRate;
-      spendDay = budget;
+      const cpc = Math.max(0.0001, nonNeg(source.cpc ?? 2));
+      const effCPA = cpc / APPLY_CPC;
+      if (source.apps_override != null) {
+        const desiredApps = Math.max(0, Number(source.apps_override));
+        const desiredSpend = desiredApps * effCPA;
+        spendDay = Math.min(budget, desiredSpend);
+        apps = desiredApps;
+      } else {
+        const clicks = budget / cpc;
+        const applyRate = APPLY_CPC;
+        apps = clicks * applyRate;
+        spendDay = budget;
+      }
       break;
     }
     case "cpm": {
       const budget = nonNeg(source.daily_budget ?? 0);
-      const cpm = Math.max(0.0001, nonNeg(source.cpm ?? 0));
-      const impressions = (budget / cpm) * 1000;
-      const ctr = 0.015;
-      const clicks = impressions * ctr;
-      const applyRate = 0.1;
-      apps = clicks * applyRate;
-      spendDay = budget;
+      const cpm = Math.max(0.0001, nonNeg(source.cpm ?? 10));
+      const effCPA = cpm / (1000 * CTR * APPLY_DAILY);
+      if (source.apps_override != null) {
+        const desiredApps = Math.max(0, Number(source.apps_override));
+        const desiredSpend = desiredApps * effCPA;
+        spendDay = Math.min(budget, desiredSpend);
+        apps = desiredApps;
+      } else {
+        const impressions = (budget / cpm) * 1000;
+        const clicks = impressions * CTR;
+        const applyRate = APPLY_DAILY;
+        apps = clicks * applyRate;
+        spendDay = budget;
+      }
       break;
     }
     case "cpa": {
       const budget = nonNeg(source.daily_budget ?? 0);
-      const bid = Math.max(0.0001, nonNeg(source.cpa_bid ?? 0));
-      apps = budget / bid;
-      spendDay = budget;
+      const bid = Math.max(0.0001, nonNeg(source.cpa_bid ?? 10));
+      if (source.apps_override != null) {
+        const desiredApps = Math.max(0, Number(source.apps_override));
+        const desiredSpend = desiredApps * bid;
+        spendDay = Math.min(budget, desiredSpend);
+        apps = desiredApps;
+      } else {
+        apps = budget / bid;
+        spendDay = budget;
+      }
       break;
     }
     case "referral": {
-      spendDay = null; // depends on hires; preview leaves null
+      // Display-only: spend comes from Editor (bounty * hires/day) elsewhere; keep null here.
+      spendDay = null;
       apps = nonNeg(source.apps_override ?? source.organic_per_day ?? 0);
       break;
     }
