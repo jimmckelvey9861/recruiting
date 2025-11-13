@@ -1,4 +1,5 @@
 import { useMemo, useState, ChangeEvent } from "react";
+import { setSourcesSnapshot } from '../../state/campaignPlan';
 
 type SpendModel =
   | "organic"
@@ -61,8 +62,10 @@ function deriveKpis(source: AdSource) {
 
   switch (source.spend_model) {
     case "organic": {
-      spendDay = 0;
-      apps = nonNeg(source.organic_per_day ?? 0);
+      const monthly = nonNeg(source.daily_budget ?? 0); // reuse daily_budget as monthly storage for organic
+      spendDay = monthly / 30;
+      const overrideApps = nonNeg(source.apps_override ?? source.organic_per_day ?? 0);
+      apps = overrideApps;
       break;
     }
     case "daily_budget": {
@@ -102,8 +105,8 @@ function deriveKpis(source: AdSource) {
       break;
     }
     case "referral": {
-      spendDay = null;
-      apps = nonNeg(source.organic_per_day ?? 0);
+      spendDay = null; // depends on hires; preview leaves null
+      apps = nonNeg(source.apps_override ?? source.organic_per_day ?? 0);
       break;
     }
     default:
@@ -233,6 +236,22 @@ export default function AdSourcesPanel() {
       return filtered;
     });
   };
+
+  // Publish snapshot for planner consumers
+  const snapshot = useMemo(() => sources.map(s => ({
+    id: s.id,
+    name: s.name,
+    active: s.active,
+    spend_model: s.spend_model,
+    color: s.color,
+    cpa_bid: s.cpa_bid,
+    cpc: s.cpc,
+    cpm: s.cpm,
+    daily_budget: s.daily_budget,
+    referral_bonus_per_hire: s.referral_bonus_per_hire,
+    apps_override: s.apps_override ?? null,
+  })), [sources]);
+  useMemo(() => { setSourcesSnapshot(snapshot); return null; }, [snapshot]);
 
   return (
     <div className="w-full min-h-[560px] bg-white border rounded-xl p-4 grid grid-cols-12 gap-4">
@@ -506,6 +525,17 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
               disabled={!show.dailyBudget}
             />
           </FieldBox>
+
+          {s.spend_model === 'organic' && (
+            <FieldBox label="Monthly Budget ($/month)" className="col-span-4">
+              <input
+                type="number"
+                className={`${input} text-right`}
+                value={s.daily_budget ?? ""}
+                onChange={setNum("daily_budget")}
+              />
+            </FieldBox>
+          )}
 
           {show.cpc && (
             <FieldBox label="$ / Click" className="col-span-4">
