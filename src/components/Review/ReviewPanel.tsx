@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import SankeyDiagram, { SankeySource, SankeyStage } from './SankeyDiagram'
-import { SOURCE_COLORS, SOURCE_LABELS, SOURCE_OPTIONS } from '../../constants/sourceColors'
 import { setConversionRate } from '../../state/campaignPlan'
 import { getStateSnapshot, useCampaignPlanVersion } from '../../state/campaignPlan'
 
@@ -8,10 +7,6 @@ interface ReviewPanelProps {
   selectedJobs: string[]
   selectedLocations: string[]
 }
-
-type SourceKey = 'linkedin' | 'referrals' | 'job_boards' | 'facebook' | 'indeed'
-
-const REVIEW_SOURCE_KEYS: SourceKey[] = ['linkedin', 'referrals', 'job_boards', 'facebook', 'indeed']
 
 const STAGE_DEFINITIONS: { key: string; label: string }[] = [
   { key: 'applicants', label: 'Applicants' },
@@ -35,137 +30,123 @@ export default function ReviewPanel({ selectedJobs, selectedLocations }: ReviewP
   const planVersion = useCampaignPlanVersion()
   const liveSources = useMemo(() => getStateSnapshot().sources, [planVersion])
 
-  const initialSourceValues = useMemo(() => {
-    const jobFactor = 1 + Math.max(0, selectedJobs.length - 1) * 0.3
-    const locationFactor = 1 + Math.max(0, selectedLocations.length - 1) * 0.24
+  // Daily Spend Limit slider
+  const suggestedLimit = useMemo(() => {
+    const sum = liveSources
+      .filter((s) => s.active && typeof s.daily_budget === 'number' && (s.daily_budget || 0) > 0)
+      .reduce((acc, s) => acc + Math.max(0, Number(s.daily_budget || 0)), 0)
+    return Math.min(1000, Math.round(sum) || 500)
+  }, [liveSources])
+  const [dailyLimit, setDailyLimit] = useState<number>(suggestedLimit)
 
-    const baseValues: Record<SourceKey, number> = {
-      linkedin: 0,
-      referrals: 0,
-      job_boards: 0,
-      facebook: 0,
-      indeed: 0,
+  // Effective CPA for scalable sources (heuristics match Sources KPIs)
+  const APPLY_CPC = 0.12
+  const APPLY_DAILY = 0.10
+  const CTR = 0.015
+  const effectiveCPA = (s: any) => {
+    switch (s.spend_model) {
+      case 'cpa': return Math.max(0.0001, Number(s.cpa_bid || 10))
+      case 'cpc': return Math.max(0.0001, Number(s.cpc || 2)) / APPLY_CPC
+      case 'cpm': return Math.max(0.0001, Number(s.cpm || 10)) / (1000 * CTR * APPLY_DAILY)
+      case 'daily_budget': return Math.max(0.0001, Number(s.cpa_bid || 10))
+      default: return Number.POSITIVE_INFINITY
+    }
+  }
+
+  const { stages, flowData, totals, alloc, sankeySources, appsPerDay, hiresPerDay } = useMemo(() => {
+    const alloc = new Map<string, number>()
+    let remaining = Math.max(0, dailyLimit)
+
+    // 1) Thresholded daily_budget sources: allocate only if we can fully fund the daily budget
+    const threshold = liveSources
+      .filter((s) => s.active && s.spend_model === 'daily_budget' && (s.daily_budget || 0) > 0 && (s.cpa_bid || 0) > 0)
+      .sort((a, b) => effectiveCPA(a) - effectiveCPA(b))
+
+    for (const s of threshold) {
+      const need = Math.max(0, Number(s.daily_budget || 0))
+      if (remaining >= need) {
+        alloc.set(s.id, need)
+        remaining -= need
+      } else {
+        alloc.set(s.id, 0)
+      }
     }
 
-    REVIEW_SOURCE_KEYS.forEach((key) => {
-      const option = SOURCE_OPTIONS.find((opt) => opt.key === key)
-      const base = option?.baseCount ?? 40
-      baseValues[key] = Math.round(base * jobFactor * locationFactor)
-    })
+    // 2) Scalable sources (cpc/cpm/cpa) by cheapest effective CPA
+    const scalable = liveSources
+      .filter((s) => s.active && (s.spend_model === 'cpc' || s.spend_model === 'cpm' || s.spend_model === 'cpa'))
+      .sort((a, b) => effectiveCPA(a) - effectiveCPA(b))
 
-    return baseValues
-  }, [selectedJobs, selectedLocations])
-
-  const [sourceValues, setSourceValues] = useState<Record<SourceKey, number>>(initialSourceValues)
-
-  useEffect(() => {
-    setSourceValues(initialSourceValues)
-  }, [initialSourceValues])
-
-  const sources: SankeySource[] = useMemo(() =>
-    liveSources.map((s) => ({ key: s.id, label: s.name, color: s.color || '#94a3b8' })), [liveSources]
-  )
-
-  const { stages, flowData, totals } = useMemo(() => {
-    const stageRows: number[][] = [];
-    const firstRow = liveSources.map((s) => {
-      if (!s.active) return 0;
-      const budget = Math.max(0, Number(s.daily_budget || 0));
-      let apps = 0;
-      // include manual override if present
-      if (s.apps_override != null) apps += Math.max(0, Number(s.apps_override));
-
-      switch (s.spend_model) {
-        case 'cpc': {
-          const cpc = Math.max(0.0001, Number(s.cpc || 2));
-          const clicks = budget / cpc;
-          const applyRate = 0.12; // match Sources KPIs
-          apps += clicks * applyRate;
-          break;
-        }
-        case 'cpm': {
-          const cpm = Math.max(0.0001, Number(s.cpm || 10));
-          const impressions = (budget / cpm) * 1000;
-          const ctr = 0.015;
-          const clicks = impressions * ctr;
-          const applyRate = 0.10;
-          apps += clicks * applyRate;
-          break;
-        }
-        case 'daily_budget': {
-          const impliedCpc = Math.max(0.0001, Number(s.cpc || 2));
-          const clicks = budget / impliedCpc;
-          const applyRate = 0.10;
-          apps += clicks * applyRate;
-          break;
-        }
-        case 'cpa': {
-          const bid = Math.max(0.0001, Number(s.cpa_bid || 10));
-          apps += budget / bid;
-          break;
-        }
-        case 'referral': {
-          // already counted via apps_override (if provided)
-          break;
-        }
-        default:
-          break;
+    for (const s of scalable) {
+      if (remaining <= 0) break
+      const cap = Number.isFinite(Number(s.daily_budget)) ? Math.max(0, Number(s.daily_budget)) : Number.POSITIVE_INFINITY
+      const take = Math.min(remaining, cap)
+      if (take > 0) {
+        alloc.set(s.id, (alloc.get(s.id) || 0) + take)
+        remaining -= take
       }
-      return clamp(Math.round(apps), 0, 999999);
+    }
+
+    // 3) Build Sankey first column = applicants/day per source from allocations + organics
+    const firstRow = liveSources.map((s) => {
+      if (!s.active) return 0
+      let apps = 0
+
+      // Organic contributes applicants but no spend
+      if (s.spend_model === 'organic') {
+        const organicApps = Number(s.apps_override || 0)
+        if (Number.isFinite(organicApps)) apps += Math.max(0, Math.round(organicApps))
+      }
+
+      const spent = alloc.get(s.id) || 0
+      if (s.spend_model === 'daily_budget') {
+        const need = Math.max(0, Number(s.daily_budget || 0))
+        const cpa = Math.max(0.0001, Number(s.cpa_bid || 10))
+        if (spent >= need) apps += Math.round(spent / cpa)
+      } else if (s.spend_model === 'cpa' && spent > 0) {
+        const bid = Math.max(0.0001, Number(s.cpa_bid || 10))
+        apps += Math.round(spent / bid)
+      } else if (s.spend_model === 'cpc' && spent > 0) {
+        const cpc = Math.max(0.0001, Number(s.cpc || 2))
+        const clicks = spent / cpc
+        apps += Math.round(clicks * APPLY_CPC)
+      } else if (s.spend_model === 'cpm' && spent > 0) {
+        const cpm = Math.max(0.0001, Number(s.cpm || 10))
+        const impressions = (spent / cpm) * 1000
+        const clicks = impressions * CTR
+        apps += Math.round(clicks * APPLY_DAILY)
+      }
+
+      return clamp(apps, 0, 999999)
     })
-    stageRows.push(firstRow)
 
-    const conversions = [
-      conversionRates.toInterview,
-      conversionRates.toOffer,
-      conversionRates.toBackground,
-      conversionRates.toHire,
-    ]
+    const toInterview = firstRow.map((v) => Math.round(v * clamp(conversionRates.toInterview, 0, 1)))
+    const toOffer = toInterview.map((v) => Math.round(v * clamp(conversionRates.toOffer, 0, 1)))
+    const toBg = toOffer.map((v) => Math.round(v * clamp(conversionRates.toBackground, 0, 1)))
+    const toHire = toBg.map((v) => Math.round(v * clamp(conversionRates.toHire, 0, 1)))
 
-    conversions.forEach((rate, idx) => {
-      const previousRow = stageRows[idx]
-      const nextRow = previousRow.map((value) => Math.round(value * clamp(rate, 0, 1)))
-      stageRows.push(nextRow)
-    })
+    const flowData = [firstRow, toInterview, toOffer, toBg, toHire]
+    const totals = flowData.map((row) => row.reduce((sum, v) => sum + v, 0))
 
-    const totalsByStage = stageRows.map((row) => row.reduce((sum, value) => sum + value, 0))
+    const stages: SankeyStage[] = STAGE_DEFINITIONS.map((stg, idx) => ({ key: stg.key, label: stg.label, total: totals[idx] }))
 
-    const sankeyStages: SankeyStage[] = STAGE_DEFINITIONS.map((definition, idx) => ({
-      key: definition.key,
-      label: definition.label,
-      total: totalsByStage[idx] ?? 0,
-    }))
+    const sankeySources: SankeySource[] = liveSources.map((s) => ({ key: s.id, label: s.name, color: s.color || '#94a3b8' }))
 
-    return { stages: sankeyStages, flowData: stageRows, totals: totalsByStage }
-  }, [liveSources, conversionRates])
+    const appsPerDay = totals[0]
+    const hiresPerDay = totals[totals.length - 1]
 
-  // Publish overall conversion = product of stages (excluding final 100%)
+    return { stages, flowData, totals, alloc, sankeySources, appsPerDay, hiresPerDay }
+  }, [liveSources, conversionRates, dailyLimit])
+
+  // Publish overall conversion = product across stages
   useEffect(() => {
-    const overall = [
-      conversionRates.toInterview,
-      conversionRates.toOffer,
-      conversionRates.toBackground,
-      conversionRates.toHire,
-    ].reduce((acc, r) => acc * Math.max(0, Math.min(1, r)), 1)
+    const overall = [conversionRates.toInterview, conversionRates.toOffer, conversionRates.toBackground, conversionRates.toHire]
+      .reduce((acc, r) => acc * clamp(r, 0, 1), 1)
     setConversionRate(overall)
   }, [conversionRates])
 
   const locationsLabel = selectedLocations.length ? selectedLocations.join(', ') : 'All Locations'
   const jobsLabel = selectedJobs.length ? selectedJobs.join(', ') : 'All Jobs'
-
-  const updateSourceValue = (key: SourceKey, value: string) => {
-    const numeric = clamp(parseInt(value, 10) || 0, 0, 9999)
-    setSourceValues((prev) => ({ ...prev, [key]: numeric }))
-  }
-
-  const updateConversionRate = (key: keyof typeof DEFAULT_CONVERSION_RATES, value: string) => {
-    const numeric = clamp(parseFloat(value) || 0, 0, 1)
-    setConversionRates((prev) => ({ ...prev, [key]: numeric }))
-  }
-
-  const totalApplicants = totals[0] ?? 0
-  const finalHires = totals[totals.length - 1] ?? 0
-  const overallRate = totalApplicants > 0 ? Math.round((finalHires / totalApplicants) * 100) : 0
 
   return (
     <div className="h-full bg-gray-50 overflow-auto">
@@ -177,25 +158,60 @@ export default function ReviewPanel({ selectedJobs, selectedLocations }: ReviewP
               <p className="text-sm text-gray-500">{jobsLabel} · {locationsLabel}</p>
             </div>
             <div className="text-xs text-gray-500 bg-gray-100 border border-gray-200 rounded-md px-3 py-1">
-              Adjust source mix and conversions to forecast hiring throughput.
+              Allocate your Daily Spend across sources to maximize applicants.
             </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            {/* Sources list (live from Sources tab) */}
+            {/* Sources + allocator */}
             <div className="bg-white rounded-lg shadow-sm p-5 border">
               <h2 className="text-sm font-semibold mb-4 text-gray-700 uppercase tracking-wide">Sources</h2>
+
+              <div className="mb-3">
+                <label className="flex justify-between text-sm font-medium text-slate-700 mb-1">
+                  <span>Daily Spend Limit</span>
+                  <span className="text-slate-900">${Math.round(dailyLimit)}</span>
+                </label>
+                <input
+                  type="range"
+                  min={0}
+                  max={1000}
+                  step={10}
+                  value={dailyLimit}
+                  onChange={(e) => setDailyLimit(Number(e.target.value))}
+                  className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"
+                />
+              </div>
+
               <div className="space-y-2">
-                {liveSources.length === 0 && (
+                {sankeySources.length === 0 && (
                   <div className="text-xs text-gray-500">No sources configured. Open the Sources tab to add some.</div>
                 )}
-                {liveSources.map((s) => (
-                  <div key={s.id} className="flex items-center gap-2 text-sm">
-                    <span className="inline-block w-3 h-3 rounded" style={{ backgroundColor: s.color || '#94a3b8' }} />
-                    <span className="truncate">{s.name}</span>
-                    {!s.active && <span className="ml-auto text-xs text-gray-500">paused</span>}
-                  </div>
-                ))}
+                {sankeySources.map((s) => {
+                  const spent = alloc.get(s.key) || 0
+                  const pct = dailyLimit > 0 ? (100 * spent / dailyLimit) : 0
+                  return (
+                    <div key={s.key} className="flex items-center gap-2 text-sm">
+                      <span className="inline-block w-3 h-3 rounded" style={{ backgroundColor: s.color }} />
+                      <div className="flex-1 h-2 bg-slate-200 rounded overflow-hidden">
+                        <div className="h-2" style={{ width: `${pct}%`, backgroundColor: s.color }} />
+                      </div>
+                      <div className="w-16 text-right">${Math.round(spent)}</div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Stats driven by allocation */}
+              <div className="mt-4 grid grid-cols-3 gap-2 text-sm">
+                <div className="text-slate-600">Apps/day</div>
+                <div className="col-span-2 text-right font-semibold">{appsPerDay.toLocaleString()}</div>
+                <div className="text-slate-600">Hires/day</div>
+                <div className="col-span-2 text-right font-semibold">{hiresPerDay.toLocaleString()}</div>
+                <div className="text-slate-600">Spend/day</div>
+                <div className="col-span-2 text-right font-semibold">${Math.round(dailyLimit).toLocaleString()}</div>
+                <div className="text-slate-600">$/App</div>
+                <div className="col-span-2 text-right font-semibold">{appsPerDay > 0 ? `$${Math.round(dailyLimit / appsPerDay)}` : '—'}</div>
               </div>
             </div>
 
@@ -203,13 +219,10 @@ export default function ReviewPanel({ selectedJobs, selectedLocations }: ReviewP
             <div className="lg:col-span-3">
               <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-4">
                 <SankeyDiagram
-                  sources={sources}
+                  sources={sankeySources}
                   stages={stages}
                   flowData={flowData}
-                  options={{
-                    showConversionRates: true,
-                    showRejectBar: false,
-                  }}
+                  options={{ showConversionRates: true, showRejectBar: false }}
                 />
               </div>
             </div>
