@@ -72,14 +72,22 @@ export default function ReviewPanel({ selectedJobs, selectedLocations }: ReviewP
       }
     }
 
-    // 2) Scalable sources (cpc/cpm/cpa) by cheapest effective CPA
+    // 2) Scalable sources (referral/cpc/cpm/cpa) by cheapest effective CPA
+    const overallConv = clamp(conversionRates.toInterview * conversionRates.toOffer * conversionRates.toBackground * conversionRates.toHire, 0, 1)
     const scalable = liveSources
-      .filter((s) => s.active && (s.spend_model === 'cpc' || s.spend_model === 'cpm' || s.spend_model === 'cpa'))
-      .sort((a, b) => effectiveCPA(a) - effectiveCPA(b))
+      .filter((s) => s.active && (s.spend_model === 'referral' || s.spend_model === 'cpc' || s.spend_model === 'cpm' || s.spend_model === 'cpa'))
+      .sort((a, b) => {
+        const cpaA = a.spend_model === 'referral' ? Math.max(0.0001, Number(a.referral_bonus_per_hire || 0)) * Math.max(0.0001, overallConv) : effectiveCPA(a)
+        const cpaB = b.spend_model === 'referral' ? Math.max(0.0001, Number(b.referral_bonus_per_hire || 0)) * Math.max(0.0001, overallConv) : effectiveCPA(b)
+        return cpaA - cpaB
+      })
 
     for (const s of scalable) {
       if (remaining <= 0) break
-      const cap = Number.isFinite(Number(s.daily_budget)) ? Math.max(0, Number(s.daily_budget)) : Number.POSITIVE_INFINITY
+      // For referral, cap spend to fully cover expected referral hires per day = bounty * (apps_override * overallConv)
+      const cap = s.spend_model === 'referral'
+        ? Math.max(0, Number(s.referral_bonus_per_hire || 0)) * Math.max(0, Number(s.apps_override || 0)) * Math.max(0.0001, overallConv)
+        : (Number.isFinite(Number(s.daily_budget)) ? Math.max(0, Number(s.daily_budget)) : Number.POSITIVE_INFINITY)
       const take = Math.min(remaining, cap)
       if (take > 0) {
         alloc.set(s.id, (alloc.get(s.id) || 0) + take)
@@ -103,6 +111,12 @@ export default function ReviewPanel({ selectedJobs, selectedLocations }: ReviewP
         const need = Math.max(0, Number(s.daily_budget || 0))
         const cpa = Math.max(0.0001, Number(s.cpa_bid || 10))
         if (spent >= need) apps += Math.round(spent / cpa)
+      } else if (s.spend_model === 'referral' && spent > 0) {
+        const bounty = Math.max(0.0001, Number(s.referral_bonus_per_hire || 0))
+        const conv = Math.max(0.0001, overallConv)
+        const maxApps = Math.max(0, Number(s.apps_override || 0))
+        const appsFromSpend = spent / (bounty * conv)
+        apps += Math.round(Math.min(maxApps, appsFromSpend))
       } else if (s.spend_model === 'cpa' && spent > 0) {
         const bid = Math.max(0.0001, Number(s.cpa_bid || 10))
         apps += Math.round(spent / bid)
