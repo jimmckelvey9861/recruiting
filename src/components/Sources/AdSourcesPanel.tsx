@@ -1,4 +1,4 @@
-import { useMemo, useState, ChangeEvent } from "react";
+import { useMemo, useState, ChangeEvent, useEffect } from "react";
 import { setSourcesSnapshot } from '../../state/campaignPlan';
 import { getStateSnapshot } from '../../state/campaignPlan';
 
@@ -200,6 +200,20 @@ export default function AdSourcesPanel() {
   const [activeId, setActiveId] = useState<string>(sources[0]?.id || "");
   const active = useMemo(() => sources.find((source) => source.id === activeId) || null, [sources, activeId]);
 
+  // Load persisted sources on mount
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('passcom-sources-v1');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length) {
+          setSources(parsed);
+          setActiveId(parsed[0]?.id || "");
+        }
+      }
+    } catch {}
+  }, []);
+
   const update = (id: string, patch: Partial<AdSource>) =>
     setSources((prev) => prev.map((source) => (source.id === id ? { ...source, ...patch } : source)));
 
@@ -238,7 +252,7 @@ export default function AdSourcesPanel() {
     });
   };
 
-  // Publish snapshot for planner consumers
+  // Build snapshot for planner consumers
   const snapshot = useMemo(() => sources.map(s => ({
     id: s.id,
     name: s.name,
@@ -252,7 +266,11 @@ export default function AdSourcesPanel() {
     referral_bonus_per_hire: s.referral_bonus_per_hire,
     apps_override: s.apps_override ?? null,
   })), [sources]);
-  useMemo(() => { setSourcesSnapshot(snapshot); return null; }, [snapshot]);
+  // Publish snapshot and persist to localStorage on change
+  useEffect(() => {
+    setSourcesSnapshot(snapshot);
+    try { localStorage.setItem('passcom-sources-v1', JSON.stringify(sources)); } catch {}
+  }, [snapshot, sources]);
 
   return (
     <div className="w-full min-h-[560px] bg-white border rounded-xl p-4 grid grid-cols-12 gap-4">
@@ -487,6 +505,7 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
                   readOnly={s.end_type !== "date"}
                   value={s.end_type === 'date' ? (s.end_date ?? '') : (derivedEndISO || '')}
                   onChange={(event) => set({ end_date: event.target.value || null })}
+                  style={s.end_type !== 'date' ? { backgroundColor: '#f1f5f9', color: '#2563eb' } : undefined}
                 />
               </div>
 
@@ -506,6 +525,7 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
                   readOnly={s.end_type !== "hires"}
                   value={s.end_type === 'hires' ? (s.end_hires ?? '') : Math.round(derivedHires)}
                   onChange={setNum("end_hires")}
+                  style={s.end_type !== 'hires' ? { backgroundColor: '#f1f5f9', color: '#2563eb' } : undefined}
                 />
               </div>
 
@@ -525,6 +545,7 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
                   readOnly={s.end_type !== "budget"}
                   value={s.end_type === 'budget' ? (s.end_budget ?? '') : Math.round(derivedBudget)}
                   onChange={setNum("end_budget")}
+                  style={s.end_type !== 'budget' ? { backgroundColor: '#f1f5f9', color: '#2563eb' } : undefined}
                 />
               </div>
             </div>
