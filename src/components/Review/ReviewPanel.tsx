@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import SankeyDiagram, { SankeySource, SankeyStage } from './SankeyDiagram'
 import { SOURCE_COLORS, SOURCE_LABELS, SOURCE_OPTIONS } from '../../constants/sourceColors'
+import { setConversionRate } from '../../state/campaignPlan'
+import { getStateSnapshot, useCampaignPlanVersion } from '../../state/campaignPlan'
 
 interface ReviewPanelProps {
   selectedJobs: string[]
@@ -30,6 +32,8 @@ const clamp = (value: number, min: number, max: number) => Math.max(min, Math.mi
 
 export default function ReviewPanel({ selectedJobs, selectedLocations }: ReviewPanelProps) {
   const [conversionRates, setConversionRates] = useState(DEFAULT_CONVERSION_RATES)
+  const planVersion = useCampaignPlanVersion()
+  const liveSources = useMemo(() => getStateSnapshot().sources, [planVersion])
 
   const initialSourceValues = useMemo(() => {
     const jobFactor = 1 + Math.max(0, selectedJobs.length - 1) * 0.3
@@ -58,19 +62,57 @@ export default function ReviewPanel({ selectedJobs, selectedLocations }: ReviewP
     setSourceValues(initialSourceValues)
   }, [initialSourceValues])
 
-  const sources: SankeySource[] = useMemo(
-    () =>
-      REVIEW_SOURCE_KEYS.map((key) => ({
-        key,
-        label: SOURCE_LABELS[key] ?? key,
-        color: SOURCE_COLORS[key] ?? '#94a3b8',
-      })),
-    []
+  const sources: SankeySource[] = useMemo(() =>
+    liveSources.map((s) => ({ key: s.id, label: s.name, color: s.color || '#94a3b8' })), [liveSources]
   )
 
   const { stages, flowData, totals } = useMemo(() => {
-    const stageRows: number[][] = []
-    const firstRow = REVIEW_SOURCE_KEYS.map((key) => clamp(Math.round(sourceValues[key] ?? 0), 0, 9999))
+    const stageRows: number[][] = [];
+    const firstRow = liveSources.map((s) => {
+      if (!s.active) return 0;
+      const budget = Math.max(0, Number(s.daily_budget || 0));
+      let apps = 0;
+      // include manual override if present
+      if (s.apps_override != null) apps += Math.max(0, Number(s.apps_override));
+
+      switch (s.spend_model) {
+        case 'cpc': {
+          const cpc = Math.max(0.0001, Number(s.cpc || 2));
+          const clicks = budget / cpc;
+          const applyRate = 0.12; // match Sources KPIs
+          apps += clicks * applyRate;
+          break;
+        }
+        case 'cpm': {
+          const cpm = Math.max(0.0001, Number(s.cpm || 10));
+          const impressions = (budget / cpm) * 1000;
+          const ctr = 0.015;
+          const clicks = impressions * ctr;
+          const applyRate = 0.10;
+          apps += clicks * applyRate;
+          break;
+        }
+        case 'daily_budget': {
+          const impliedCpc = Math.max(0.0001, Number(s.cpc || 2));
+          const clicks = budget / impliedCpc;
+          const applyRate = 0.10;
+          apps += clicks * applyRate;
+          break;
+        }
+        case 'cpa': {
+          const bid = Math.max(0.0001, Number(s.cpa_bid || 10));
+          apps += budget / bid;
+          break;
+        }
+        case 'referral': {
+          // already counted via apps_override (if provided)
+          break;
+        }
+        default:
+          break;
+      }
+      return clamp(Math.round(apps), 0, 999999);
+    })
     stageRows.push(firstRow)
 
     const conversions = [
@@ -95,7 +137,18 @@ export default function ReviewPanel({ selectedJobs, selectedLocations }: ReviewP
     }))
 
     return { stages: sankeyStages, flowData: stageRows, totals: totalsByStage }
-  }, [sourceValues, conversionRates])
+  }, [liveSources, conversionRates])
+
+  // Publish overall conversion = product of stages (excluding final 100%)
+  useEffect(() => {
+    const overall = [
+      conversionRates.toInterview,
+      conversionRates.toOffer,
+      conversionRates.toBackground,
+      conversionRates.toHire,
+    ].reduce((acc, r) => acc * Math.max(0, Math.min(1, r)), 1)
+    setConversionRate(overall)
+  }, [conversionRates])
 
   const locationsLabel = selectedLocations.length ? selectedLocations.join(', ') : 'All Locations'
   const jobsLabel = selectedJobs.length ? selectedJobs.join(', ') : 'All Jobs'
@@ -129,118 +182,20 @@ export default function ReviewPanel({ selectedJobs, selectedLocations }: ReviewP
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            {/* Controls */}
-            <div className="lg:col-span-1 space-y-6">
-              <div className="bg-slate-50 border border-slate-200 rounded-lg p-5">
-                <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-4">Initial Sources</h3>
-                <div className="space-y-4">
-                  {sources.map((source) => (
-                    <div key={source.key}>
-                      <label className="flex items-center justify-between text-sm font-medium text-slate-700 mb-1">
-                        <span className="flex items-center gap-2">
-                          <span className="w-3 h-3 rounded" style={{ backgroundColor: source.color }} />
-                          {source.label}
-                        </span>
-                        <span className="text-slate-900 font-semibold">{sourceValues[source.key as SourceKey]}</span>
-                      </label>
-                      <input
-                        type="range"
-                        min={0}
-                        max={600}
-                        value={sourceValues[source.key as SourceKey]}
-                        onChange={(event) => updateSourceValue(source.key as SourceKey, event.target.value)}
-                        className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="bg-slate-50 border border-slate-200 rounded-lg p-5">
-                <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-4">Conversion Rates</h3>
-                <div className="space-y-4">
-                  <div>
-                    <label className="flex justify-between text-sm font-medium text-slate-700 mb-1">
-                      <span>App → Interview</span>
-                      <span className="text-slate-900 font-semibold">{Math.round(conversionRates.toInterview * 100)}%</span>
-                    </label>
-                    <input
-                      type="range"
-                      min={0}
-                      max={1}
-                      step={0.01}
-                      value={conversionRates.toInterview}
-                      onChange={(event) => updateConversionRate('toInterview', event.target.value)}
-                      className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"
-                    />
+            {/* Sources list (live from Sources tab) */}
+            <div className="bg-white rounded-lg shadow-sm p-5 border">
+              <h2 className="text-sm font-semibold mb-4 text-gray-700 uppercase tracking-wide">Sources</h2>
+              <div className="space-y-2">
+                {liveSources.length === 0 && (
+                  <div className="text-xs text-gray-500">No sources configured. Open the Sources tab to add some.</div>
+                )}
+                {liveSources.map((s) => (
+                  <div key={s.id} className="flex items-center gap-2 text-sm">
+                    <span className="inline-block w-3 h-3 rounded" style={{ backgroundColor: s.color || '#94a3b8' }} />
+                    <span className="truncate">{s.name}</span>
+                    {!s.active && <span className="ml-auto text-xs text-gray-500">paused</span>}
                   </div>
-
-                  <div>
-                    <label className="flex justify-between text-sm font-medium text-slate-700 mb-1">
-                      <span>Interview → Offer</span>
-                      <span className="text-slate-900 font-semibold">{Math.round(conversionRates.toOffer * 100)}%</span>
-                    </label>
-                    <input
-                      type="range"
-                      min={0}
-                      max={1}
-                      step={0.01}
-                      value={conversionRates.toOffer}
-                      onChange={(event) => updateConversionRate('toOffer', event.target.value)}
-                      className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="flex justify-between text-sm font-medium text-slate-700 mb-1">
-                      <span>Offer → Background</span>
-                      <span className="text-slate-900 font-semibold">{Math.round(conversionRates.toBackground * 100)}%</span>
-                    </label>
-                    <input
-                      type="range"
-                      min={0}
-                      max={1}
-                      step={0.01}
-                      value={conversionRates.toBackground}
-                      onChange={(event) => updateConversionRate('toBackground', event.target.value)}
-                      className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="flex justify-between text-sm font-medium text-slate-700 mb-1">
-                      <span>Background → Hire</span>
-                      <span className="text-slate-900 font-semibold">{Math.round(conversionRates.toHire * 100)}%</span>
-                    </label>
-                    <input
-                      type="range"
-                      min={0}
-                      max={1}
-                      step={0.01}
-                      value={conversionRates.toHire}
-                      onChange={(event) => updateConversionRate('toHire', event.target.value)}
-                      className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-slate-50 border border-slate-200 rounded-lg p-5">
-                <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-4">Pipeline Stats</h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-slate-600">Total Applicants:</span>
-                    <span className="font-semibold text-slate-900">{totalApplicants.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-600">Final Hires:</span>
-                    <span className="font-semibold text-slate-900">{finalHires.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between pt-2 border-t border-slate-200">
-                    <span className="text-slate-600">Overall Rate:</span>
-                    <span className="font-semibold text-slate-900">{overallRate}%</span>
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
 
