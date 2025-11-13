@@ -199,19 +199,22 @@ export default function AdSourcesPanel() {
   const [sources, setSources] = useState<AdSource[]>(seed());
   const [activeId, setActiveId] = useState<string>(sources[0]?.id || "");
   const active = useMemo(() => sources.find((source) => source.id === activeId) || null, [sources, activeId]);
+  const [hydrated, setHydrated] = useState(false);
 
   // Load persisted sources on mount
   useEffect(() => {
     try {
       const raw = localStorage.getItem('passcom-sources-v1');
+      const aid = localStorage.getItem('passcom-sources-active');
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed) && parsed.length) {
           setSources(parsed);
-          setActiveId(parsed[0]?.id || "");
+          setActiveId(aid || parsed[0]?.id || "");
         }
       }
     } catch {}
+    setHydrated(true);
   }, []);
 
   const update = (id: string, patch: Partial<AdSource>) =>
@@ -269,8 +272,12 @@ export default function AdSourcesPanel() {
   // Publish snapshot and persist to localStorage on change
   useEffect(() => {
     setSourcesSnapshot(snapshot);
-    try { localStorage.setItem('passcom-sources-v1', JSON.stringify(sources)); } catch {}
-  }, [snapshot, sources]);
+    if (!hydrated) return;
+    try {
+      localStorage.setItem('passcom-sources-v1', JSON.stringify(sources));
+      localStorage.setItem('passcom-sources-active', activeId);
+    } catch {}
+  }, [snapshot, sources, activeId, hydrated]);
 
   return (
     <div className="w-full min-h-[560px] bg-white border rounded-xl p-4 grid grid-cols-12 gap-4">
