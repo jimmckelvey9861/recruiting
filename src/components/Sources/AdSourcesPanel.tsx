@@ -516,15 +516,16 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
             </select>
           </FieldBox>
 
-          <FieldBox label="Daily Budget ($/day)" className="col-span-4">
-            <input
-              type="number"
-              className={`${input} text-right`}
-              value={s.daily_budget ?? ""}
-              onChange={setNum("daily_budget")}
-              disabled={!show.dailyBudget}
-            />
-          </FieldBox>
+          {s.spend_model !== 'organic' && show.dailyBudget && (
+            <FieldBox label="Daily Budget ($/day)" className="col-span-4">
+              <input
+                type="number"
+                className={`${input} text-right`}
+                value={s.daily_budget ?? ""}
+                onChange={setNum("daily_budget")}
+              />
+            </FieldBox>
+          )}
 
           {s.spend_model === 'organic' && (
             <FieldBox label="Monthly Budget ($/month)" className="col-span-4">
