@@ -1086,7 +1086,9 @@ function CampaignsWindow(props: CampaignsWindowProps){
       .filter(c => q ? (c.name || '').toLowerCase().includes(q) : true)
       .map((c)=>{
         const hiresTotal = typeof c.endHires === 'number' ? c.endHires : null;
-        const job = (c.jobs && c.jobs.length > 0) ? c.jobs[0] : '';
+        // Prefer the campaign's first job; if none, fall back to globally selected job (so new campaigns aren't gray)
+        const fallbackJob = (props.selectedJobs && props.selectedJobs[0]) || '';
+        const job = (c.jobs && c.jobs.length > 0) ? c.jobs[0] : fallbackJob;
         const jobInitial = job ? job.charAt(0).toUpperCase() : '';
         const jobColor = JOB_COLORS[job] || '#64748B';
         // Normalize status to desired set
@@ -1108,7 +1110,7 @@ function CampaignsWindow(props: CampaignsWindowProps){
       });
     }
     return rows;
-  },[campaigns, statusFilter, query, locationFilter, jobFilter, sortField, sortAsc]);
+  },[campaigns, statusFilter, query, locationFilter, jobFilter, sortField, sortAsc, props.selectedJobs]);
 
   const handleCreateCampaign = () => {
     const id = `c${Date.now()}`;
