@@ -1086,9 +1086,12 @@ function CampaignsWindow(props: CampaignsWindowProps){
       .filter(c => q ? (c.name || '').toLowerCase().includes(q) : true)
       .map((c)=>{
         const hiresTotal = typeof c.endHires === 'number' ? c.endHires : null;
-        // Prefer the campaign's first job; if none, fall back to globally selected job (so new campaigns aren't gray)
+        // If exactly one global job is selected, use it for the circle;
+        // otherwise use the campaign's first job; if none, fallback to first globally selected (if any)
+        const selectedJob = (props.selectedJobs && props.selectedJobs.length === 1) ? props.selectedJobs[0] : '';
+        const campaignJob = (c.jobs && c.jobs.length > 0) ? c.jobs[0] : '';
         const fallbackJob = (props.selectedJobs && props.selectedJobs[0]) || '';
-        const job = (c.jobs && c.jobs.length > 0) ? c.jobs[0] : fallbackJob;
+        const job = selectedJob || campaignJob || fallbackJob;
         const jobInitial = job ? job.charAt(0).toUpperCase() : '';
         const jobColor = JOB_COLORS[job] || '#64748B';
         // Normalize status to desired set
