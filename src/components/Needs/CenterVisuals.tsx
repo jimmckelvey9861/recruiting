@@ -342,6 +342,7 @@ function LinesChart({
   const state = getStateSnapshot();
   const showSeparate = !state.liveView;
   const maxY = Math.max(1, yMax);
+  const supplyLegendLabel = state.liveView ? "Supply + New Hires" : "Supply";
 
   const X = (i: number) => PADL + (i / Math.max(1, series.length - 1)) * innerW;
   const Y = (v: number) => PADT + innerH - (v / maxY) * innerH;
@@ -435,7 +436,7 @@ function LinesChart({
         <rect width="12" height="12" fill="#b91c1c" rx="3" />
         <text x="16" y="10" fontSize="12" fill="#1f2937">Demand</text>
         <rect x="92" width="12" height="12" fill="#1d4ed8" rx="3" />
-        <text x="108" y="10" fontSize="12" fill="#1f2937">Supply</text>
+        <text x="108" y="10" fontSize="12" fill="#1f2937">{supplyLegendLabel}</text>
         {showSeparate && (
           <>
             <rect x="170" width="12" height="12" fill="#16a34a" rx="3" />
