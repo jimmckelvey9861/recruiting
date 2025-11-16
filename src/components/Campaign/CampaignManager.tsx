@@ -149,10 +149,25 @@ interface CampaignManagerProps {
 }
 
 export default function CampaignManager({ selectedLocations, setSelectedLocations, selectedJobs, setSelectedJobs, onOpenPlanner, onOpenSources }: CampaignManagerProps){
-  const [campaigns, setCampaigns] = useState(
-    [...CAMPAIGNS].sort((a,b)=> new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-  );
-  const [activeId, setActiveId] = useState(campaigns[0]?.id);
+  const [campaigns, setCampaigns] = useState<Campaign[]>(() => {
+    try {
+      const raw = localStorage.getItem('passcom-campaigns-v1');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length) {
+          return parsed as Campaign[];
+        }
+      }
+    } catch {}
+    return [...CAMPAIGNS].sort((a,b)=> new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  });
+  const [activeId, setActiveId] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('passcom-campaign-active');
+      if (saved) return saved;
+    } catch {}
+    return (campaigns[0]?.id || '');
+  });
   const current = useMemo(()=> campaigns.find(c=>c.id===activeId) || campaigns[0], [campaigns, activeId]);
 
   // Shared planner KPIs
@@ -278,10 +293,18 @@ export default function CampaignManager({ selectedLocations, setSelectedLocation
 
   // Sidebar actions
   const handleToggleStatus = () => {
+    if (!current) return;
+    const now = new Date(); now.setHours(0,0,0,0);
+    const start = current.startDate ? parseLocalDate(current.startDate) : null;
+    if (start) start.setHours(0,0,0,0);
     setCampaigns(prev => prev.map(c => {
-      if (c.id !== (current?.id || '')) return c;
-      const newStatus: Campaign['status'] = c.status === 'active' ? 'suspended' : 'active';
-      return { ...c, status: newStatus };
+      if (c.id !== current.id) return c;
+      // Pause if active
+      if (c.status === 'active') return { ...c, status: 'suspended' };
+      // Launch from paused/pending: if start is in the future -> pending (draft), else active
+      const shouldBePending = !!(start && start.getTime() > now.getTime());
+      const nextStatus: Campaign['status'] = shouldBePending ? 'draft' : 'active';
+      return { ...c, status: nextStatus };
     }));
   };
   const handleCopy = () => {
@@ -290,7 +313,7 @@ export default function CampaignManager({ selectedLocations, setSelectedLocation
       ...current,
       id: `c${Date.now()}`,
       name: `${current.name} (Copy)`,
-      status: 'draft',
+      status: 'suspended',
       createdAt: new Date().toISOString().slice(0, 10),
     };
     setCampaigns(prev => [copied, ...prev]);
@@ -303,6 +326,46 @@ export default function CampaignManager({ selectedLocations, setSelectedLocation
     const remaining = campaigns.filter(c => c.id !== current.id);
     if (remaining.length > 0) setActiveId(remaining[0].id);
   };
+  const saveNow = () => {
+    try {
+      localStorage.setItem('passcom-campaigns-v1', JSON.stringify(campaigns));
+      localStorage.setItem('passcom-campaign-active', activeId || '');
+    } catch {}
+  };
+  // Auto-persist when data changes
+  useEffect(() => { saveNow(); }, [campaigns, activeId]);
+  // Also persist when tab/window loses focus or before unload
+  useEffect(() => {
+    const onVis = () => { if (document.hidden) saveNow(); };
+    const onBeforeUnload = () => { saveNow(); };
+    window.addEventListener('visibilitychange', onVis);
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => {
+      window.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('beforeunload', onBeforeUnload);
+    };
+  }, [campaigns, activeId]);
+
+  // Defensive sync: if planner.startDate changes elsewhere, reflect into the selected campaign
+  useEffect(() => {
+    const plannerISO = getStateSnapshot().planner.startDate || '';
+    const curISO = current?.startDate || '';
+    if (!current || !plannerISO || plannerISO === curISO) return;
+    setCampaigns(prev =>
+      prev.map(c => c.id === current.id ? ({ ...c, startDate: plannerISO }) : c)
+    );
+    try { localStorage.setItem('passcom-campaign-active', current.id); } catch {}
+  }, [current?.id, getStateSnapshot().planner.startDate]);
+
+  // Defensive sync: if campaign.startDate changes (e.g., from list editor), mirror to planner
+  useEffect(() => {
+    if (!current) return;
+    const plannerISO = getStateSnapshot().planner.startDate || '';
+    const curISO = current.startDate || '';
+    if (curISO && curISO !== plannerISO) {
+      setPlanner({ startDate: curISO });
+    }
+  }, [current?.startDate]);
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 p-6">
@@ -391,8 +454,16 @@ export default function CampaignManager({ selectedLocations, setSelectedLocation
                   <div className="text-[11px] text-gray-500 mb-1">Start Date</div>
                   <input
                     type="date"
-                    value={planner.startDate || ''}
-                    onChange={(e)=> setPlanner({ startDate: e.target.value })}
+                    value={current?.startDate || ''}
+                    onChange={(e) => {
+                      const iso = e.target.value || '';
+                      // Update selected campaign's start date
+                      setCampaigns(prev =>
+                        prev.map(c => c.id === (current?.id || '') ? ({ ...c, startDate: iso }) : c)
+                      );
+                      // Keep planner in sync for visuals/derived
+                      setPlanner({ startDate: iso });
+                    }}
                     className="w-full text-sm border rounded px-2 py-1 outline-none"
                   />
                 </div>
@@ -511,10 +582,11 @@ export default function CampaignManager({ selectedLocations, setSelectedLocation
                       return <span className={`px-3 py-1 rounded-full text-xs font-medium ${mapColor(current?.status)}`}>{mapText(current?.status)}</span>;
                     })()}
                   </div>
-                  <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3">
                     <button onClick={handleToggleStatus} className="px-3 py-1.5 rounded border text-sm">
                       {current?.status === 'active' ? 'Pause' : 'Launch'}
                     </button>
+                  <button onClick={saveNow} className="px-3 py-1.5 rounded border text-sm">Save</button>
                     <button onClick={handleCopy} className="text-sm text-gray-700 underline">Copy</button>
                     <button onClick={handleDelete} className="text-sm text-red-600 underline">Delete</button>
                   </div>
@@ -1006,7 +1078,7 @@ function CampaignsWindow(props: CampaignsWindowProps){
 
   const previewRows = useMemo(()=>{
     const q = query.trim().toLowerCase();
-    const statusOrder: Record<string, number> = { active: 0, pending: 1, suspended: 2, completed: 3 };
+    const statusOrder: Record<string, number> = { active: 0, launched: 1, suspended: 2, completed: 3 };
     let rows = (campaigns || [])
       .filter(c => statusFilter === 'all' ? true : c.status === statusFilter)
       .filter(c => locationFilter === 'all' ? true : (c.locations||[]).includes(locationFilter))
@@ -1018,7 +1090,7 @@ function CampaignsWindow(props: CampaignsWindowProps){
         const jobInitial = job ? job.charAt(0).toUpperCase() : '';
         const jobColor = JOB_COLORS[job] || '#64748B';
         // Normalize status to desired set
-        const status = (c.status === 'draft') ? ('pending' as const) : (c.status as any);
+        const status = (c.status === 'draft') ? ('launched' as const) : (c.status as any);
         return { id:c.id || '', name:c.name || 'Untitled Campaign', hiresTotal, status, job, jobInitial, jobColor, statusRank: statusOrder[status] ?? 99 };
       });
     if (sortField) {
@@ -1045,7 +1117,7 @@ function CampaignsWindow(props: CampaignsWindowProps){
       name: 'New Campaign',
       createdAt: safeISO(new Date()),
       sources: [],
-      status: 'draft',
+      status: 'suspended',
       locations: [],
       jobs: [],
       startDate: safeISO(new Date()),
@@ -1123,7 +1195,7 @@ function CampaignsWindow(props: CampaignsWindowProps){
               row.status === 'active' ? 'bg-green-50' :
               row.status === 'suspended' ? 'bg-red-50' :
               row.status === 'completed' ? 'bg-gray-100' :
-              row.status === 'pending' ? 'bg-yellow-50' : 'bg-white';
+              row.status === 'launched' ? 'bg-blue-50' : 'bg-white';
             return (
               <button
                 key={row.id}
