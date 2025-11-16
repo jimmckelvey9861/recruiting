@@ -155,8 +155,8 @@ export default function SankeyDiagram({ sources, stages, flowData, options = {} 
         )
       })}
 
-      {/* Legend */}
-      <g transform={`translate(${width - 220}, ${paddingTop})`}>
+      {/* Legend (shifted 40px to the right) */}
+      <g transform={`translate(${width - 180}, ${paddingTop})`}>
         {sources.map((source, index) => (
           <g key={source.key} transform={`translate(0, ${index * 18})`}>
             <rect width={12} height={12} rx={2} fill={source.color} />

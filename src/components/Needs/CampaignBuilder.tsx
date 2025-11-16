@@ -1,29 +1,122 @@
-import React, { useState, useEffect } from 'react';
-import { setPlanner } from '../../state/campaignPlan';
-import { setLiveView } from '../../state/campaignPlan';
+import React, { useState, useEffect, useMemo } from 'react';
+import { setPlanner, setLiveView } from '../../state/campaignPlan';
 import { getDerivedFromCriterion } from '../../state/campaignPlan';
+import { useCampaignPlanVersion, getStateSnapshot, getHiresPerDay } from '../../state/campaignPlan';
 
 export default function CampaignBuilder() {
-  const [startDate, setStartDate] = useState('2025-11-05');
-  const [dailyBudget, setDailyBudget] = useState(500);
-  const [endGoalType, setEndGoalType] = useState<'hires' | 'date' | 'budget'>('hires');
-  const [hiresTarget, setHiresTarget] = useState(25);
-  const [endDate, setEndDate] = useState('2025-11-30');
-  const [totalBudget, setTotalBudget] = useState(7000);
-  const [liveView, setLive] = useState(true);
+  const planVersion = useCampaignPlanVersion();
+  const snapshot = getStateSnapshot();
+  const planner0 = snapshot.planner || { startDate: null, endType: 'budget', endValue: null, dailySpend: 0 };
+  // derive initial local states from global planner
+  const initStart = planner0.startDate || new Date().toISOString().slice(0,10);
+  const initDaily = planner0.dailySpend || 0;
+  const initEndType = (planner0.endType as 'hires' | 'date' | 'budget') || 'budget';
+  const initHires = initEndType === 'hires' ? Math.round(Number(planner0.endValue || 0)) : 25;
+  const initBudget = initEndType === 'budget' ? Math.round(Number(planner0.endValue || 0)) : 7000;
+  const initEndDate = (() => {
+    if (initEndType !== 'date' || !planner0.endValue) return new Date(new Date(initStart).getTime() + 14*24*60*60*1000).toISOString().slice(0,10);
+    const sd = new Date(initStart); sd.setDate(sd.getDate() + Math.round(Number(planner0.endValue)));
+    return sd.toISOString().slice(0,10);
+  })();
+  const [startDate, setStartDate] = useState(initStart);
+  const [dailyBudget, setDailyBudget] = useState(initDaily);
+  const [endGoalType, setEndGoalType] = useState<'hires' | 'date' | 'budget'>(initEndType);
+  const [hiresTarget, setHiresTarget] = useState(initHires);
+  const [endDate, setEndDate] = useState(initEndDate);
+  const [totalBudget, setTotalBudget] = useState(initBudget);
+  const [liveView, setLive] = useState(snapshot.liveView);
 
-  useEffect(() => {
-    setPlanner({ startDate, dailySpend: dailyBudget, endType: endGoalType, endValue: endGoalType==='budget'? totalBudget : (endGoalType==='hires'? hiresTarget : null) })
-  }, [startDate, dailyBudget, endGoalType, hiresTarget, endDate, totalBudget]);
-
-  useEffect(() => { setLiveView(liveView) }, [liveView]);
-
-  const daysFromStart = (() => {
+  // Compute days from start to end for 'date' end criterion
+  const daysFromStart = useMemo(() => {
     if (!startDate || !endDate) return 0;
     const sd = new Date(startDate); sd.setHours(0,0,0,0);
     const ed = new Date(endDate); ed.setHours(0,0,0,0);
     return Math.max(0, Math.floor((ed.getTime() - sd.getTime()) / (1000*60*60*24)));
-  })();
+  }, [startDate, endDate]);
+
+  useEffect(() => {
+    setPlanner({ 
+      startDate, 
+      dailySpend: dailyBudget, 
+      endType: endGoalType, 
+      endValue: endGoalType==='budget'? totalBudget : (endGoalType==='hires'? hiresTarget : daysFromStart) 
+    })
+  }, [startDate, dailyBudget, endGoalType, hiresTarget, endDate, totalBudget, daysFromStart]);
+
+  useEffect(() => { setLiveView(liveView) }, [liveView]);
+
+  // When global planner changes (e.g., user moves slider on Sources tab), reflect into local UI
+  useEffect(() => {
+    const s = getStateSnapshot().planner;
+    if (!s) return;
+    if (s.dailySpend !== dailyBudget) setDailyBudget(s.dailySpend || 0);
+    if (s.startDate && s.startDate !== startDate) setStartDate(s.startDate);
+    if (s.endType && s.endType !== endGoalType) {
+      setEndGoalType(s.endType as 'hires' | 'date' | 'budget');
+    }
+    if (s.endType === 'hires' && s.endValue != null && s.endValue !== hiresTarget) {
+      setHiresTarget(Math.round(Number(s.endValue)));
+    } else if (s.endType === 'budget' && s.endValue != null && s.endValue !== totalBudget) {
+      setTotalBudget(Math.round(Number(s.endValue)));
+    } else if (s.endType === 'date' && s.endValue != null) {
+      const sd = new Date(s.startDate || startDate);
+      sd.setDate(sd.getDate() + Math.round(Number(s.endValue)));
+      const iso = sd.toISOString().slice(0,10);
+      if (iso !== endDate) setEndDate(iso);
+    }
+  }, [planVersion]);
+
+  // Bootstrap default sources if spend is increased from zero and no sources exist
+  useEffect(() => {
+    const snapshot = getStateSnapshot();
+    const hasSources = (snapshot.sources || []).length > 0;
+    if (dailyBudget > 0 && !hasSources) {
+      try {
+        const defaults = [
+          { id:'seed_cpc', name:'Indeed Sponsored', active:true, spend_model:'cpc', color:'#2563eb', cpc:1.8, daily_budget:300 },
+          { id:'seed_cpm', name:'Facebook Ads', active:true, spend_model:'cpm', color:'#4f46e5', cpm:9, daily_budget:200 },
+          { id:'seed_ref', name:'Employee Referrals', active:true, spend_model:'referral', color:'#10b981', referral_bonus_per_hire:300, apps_override:5 }
+        ] as any[];
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { setSourcesSnapshot } = require('../../state/campaignPlan');
+        setSourcesSnapshot(defaults);
+      } catch {}
+    }
+  }, [dailyBudget]);
+
+  // Compute slider cap based on active sources (mirrors Review panel allocator cap)
+  const sliderMax = useMemo(() => {
+    const state = getStateSnapshot();
+    const sources = state.sources || [];
+    const conv = Math.max(0, Math.min(1, Number(state.conversionRate) || 0));
+    let cap = 0;
+    let hasInfinite = false;
+    for (const s of sources) {
+      if (!s.active) continue;
+      if (s.spend_model === 'organic') continue;
+      if (s.spend_model === 'referral') {
+        const bounty = Math.max(0, Number(s.referral_bonus_per_hire || 0));
+        const apps = Math.max(0, Number(s.apps_override || 0));
+        cap += bounty * apps * Math.max(0.0001, conv);
+      } else if (s.spend_model === 'daily_budget') {
+        cap += Math.max(0, Number(s.daily_budget || 0));
+      } else {
+        // scalable sources
+        if (Number.isFinite(Number(s.daily_budget)) && Number(s.daily_budget) > 0) {
+          cap += Math.max(0, Number(s.daily_budget));
+        } else {
+          hasInfinite = true;
+        }
+      }
+    }
+    const raw = hasInfinite ? 1000 : Math.round(cap);
+    return Math.max(0, raw);
+  }, [planVersion]);
+
+  // Clamp dailyBudget when cap changes
+  useEffect(() => {
+    setDailyBudget((prev) => Math.min(prev, sliderMax));
+  }, [sliderMax]);
 
   const derived = getDerivedFromCriterion({
     startISO: startDate,
@@ -51,7 +144,7 @@ export default function CampaignBuilder() {
       <div className="p-5 space-y-5">
         <h2 className="text-lg font-semibold text-gray-800">Campaign Planner</h2>
         
-        {/* Start Date + Daily Spend */}
+        {/* Start Date + Daily Spend Limit */}
         <div className="space-y-3">
           <div className="flex items-center">
             <span className="text-gray-700 text-sm font-medium">Start Date</span>
@@ -64,34 +157,45 @@ export default function CampaignBuilder() {
           </div>
 
           <div className="flex items-center gap-3">
-            <span className="text-gray-700 text-sm font-medium">Daily Spend Target</span>
-            <div className="relative ml-auto w-28">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
-              <input
-                type="number"
-                value={dailyBudget}
-                onChange={(e) => setDailyBudget(Number(e.target.value))}
-                min="0"
-                max="1000"
-                className="w-full pl-6 pr-3 py-1.5 border border-gray-300 rounded-lg text-center text-sm font-semibold focus:outline-none focus:border-blue-500"
-              />
-            </div>
+            <span className="text-gray-700 text-sm font-medium">Daily Spend Limit</span>
+            <div className="ml-auto text-sm font-semibold text-gray-900">${Math.round(dailyBudget)}</div>
           </div>
 
           <div className="flex items-center gap-4">
             <input
               type="range"
               min="0"
-              max="1000"
+              max={sliderMax}
               step="10"
               value={dailyBudget}
               onChange={(e) => setDailyBudget(Number(e.target.value))}
               className="flex-1 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer"
               style={{
-                background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${dailyBudget / 10}%, #e5e7eb ${dailyBudget / 10}%, #e5e7eb 100%)`
+                background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${sliderMax ? (dailyBudget / sliderMax) * 100 : 0}%, #e5e7eb ${sliderMax ? (dailyBudget / sliderMax) * 100 : 0}%, #e5e7eb 100%)`
               }}
             />
-            <div className="text-xs text-gray-500">$1000</div>
+            {dailyBudget >= sliderMax && Number.isFinite(sliderMax) && (
+              <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                Maximum spend limit. To increase, enable more sources.
+                <button
+                  className="ml-2 underline text-amber-800"
+                  onClick={()=>{
+                    try {
+                      localStorage.setItem('passcom-recruiting-active-tab','review');
+                      window.location.reload();
+                    } catch {}
+                  }}
+                >
+                  Open Sources
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Estimated hires/day from current limit */}
+          <div className="flex items-center justify-between text-sm text-gray-700">
+            <span>Estimated Hires/day</span>
+            <span className="font-semibold">{getHiresPerDay().toFixed(2)}</span>
           </div>
         </div>
 
@@ -106,7 +210,12 @@ export default function CampaignBuilder() {
               id="hires"
               name="endGoal"
               checked={endGoalType === 'hires'}
-              onChange={() => setEndGoalType('hires')}
+              onChange={() => {
+                const newH = Math.max(0, Math.round(derived.hires || 0));
+                setHiresTarget(newH);
+                setEndGoalType('hires');
+                setPlanner({ endType: 'hires', endValue: newH });
+              }}
               className="w-4 h-4 cursor-pointer"
             />
             <label htmlFor="hires" className="text-gray-700 text-sm cursor-pointer">Hires</label>
@@ -116,6 +225,7 @@ export default function CampaignBuilder() {
               onChange={(e) => setHiresTarget(Number(e.target.value))}
               readOnly={endGoalType !== 'hires'}
               className={`ml-auto w-28 px-3 py-1.5 border border-gray-300 rounded-lg text-right text-sm font-semibold focus:outline-none focus:border-blue-500 ${endGoalType !== 'hires' ? 'bg-slate-100 text-blue-600' : ''}`}
+              style={endGoalType !== 'hires' ? { backgroundColor: '#f1f5f9', color: '#2563eb' } : undefined}
             />
           </div>
 
@@ -126,7 +236,16 @@ export default function CampaignBuilder() {
               id="date"
               name="endGoal"
               checked={endGoalType === 'date'}
-              onChange={() => setEndGoalType('date')}
+              onChange={() => {
+                const newEndDate = derived.endDate || endDate;
+                // compute days from start to newEndDate for planner endValue
+                const sd = new Date(startDate); sd.setHours(0,0,0,0);
+                const ed = new Date(newEndDate); ed.setHours(0,0,0,0);
+                const newDays = Math.max(0, Math.floor((ed.getTime()-sd.getTime())/(1000*60*60*24)));
+                setEndDate(newEndDate);
+                setEndGoalType('date');
+                setPlanner({ endType: 'date', endValue: newDays });
+              }}
               className="w-4 h-4 cursor-pointer"
             />
             <label htmlFor="date" className="text-gray-700 text-sm cursor-pointer">Date</label>
@@ -135,7 +254,8 @@ export default function CampaignBuilder() {
               value={endGoalType === 'date' ? endDate : (derived.endDate || '')}
               onChange={(e) => setEndDate(e.target.value)}
               readOnly={endGoalType !== 'date'}
-              className={`ml-auto px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-right focus:outline-none focus:border-blue-500 ${endGoalType !== 'date' ? 'bg-slate-100 text-blue-600' : ''}`}
+              className={`ml-auto w-[140px] px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-right focus:outline-none focus:border-blue-500 ${endGoalType !== 'date' ? 'bg-slate-100 text-blue-600' : ''}`}
+              style={endGoalType !== 'date' ? { backgroundColor: '#f1f5f9', color: '#2563eb' } : undefined}
             />
           </div>
 
@@ -146,7 +266,12 @@ export default function CampaignBuilder() {
               id="budget"
               name="endGoal"
               checked={endGoalType === 'budget'}
-              onChange={() => setEndGoalType('budget')}
+              onChange={() => {
+                const newBudget = Math.max(0, Math.round(derived.budget || totalBudget || 0));
+                setTotalBudget(newBudget);
+                setEndGoalType('budget');
+                setPlanner({ endType: 'budget', endValue: newBudget });
+              }}
               className="w-4 h-4 cursor-pointer"
             />
             <label htmlFor="budget" className="text-gray-700 text-sm cursor-pointer">Budget</label>
@@ -155,28 +280,16 @@ export default function CampaignBuilder() {
               <input
                 type={endGoalType === 'budget' ? 'number' : 'text'}
                 value={endGoalType === 'budget' ? totalBudget : Math.round(derived.budget)}
-                onChange={(e) => setTotalBudget(Number(e.target.value))}
+              onChange={(e) => setTotalBudget(Number(e.target.value))}
                 readOnly={endGoalType !== 'budget'}
                 className={`w-full pl-6 pr-3 py-1.5 border border-gray-300 rounded-lg text-right text-sm font-semibold focus:outline-none focus:border-blue-500 ${endGoalType !== 'budget' ? 'bg-slate-100 text-blue-600' : ''}`}
+                style={endGoalType !== 'budget' ? { backgroundColor: '#f1f5f9', color: '#2563eb' } : undefined}
               />
             </div>
           </div>
         </div>
 
-        {/* Build Campaign Button */}
-        <div className="flex items-center justify-between">
-          <label className="inline-flex items-center gap-2 text-sm text-gray-700">
-            <input type="checkbox" checked={liveView} onChange={(e)=> setLive(e.target.checked)} />
-            <span>Merge new hires</span>
-          </label>
-        </div>
-
-        <button
-          onClick={handleBuildCampaign}
-          className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 text-sm"
-        >
-          Build Campaign
-        </button>
+        {/* Removed merge toggle and build button per request */}
 
         <style>{`
           input[type='range']::-webkit-slider-thumb {

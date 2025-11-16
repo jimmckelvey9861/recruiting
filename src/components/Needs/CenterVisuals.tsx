@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { genWeek } from "../Campaign/CoverageHeatmap";
 import { useOverrideVersion } from '../../state/dataOverrides'
+import { useCampaignPlanVersion, getExtraSupplyHalfHoursPerDay, getStateSnapshot, getHiresPerDay, setLiveView } from '../../state/campaignPlan'
 
 const clamp = (n: number, a: number, b: number) => Math.max(a, Math.min(b, n));
 const addDays = (date: Date, delta: number) => {
@@ -20,11 +21,17 @@ const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 function buildLineSeries(job: string, weeks: number) {
   const start = new Date();
   start.setHours(0, 0, 0, 0);
-  const series: { date: string; demand: number; supply: number }[] = [];
+  const series: { date: string; demand: number; supply: number; newHire: number }[] = [];
 
   let dayOffset = 0;
+  // Campaign dynamics for separate line
+  const state = getStateSnapshot();
+  const onboardingDelayDays = 3; // simple onboarding lag
+  const dailyQuitRate = 0.10 / 30; // ~10% monthly attrition (~3.3% per month)
+  let accumulatedEmployees = 0; // Total accumulated employees from campaign
 
   for (let week = 0; week < weeks; week++) {
+    // Always compute base week without merged overlay; we'll add new hires ourselves below if liveView is ON.
     const weekMatrix = genWeek(job, week, false);
 
     for (let day = 0; day < 7; day++) {
@@ -37,10 +44,51 @@ function buildLineSeries(job: string, weeks: number) {
       const supplyTotal = slots.reduce((sum, slot) => sum + slot.supply, 0);
 
       const date = addDays(start, dayOffset);
+      const sinceStartDays = state.planner.startDate
+        ? Math.floor((date.getTime() - new Date(state.planner.startDate).setHours(0,0,0,0)) / (1000*60*60*24))
+        : Infinity;
+      
+      let newHireTotal = 0;
+      // Compute campaign-driven hires accumulation regardless of liveView
+      const hasSpend = Math.max(0, Number(state.planner.dailySpend || 0)) > 0;
+      const beforeEnd = (() => {
+        const { endType, endValue, dailySpend, startDate } = state.planner;
+        if (!startDate || !hasSpend) return false;
+        if (endType === 'date' && endValue != null) {
+          const end = new Date(startDate);
+          end.setDate(end.getDate() + Math.round(Number(endValue)));
+          return date <= end;
+        } else if (endType === 'hires' && endValue != null) {
+          const hpd = getHiresPerDay();
+          const days = Math.round(Number(endValue)) / Math.max(0.001, hpd);
+          return sinceStartDays < days;
+        } else if (endType === 'budget' && endValue != null) {
+          const days = Math.round(Number(endValue)) / Math.max(0.001, Number(dailySpend || 0));
+          return sinceStartDays < days;
+        }
+        return true;
+      })();
+      
+      // Apply attrition daily
+      accumulatedEmployees *= (1 - dailyQuitRate);
+      
+      // Add new hires if campaign is active and after onboarding
+      const scheduled = hasSpend && beforeEnd && sinceStartDays >= onboardingDelayDays;
+      if (scheduled) {
+        const hiresPerDay = getHiresPerDay();
+        accumulatedEmployees += hiresPerDay;
+      }
+      
+      // Convert accumulated employees to hours/day
+      const halfHoursPerEmployee = (30 / 7) * 2;
+      const totalHalfHours = accumulatedEmployees * halfHoursPerEmployee;
+      newHireTotal = totalHalfHours;
+      
       series.push({
         date: formatISO(date),
-        demand: Math.round(demandTotal / slotCount),
-        supply: Math.round(supplyTotal / slotCount)
+        demand: Math.round(demandTotal * 0.5),     // hours/day
+        supply: Math.round((supplyTotal * 0.5) + (state.liveView ? ((newHireTotal || 0) / 2) : 0)), // merge if liveView
+        newHire: Math.round((newHireTotal || 0) / 2) // hours/day
       });
 
       dayOffset++;
@@ -50,8 +98,8 @@ function buildLineSeries(job: string, weeks: number) {
   return series;
 }
 
-function buildHeatGrid(job: string, weekOffset: number) {
-  const weekMatrix = genWeek(job, weekOffset, false);
+function buildHeatGrid(job: string, weekOffset: number, withCampaign: boolean) {
+  const weekMatrix = genWeek(job, weekOffset, withCampaign);
   const startSlot = DISPLAY_START_HOUR * 2;
   const endSlot = DISPLAY_END_HOUR * 2;
   const grid: (number | null)[][] = [];
@@ -115,14 +163,50 @@ export default function CenterVisuals({ job, rangeIdx, onRangeChange }: { job: s
   const weeks = RANGE_WEEKS[rangeIdx];
   const days = weeks * 7;
   const overrideVersion = useOverrideVersion();
+  const planVersion = useCampaignPlanVersion();
 
-  const lineSeries = useMemo(() => buildLineSeries(role, weeks), [role, weeks, overrideVersion]);
+  const lineSeries = useMemo(() => buildLineSeries(role, weeks), [role, weeks, overrideVersion, planVersion]);
+  // Y-axis scaling: 33% above max; recompute only when range or role changes
+  const [yMax, setYMax] = useState<number>(150);
+  useEffect(() => {
+    const maxVal = lineSeries.reduce((m, p) => Math.max(m, p.demand, p.supply, p.newHire), 0);
+    const target = Math.max(10, Math.ceil((maxVal * 1.33) / 10) * 10);
+    setYMax(target);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rangeIdx, role]);
 
   const heatWeeks = weeks;
   const [weekIndex, setWeekIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const safeWeekIndex = heatWeeks > 0 ? Math.min(weekIndex, heatWeeks - 1) : 0;
-  const heatGrid = useMemo(() => buildHeatGrid(role, safeWeekIndex), [role, safeWeekIndex, overrideVersion]);
+  const state = useMemo(() => getStateSnapshot(), [planVersion]);
+  const withCampaign = !!state.liveView;
+  const heatGrid = useMemo(() => buildHeatGrid(role, safeWeekIndex, withCampaign), [role, safeWeekIndex, withCampaign, overrideVersion, planVersion]);
+  const headerMeta = useMemo(() => {
+    const wm = genWeek(role, safeWeekIndex, withCampaign);
+    const mon = (() => {
+      const now = new Date();
+      const day = (now.getDay() + 6) % 7;
+      const m = new Date(now);
+      m.setDate(now.getDate() - day + safeWeekIndex * 7);
+      m.setHours(0,0,0,0);
+      return m;
+    })();
+    const arr = [];
+    for (let d = 0; d < 7; d++) {
+      const daySlots = wm[d] || [];
+      let demandH = 0, supplyH = 0;
+      for (let s = DISPLAY_START_HOUR * 2; s < DISPLAY_END_HOUR * 2; s++) {
+        const cell = daySlots[s];
+        if (!cell || cell.closed) continue;
+        demandH += (cell.demand || 0) * 0.5;
+        supplyH += (cell.supply || 0) * 0.5;
+      }
+      const date = new Date(mon); date.setDate(mon.getDate() + d);
+      arr.push({ date, demandH: Math.round(demandH), supplyH: Math.round(supplyH) });
+    }
+    return arr;
+  }, [role, safeWeekIndex, withCampaign, overrideVersion, planVersion]);
 
   useEffect(() => {
     setWeekIndex(0);
@@ -141,7 +225,15 @@ export default function CenterVisuals({ job, rangeIdx, onRangeChange }: { job: s
         <h3 className="text-sm font-semibold text-gray-700">
           {view === "heatmap" ? `Weekly Coverage • ${role}` : `Demand & Supply • ${role}`}
         </h3>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          <label className="inline-flex items-center gap-1 text-xs text-gray-700">
+            <input
+              type="checkbox"
+              checked={!!getStateSnapshot().liveView}
+              onChange={(e)=> setLiveView(e.target.checked)}
+            />
+            <span>Merge new hires</span>
+          </label>
           <label className="text-xs text-gray-600" htmlFor={`range-select-${role}`}>Range</label>
           <select
             id={`range-select-${role}`}
@@ -173,10 +265,10 @@ export default function CenterVisuals({ job, rangeIdx, onRangeChange }: { job: s
       </div>
 
       {view === "lines" ? (
-        <LinesChart series={lineSeries} height={360} role={role} />
+        <LinesChart series={lineSeries} height={433} role={role} yMax={yMax} />
       ) : (
         <div>
-          <WeekHeatmap grid={heatGrid} rowHeight={11} role={role} />
+          <WeekHeatmap grid={heatGrid} rowHeight={11} role={role} headerMeta={headerMeta} />
           <div className="mt-3 flex items-center gap-3">
             <button
               className="text-xs px-2 py-1 border rounded w-20 text-center"
@@ -230,30 +322,45 @@ function RangeLegend() {
 function LinesChart({
   series,
   height = 360,
-  role
+  role,
+  yMax = 150,
 }: {
-  series: { date: string; demand: number; supply: number }[];
+  series: { date: string; demand: number; supply: number; newHire: number }[];
   height?: number;
   role: string;
+  yMax?: number;
 }) {
   if (series.length === 0) {
     return <div className="h-[360px] flex items-center justify-center text-sm text-gray-500">No data available.</div>;
   }
 
-  const W = 800;
+  const W = 860;
   const H = height;
-  const PADL = 56, PADR = 16, PADT = 18, PADB = 42;
+  const PADL = 58, PADR = 16, PADT = 26, PADB = 58;
   const innerW = W - PADL - PADR;
   const innerH = H - PADT - PADB;
-  const maxY = Math.max(1, ...series.map((s) => Math.max(s.demand, s.supply)));
+  const state = getStateSnapshot();
+  const showSeparate = !state.liveView;
+  const maxY = Math.max(1, yMax);
 
   const X = (i: number) => PADL + (i / Math.max(1, series.length - 1)) * innerW;
   const Y = (v: number) => PADT + innerH - (v / maxY) * innerH;
+  const [hover, setHover] = useState<{ i: number; x: number; y: number } | null>(null);
+  const onMove = (evt: React.MouseEvent<SVGSVGElement>) => {
+    const svg = (evt.currentTarget as SVGSVGElement);
+    const rect = svg.getBoundingClientRect();
+    const x = evt.clientX - rect.left;
+    const t = Math.max(0, Math.min(1, (x - PADL) / innerW));
+    const idx = Math.round(t * (Math.max(1, series.length - 1)));
+    const hx = X(idx);
+    const hy = Y(Math.max(series[idx]?.demand || 0, series[idx]?.supply || 0));
+    setHover({ i: idx, x: hx, y: hy });
+  };
+  const onLeave = () => setHover(null);
 
-  const baseTicks = 8;
-  const yTicksFull = range(baseTicks + 1).map((t) => Math.round((t / baseTicks) * maxY));
-  const yStep = Math.max(1, Math.ceil(yTicksFull.length / 10));
-  const yTicks = yTicksFull.filter((_, idx) => idx % yStep === 0);
+  const yTicks: number[] = [];
+  const step = Math.max(10, Math.ceil(maxY / 10));
+  for (let v = 0; v <= maxY; v += step) yTicks.push(v);
 
   const maxXTicks = 10;
   const stepDaysBase = 7;
@@ -263,7 +370,7 @@ function LinesChart({
   }
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-[360px]">
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" onMouseMove={onMove} onMouseLeave={onLeave}>
       <line x1={PADL} y1={PADT} x2={PADL} y2={H - PADB} stroke="#94a3b8" />
       <line x1={PADL} y1={H - PADB} x2={W - PADR} y2={H - PADB} stroke="#94a3b8" />
 
@@ -279,7 +386,7 @@ function LinesChart({
         );
       })}
       <text x={14} y={PADT + innerH / 2} fontSize="14" fontWeight={600} fill="#1f2937" transform={`rotate(-90 14 ${PADT + innerH / 2})`}>
-        Avg. employees per slot
+        Labor-hours per day
       </text>
 
       <polyline
@@ -294,11 +401,25 @@ function LinesChart({
         strokeWidth={3.5}
         points={series.map((s, i) => `${X(i)},${Y(s.supply)}`).join(" ")}
       />
+      {showSeparate && (
+        <polyline
+          fill="none"
+          stroke="#16a34a"
+          strokeWidth={3.5}
+          points={series.map((s, i) => `${X(i)},${Y(s.newHire)}`).join(" ")}
+        />
+      )}
       {series.map((s, i) => (
         <g key={i}>
           <circle cx={X(i)} cy={Y(s.demand)} r={2.4} fill="#b91c1c" />
           <circle cx={X(i)} cy={Y(s.supply)} r={2.4} fill="#1d4ed8" />
+          {showSeparate && <circle cx={X(i)} cy={Y(s.newHire)} r={2.4} fill="#16a34a" />}
         </g>
+      ))}
+
+      {/* Week separators on each Monday (every 7 days) */}
+      {series.map((s, i) => (i % 7 === 0) && (
+        <line key={`wk-${i}`} x1={X(i)} x2={X(i)} y1={PADT} y2={H - PADB} stroke="#e2e8f0" />
       ))}
 
       {series.map((s, i) => i % stepDays === 0 && (
@@ -310,12 +431,37 @@ function LinesChart({
         </g>
       ))}
 
-      <g transform={`translate(${W - 200}, ${PADT + 8})`}>
+      <g transform={`translate(${W - 260}, ${PADT + 8})`}>
         <rect width="12" height="12" fill="#b91c1c" rx="3" />
         <text x="16" y="10" fontSize="12" fill="#1f2937">Demand</text>
         <rect x="92" width="12" height="12" fill="#1d4ed8" rx="3" />
         <text x="108" y="10" fontSize="12" fill="#1f2937">Supply</text>
+        {showSeparate && (
+          <>
+            <rect x="170" width="12" height="12" fill="#16a34a" rx="3" />
+            <text x="186" y="10" fontSize="12" fill="#1f2937">New Hires</text>
+          </>
+        )}
       </g>
+
+      {/* Hover tooltip */}
+      {hover && series[hover.i] && (
+        <g pointerEvents="none">
+          <line x1={hover.x} y1={PADT} x2={hover.x} y2={H - PADB} stroke="#94a3b8" strokeDasharray="4 3" />
+          <circle cx={hover.x} cy={Y(series[hover.i].demand)} r={3} fill="#b91c1c" />
+          <circle cx={hover.x} cy={Y(series[hover.i].supply)} r={3} fill="#1d4ed8" />
+          <rect x={Math.min(hover.x + 8, W - PADR - 150)} y={Math.max(PADT + 6, hover.y - 46)} width="150" height="54" rx="6" fill="#ffffff" stroke="#cbd5e1" />
+          <text x={Math.min(hover.x + 16, W - PADR - 142)} y={Math.max(PADT + 20, hover.y - 30)} fontSize="11" fontWeight={600} fill="#0f172a">
+            {series[hover.i].date}
+          </text>
+          <text x={Math.min(hover.x + 16, W - PADR - 142)} y={Math.max(PADT + 36, hover.y - 14)} fontSize="11" fill="#b91c1c">
+            Demand: {series[hover.i].demand} h
+          </text>
+          <text x={Math.min(hover.x + 16, W - PADR - 142)} y={Math.max(PADT + 50, hover.y)} fontSize="11" fill="#1d4ed8">
+            Supply: {series[hover.i].supply} h
+          </text>
+        </g>
+      )}
 
     </svg>
   );
@@ -324,11 +470,13 @@ function LinesChart({
 function WeekHeatmap({
   grid,
   rowHeight = 11,
-  role
+  role,
+  headerMeta
 }: {
   grid: (number | null)[][];
   rowHeight?: number;
   role: string;
+  headerMeta: { date: Date; demandH: number; supplyH: number }[];
 }) {
   const labelForRow = (r: number) => {
     const slotIdx = DISPLAY_START_HOUR * 2 + r;
@@ -340,12 +488,22 @@ function WeekHeatmap({
   return (
     <div>
       <div className="grid" style={{ gridTemplateColumns: "50px repeat(7, 1fr)" }}>
-        <div className="h-6 text-[11px] text-gray-600 flex items-center justify-end pr-1">Time</div>
-        {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
-          <div key={d} className="h-6 text-xs text-gray-600 flex items-center justify-center border-l">
-            {d}
-          </div>
-        ))}
+        <div className="h-10 text-[11px] text-gray-600 flex items-center justify-end pr-1">Time</div>
+        {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d, idx) => {
+          const meta = headerMeta[idx];
+          const mm = String((meta?.date.getMonth() ?? 0) + 1).padStart(2, '0');
+          const dd = String(meta?.date.getDate() ?? 1).padStart(2, '0');
+          return (
+            <div key={d} className="h-10 text-xs text-gray-700 flex flex-col items-center justify-center border-l">
+              <div className="leading-none">{d}</div>
+              <div className="mt-[3px] flex items-center gap-2 leading-none">
+                <span className="text-blue-600 font-semibold">{meta?.demandH ?? 0}</span>
+                <span className="text-rose-600 font-semibold">{meta?.supplyH ?? 0}</span>
+                <span className="text-slate-500">{mm}-{dd}</span>
+              </div>
+            </div>
+          )
+        })}
       </div>
       <div className="border-t max-h-[520px] overflow-auto">
         {range(grid.length).map((r) => (

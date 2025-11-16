@@ -1,7 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
-import CoverageHeatmap from './CoverageHeatmap';
-import CampaignControlPanel from './CampaignControlPanel';
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { SOURCE_COLORS } from '../../constants/sourceColors';
+import { useCampaignPlanVersion, getApplicantsPerDay as getAppsPerDay, getHiresPerDay, getStateSnapshot, getDerivedFromCriterion, setPlanner, setConversionRate } from '../../state/campaignPlan';
 
 // ===============================
 // Campaign Manager – compact, robust single file (JSX only)
@@ -48,6 +47,10 @@ interface Campaign {
   createdAt: string;
   sources: Source[];
   status: 'active' | 'suspended' | 'draft';
+  owners?: string[];
+  notes?: string;
+  dailyCapGuard?: number;
+  relatedIds?: string[];
   locations: string[];
   jobs: string[];
   startDate: string;
@@ -76,6 +79,59 @@ const CAMPAIGNS: Campaign[] = [
   { id:'c1', name:'Holiday Surge', createdAt:'2025-08-31', sources: DEFAULT_SOURCES, status: 'active', locations: ['BOS'], jobs: ['Cook', 'Server', 'Bartender'], startDate: '2025-08-31', endDate: '2025-12-25', endMode: 'date' },
 ];
 
+// Compact, single-line multi-select dropdown with checkboxes
+function CompactMultiSelect({
+  options,
+  selected,
+  onChange,
+  placeholder = 'Select…',
+}: {
+  options: { value: string; label: string }[];
+  selected: string[];
+  onChange: (values: string[]) => void;
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      if (!ref.current) return;
+      if (!ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
+  const label = (() => {
+    if (!selected || selected.length === 0) return placeholder;
+    const labels = options.filter(o => selected.includes(o.value)).map(o => o.label);
+    return labels.join(', ');
+  })();
+  const toggle = (val: string) => {
+    const has = selected.includes(val);
+    const next = has ? selected.filter(v => v !== val) : [...selected, val];
+    onChange(next);
+  };
+  return (
+    <div className="relative" ref={ref}>
+      <button type="button" className="w-full h-8 text-sm border rounded px-2 flex items-center justify-between overflow-hidden"
+        onClick={() => setOpen(v => !v)}>
+        <span className={`truncate ${(!selected || selected.length===0) ? 'text-gray-400' : ''}`}>{label}</span>
+        <svg viewBox="0 0 20 20" className="w-4 h-4 text-gray-500 ml-2" fill="none" stroke="currentColor"><path d="M6 8l4 4 4-4"/></svg>
+      </button>
+      {open && (
+        <div className="absolute z-20 mt-1 w-full max-h-56 overflow-auto bg-white border rounded shadow">
+          {options.map(opt => (
+            <label key={opt.value} className="flex items-center gap-2 px-2 py-1 text-sm hover:bg-gray-50 cursor-pointer">
+              <input type="checkbox" checked={selected.includes(opt.value)} onChange={()=> toggle(opt.value)} />
+              <span className="truncate">{opt.label}</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const applicantsPerDay = (s: Source) => {
   if (!s.enabled || s.cpa <= 0 || s.dailyBudget <= 0) return 0;
   const est = s.dailyBudget / s.cpa;
@@ -87,14 +143,130 @@ interface CampaignManagerProps {
   setSelectedLocations: (locations: string[]) => void;
   selectedJobs: string[];
   setSelectedJobs: (jobs: string[]) => void;
+  onOpenPlanner?: () => void;
+  onOpenSources?: () => void;
 }
 
-export default function CampaignManager({ selectedLocations, setSelectedLocations, selectedJobs, setSelectedJobs }: CampaignManagerProps){
+export default function CampaignManager({ selectedLocations, setSelectedLocations, selectedJobs, setSelectedJobs, onOpenPlanner, onOpenSources }: CampaignManagerProps){
   const [campaigns, setCampaigns] = useState(
     [...CAMPAIGNS].sort((a,b)=> new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
   );
   const [activeId, setActiveId] = useState(campaigns[0]?.id);
   const current = useMemo(()=> campaigns.find(c=>c.id===activeId) || campaigns[0], [campaigns, activeId]);
+
+  // Shared planner KPIs
+  const _ver = useCampaignPlanVersion();
+  const appsPerDay = getAppsPerDay();
+  const hiresPerDay = getHiresPerDay();
+  const spendPerDay = Math.max(0, Number(getStateSnapshot().planner.dailySpend || 0));
+  const costPerHire = hiresPerDay > 0 ? spendPerDay / hiresPerDay : 0;
+  const planner = getStateSnapshot().planner;
+  const derived = getDerivedFromCriterion({
+    startISO: planner.startDate,
+    endType: planner.endType,
+    endValue: planner.endValue,
+    dailySpend: planner.dailySpend,
+  });
+  const targetPerDay = derived.days > 0 ? (derived.hires / derived.days) : hiresPerDay;
+
+  // Utility: estimate simple to-date metrics from start date
+  const daysFrom = (iso: string | null | undefined) => {
+    if (!iso) return 0;
+    const s = parseLocalDate(iso);
+    const now = new Date();
+    s.setHours(0,0,0,0);
+    now.setHours(0,0,0,0);
+    const diff = Math.floor((now.getTime() - s.getTime())/(1000*60*60*24));
+    return Math.max(0, diff);
+  };
+  const startISO = planner.startDate || (current?.startDate ?? null);
+  const daysSinceStart = daysFrom(startISO);
+  const applicantsToDate = Math.max(0, Math.round(appsPerDay * daysSinceStart));
+  const hiresToDate = Math.max(0, Math.round(hiresPerDay * daysSinceStart));
+  const spendToDate = Math.max(0, Math.round(spendPerDay * daysSinceStart));
+
+  // Targets/projections
+  const targetHires = Math.max(0, Math.round(derived.hires));
+  const expectedHiresByNow = derived.days > 0 ? Math.round(targetHires * Math.min(1, daysSinceStart / Math.max(1, Math.round(derived.days)))) : 0;
+  const varianceHires = hiresToDate - expectedHiresByNow; // + ahead, - behind
+  const paceLabel = (() => {
+    if (derived.days <= 0 || targetHires <= 0) return '—';
+    const tol = Math.max(1, Math.round(0.05 * expectedHiresByNow));
+    if (hiresToDate > expectedHiresByNow + tol) return 'ahead';
+    if (hiresToDate < expectedHiresByNow - tol) return 'behind';
+    return 'on‑track';
+  })();
+  const projectedSpendAtCompletion = derived.days > 0 ? Math.round(spendPerDay * Math.round(derived.days)) : 0;
+  const burnMeter = (() => {
+    if (planner.endType !== 'budget' || !planner.endValue || derived.days <= 0) return { ratio: 0, text: '—' };
+    const totalBudget = Math.max(0, Number(planner.endValue||0));
+    const budgetLeft = Math.max(0, totalBudget - spendToDate);
+    const daysRemaining = Math.max(1, Math.round(derived.days) - daysSinceStart);
+    const suggestedDaily = budgetLeft / daysRemaining;
+    const ratio = suggestedDaily > 0 ? Math.min(2, spendPerDay / suggestedDaily) : 0;
+    return { ratio, text: `${Math.round(spendPerDay)}/${Math.round(suggestedDaily)} $/day` };
+  })();
+
+  // Compute slider cap from active sources (mirrors Review panel)
+  const sliderMax = useMemo(() => {
+    const state = getStateSnapshot();
+    const sources = state.sources || [];
+    const overallConvForCaps = Math.max(0, Math.min(1,
+      Number(state.conversionRate) || 0
+    ));
+    let cap = 0;
+    let hasInfinite = false;
+    for (const s of sources) {
+      if (!s.active) continue;
+      if (s.spend_model === 'organic') continue;
+      if (s.spend_model === 'referral') {
+        const bounty = Math.max(0, Number(s.referral_bonus_per_hire || 0));
+        const apps = Math.max(0, Number(s.apps_override || 0));
+        cap += bounty * apps * Math.max(0.0001, overallConvForCaps);
+      } else if (s.spend_model === 'daily_budget') {
+        cap += Math.max(0, Number(s.daily_budget || 0));
+      } else {
+        if (Number.isFinite(Number(s.daily_budget)) && Number(s.daily_budget) > 0) {
+          cap += Math.max(0, Number(s.daily_budget));
+        } else {
+          hasInfinite = true;
+        }
+      }
+    }
+    const raw = hasInfinite ? 1000 : Math.round(cap);
+    return Math.max(0, raw);
+  }, [_ver]);
+
+  // Mini progress chart data (10 bars max, 45° dotted target)
+  const progressChart = useMemo(() => {
+    const totalDays = Math.max(1, Math.round(derived.days || 1));
+    const bins = Math.max(1, Math.min(10, totalDays));
+    const binSize = Math.max(1, Math.ceil(totalDays / bins));
+    const target = Math.max(0, Math.round(derived.hires || 0));
+    const startLabel = startISO ? formatDate(startISO) : 'Start';
+    const endLabel = derived.endDate ? formatDate(derived.endDate) : 'End';
+
+    const bars = Array.from({ length: bins }, (_, i) => {
+      const dayEnd = Math.min(totalDays, (i + 1) * binSize);
+      const actualDays = Math.min(dayEnd, daysSinceStart);
+      const expected = totalDays > 0 ? (target * (dayEnd / totalDays)) : 0;
+      const actual = hiresPerDay * actualDays;
+      const ratioActual = target > 0 ? Math.min(1, actual / target) : 0;
+      const ratioExpected = target > 0 ? Math.min(1, expected / target) : 0;
+      const isAhead = actual >= expected;
+      return { ratioActual, ratioExpected, isAhead };
+    });
+    return { bins, bars, target, startLabel, endLabel };
+  }, [derived.days, derived.hires, derived.endDate, daysSinceStart, hiresPerDay, startISO]);
+
+  // Alerts
+  const stateSnap = getStateSnapshot();
+  const activeSources = (stateSnap.sources||[]).filter(s=> s.active);
+  const alerts: string[] = [];
+  if (!startISO) alerts.push('Missing start date.');
+  if (stateSnap.planner.dailySpend <= 0) alerts.push('Daily spend is zero.');
+  if (activeSources.length === 0) alerts.push('No active sources.');
+  if (!planner.endValue) alerts.push('Missing end value for selected criterion.');
 
   const handleSelectCampaign = (campaign: Campaign) => {
     setActiveId(campaign.id);
@@ -103,141 +275,296 @@ export default function CampaignManager({ selectedLocations, setSelectedLocation
     setSelectedJobs(campaign.jobs);
   };
 
-  // Default date range: today → +27 days
-  const today = new Date();
-  const fourWeeksOut = new Date(today); fourWeeksOut.setDate(today.getDate()+27);
-  const [dateRange, setDateRange] = useState(()=>({ start: isoDate(today), end: isoDate(fourWeeksOut) }));
-
-  // build daily series for chart
-  const days = useMemo(()=>{
-    const s = parseLocalDate(dateRange.start);
-    const e = parseLocalDate(dateRange.end);
-    const ms = Math.max(0, (e.getTime() - s.getTime()));
-    return Math.max(1, Math.floor(ms/(24*60*60*1000)) + 1);
-  }, [dateRange.start, dateRange.end]);
-
-  const dailySeries = useMemo(()=>{
-    const start = parseLocalDate(dateRange.start);
-    const arr: any[] = [];
-    const crest = (i: number, n: number, k: number)=>{
-      const t = n<=1? 0 : i/(n-1);
-      const base = 0.85 + 0.35 * Math.sin(Math.PI * t);
-      const wobble = 0.05 * Math.sin(2*Math.PI*(t + k*0.17));
-      return clamp(base + wobble, 0.7, 1.35);
+  // Sidebar actions
+  const handleToggleStatus = () => {
+    setCampaigns(prev => prev.map(c => {
+      if (c.id !== (current?.id || '')) return c;
+      const newStatus: Campaign['status'] = c.status === 'active' ? 'suspended' : 'active';
+      return { ...c, status: newStatus };
+    }));
+  };
+  const handleCopy = () => {
+    if (!current) return;
+    const copied: Campaign = {
+      ...current,
+      id: `c${Date.now()}`,
+      name: `${current.name} (Copy)`,
+      status: 'draft',
+      createdAt: new Date().toISOString().slice(0, 10),
     };
-    for (let i=0;i<days;i++){
-      const d = new Date(start);
-      d.setDate(start.getDate()+i);
-      const dateLabel = `${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; // MM-DD
-      const wd = d.toLocaleDateString(undefined,{weekday:'short'});
-      const baseBy: Record<string, number> = {indeed:0,facebook:0,craigslist:0,referrals:0,qr_posters:0};
-      (current?.sources||[]).forEach(s=> { baseBy[s.key] = applicantsPerDay(s); });
-      const by = {
-        indeed:     round2(baseBy.indeed    * crest(i,days,0)),
-        facebook:   round2(baseBy.facebook  * crest(i,days,1)),
-        craigslist: round2(baseBy.craigslist* crest(i,days,2)),
-        referrals:  round2(baseBy.referrals * crest(i,days,3)),
-        qr_posters: round2(baseBy.qr_posters* crest(i,days,4)),
-      };
-      arr.push({ day:i, date: dateLabel, weekday: wd, bySource: by });
-    }
-    return arr;
-  }, [dateRange.start, dateRange.end, current, days]);
-
-  const totalApplicantsInt = Math.round(sum(dailySeries.map(d=> sum(Object.values(d.bySource)))));
+    setCampaigns(prev => [copied, ...prev]);
+    setActiveId(copied.id);
+  };
+  const handleDelete = () => {
+    if (!current) return;
+    if (!window.confirm(`Delete campaign "${current.name}"?`)) return;
+    setCampaigns(prev => prev.filter(c => c.id !== current.id));
+    const remaining = campaigns.filter(c => c.id !== current.id);
+    if (remaining.length > 0) setActiveId(remaining[0].id);
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 p-6">
       <div className="max-w-7xl mx-auto grid grid-cols-12 gap-4">
-        {/* LEFT */}
-        <div className="col-span-12 md:col-span-5 lg:col-span-4">
+        {/* LEFT: Campaign list */}
+        <div className="col-span-12 md:col-span-4 lg:col-span-3">
           <CampaignsWindow
             campaigns={campaigns}
             activeId={activeId}
             setActiveId={setActiveId}
             setCampaigns={setCampaigns}
-            dateRange={dateRange}
-            setDateRange={setDateRange}
             onSelectCampaign={handleSelectCampaign}
             selectedLocations={selectedLocations}
             selectedJobs={selectedJobs}
           />
         </div>
 
-        {/* RIGHT: Campaign Control Panel + Heatmap + Sources + Chart */}
-        <div className="col-span-12 md:col-span-7 lg:col-span-8 space-y-4">
-          {/* Campaign Control Panel */}
-          <CampaignControlPanel />
-          
-          {/* Coverage Heatmap */}
-          <CoverageHeatmap selectedJobs={selectedJobs} />
-          
-          {/* Combined Sources Section with Campaign Editor */}
-          <div className="bg-white border rounded-xl p-4">
-            {/* Campaign Editor - Moved from left sidebar */}
-            <CampaignEditor
-              current={current}
-              campaigns={campaigns}
-              activeId={activeId}
-              setActiveId={setActiveId}
-              setCampaigns={setCampaigns}
-              dateRange={dateRange}
-              setDateRange={setDateRange}
-              selectedLocations={selectedLocations}
-              selectedJobs={selectedJobs}
-            />
-            <div className="flex items-center justify-between mb-3">
-              <div className="text-sm font-semibold">Sources</div>
-              <div className="text-right">
-                <div className="text-2xl font-bold leading-5">{totalApplicantsInt.toLocaleString()}</div>
-                <div className="text-[11px] text-gray-500 leading-4">applicants</div>
-              </div>
-            </div>
-            
-            {/* Daily Applicants Chart */}
-            <div className="mb-4">
-              <AreaSection series={dailySeries} sources={current?.sources||[]} showPoints={false} />
-            </div>
-
-            {/* Sources & Daily Budgets */}
-            <div>
-              <div className="grid grid-cols-12 text-xs font-semibold text-gray-600 border-b pb-1 mb-1">
-                <div className="col-span-4">Source</div>
-                <div className="col-span-2">Enabled</div>
-                <div className="col-span-3">Daily Cap (0 = infinite)</div>
-                <div className="col-span-3">Daily Budget ($)</div>
-              </div>
-              {(current?.sources||[]).map((s)=> (
-                <div key={s.key} className="grid grid-cols-12 items-center text-sm py-0.5 border-b last:border-b-0">
-                  <div className="col-span-4 capitalize">
-                    <span className="inline-block w-3 h-3 rounded-full mr-2" style={{background:SOURCE_COLORS[s.key]}}></span>
-                    {s.key.replace('_',' ')} <span className="text-gray-500">(CPA ${s.cpa.toFixed(2)})</span>
-                  </div>
-                  <div className="col-span-2">
-                    <input type="checkbox" checked={s.enabled} onChange={e=>{
-                      const on = e.target.checked;
-                      setCampaigns(prev=> prev.map(c=> c.id!==(current?.id||'')? c: ({...c, sources: c.sources.map(v=> v.key===s.key? {...v,enabled:on}:v)})));
-                    }} />
-                  </div>
-                  <div className="col-span-3">
-                    <input type="number" min={0} className="w-28 px-2 py-0.5 bg-transparent outline-none" value={s.dailyCap}
+        {/* CENTER: Campaign Detail */}
+        <div className="col-span-12 md:col-span-8 lg:col-span-9">
+          <div className="bg-white border rounded-xl p-4 h-full flex flex-col">
+            {/* New two-column layout */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* LEFT COLUMN */}
+              <div className="space-y-3">
+                <div>
+                  <div className="text-[11px] text-gray-500 mb-1">Name</div>
+                  <input
+                    value={current?.name || ''}
+                    onChange={e=>{
+                      const val = e.target.value;
+                      setCampaigns(prev=> prev.map(c=> c.id===(current?.id||'')? ({...c, name: val}): c));
+                    }}
+                    className="w-full text-sm border rounded px-2 py-1 outline-none"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="text-[11px] text-gray-500 mb-1">ID</div>
+                    <input
+                      value={current?.id || ''}
                       onChange={e=>{
-                        const val = Math.max(0, Number(e.target.value||0));
-                        setCampaigns(prev=> prev.map(c=> c.id!==(current?.id||'')? c: ({...c, sources: c.sources.map(v=> v.key===s.key? {...v,dailyCap:val}:v)})));
-                      }} />
+                        const val = e.target.value.trim();
+                        setCampaigns(prev=> prev.map(c=> c.id===(current?.id||'')? ({...c, id: val}): c));
+                        setActiveId(val);
+                      }}
+                      className="w-full text-sm border rounded px-2 py-1 outline-none font-mono"
+                    />
                   </div>
-                  <div className="col-span-3">
-                    <input type="number" step="1" className="w-28 px-2 py-0.5 bg-transparent outline-none" value={Math.round(s.dailyBudget)}
-                      onChange={e=>{
-                        const val = Math.round(Number(e.target.value||0));
-                        setCampaigns(prev=> prev.map(c=> c.id!==(current?.id||'')? c: ({...c, sources: c.sources.map(v=> v.key===s.key? {...v,dailyBudget:Math.max(0,val)}:v)})));
-                      }} />
+                  <div>
+                    <div className="text-[11px] text-gray-500 mb-1">Owner</div>
+                    {(() => {
+                      const ALL_USERS = ['alice', 'bob', 'carol', 'dave'];
+                      const value = (current?.owners || []);
+                      const opts = ALL_USERS.map(u=> ({ value: u, label: u }));
+                      return (
+                        <CompactMultiSelect
+                          options={opts}
+                          selected={value}
+                          onChange={(sel)=> setCampaigns(prev=> prev.map(c=> c.id===(current?.id||'')? ({...c, owners: sel}): c))}
+                          placeholder="Select owners"
+                        />
+                      );
+                    })()}
                   </div>
                 </div>
-              ))}
+                <div>
+                  <div className="text-[11px] text-gray-500 mb-1">Links</div>
+                  {(() => {
+                    const linkable = (campaigns||[])
+                      .filter(c=> c.id !== (current?.id||'') && (c.status as any) !== 'completed' && (c.status as any) !== 'finished');
+                    const ids = (current?.relatedIds || []);
+                    const opts = linkable
+                      .sort((a,b)=> (a.name||'').localeCompare(b.name||''))
+                      .map(c=> ({ value: c.id, label: c.name }));
+                    return (
+                      <CompactMultiSelect
+                        options={opts}
+                        selected={ids}
+                        onChange={(sel)=> setCampaigns(prev=> prev.map(c=> c.id===(current?.id||'')? ({...c, relatedIds: sel}): c))}
+                        placeholder="Select campaigns"
+                      />
+                    );
+                  })()}
+                </div>
+                <div>
+                  <div className="text-[11px] text-gray-500 mb-1">Start Date</div>
+                  <input
+                    type="date"
+                    value={planner.startDate || ''}
+                    onChange={(e)=> setPlanner({ startDate: e.target.value })}
+                    className="w-full text-sm border rounded px-2 py-1 outline-none"
+                  />
+                </div>
+                <div>
+                  <div className="text-[11px] text-gray-500 mb-1">End Goal</div>
+                  <div className="grid grid-cols-12 gap-2 items-center text-sm">
+                    <label className="col-span-4 flex items-center gap-2">
+                      <input type="radio" name="endc2" checked={planner.endType==='date'} onChange={()=> setPlanner({ endType: 'date', endValue: planner.endValue })} />
+                      <span>Date</span>
+                    </label>
+                    <div className="col-span-8">
+                      <input
+                        type={planner.endType==='date' ? 'date' : 'text'}
+                        className={`w-full text-sm border rounded px-2 py-1 outline-none text-right ${planner.endType!=='date' ? 'bg-slate-100 text-blue-700' : ''}`}
+                        readOnly={planner.endType!=='date'}
+                        value={derived.endDate || ''}
+                        onChange={(e)=>{
+                          const endISO = e.target.value || '';
+                          if (!planner.startDate || !endISO) return setPlanner({ endValue: null as any });
+                          const s = parseLocalDate(planner.startDate);
+                          const d = parseLocalDate(endISO);
+                          s.setHours(0,0,0,0); d.setHours(0,0,0,0);
+                          const days = Math.max(0, Math.floor((d.getTime()-s.getTime())/(1000*60*60*24)));
+                          setPlanner({ endValue: days });
+                        }}
+                      />
+                    </div>
+                    <label className="col-span-4 flex items-center gap-2">
+                      <input type="radio" name="endc2" checked={planner.endType==='hires'} onChange={()=> setPlanner({ endType: 'hires', endValue: planner.endValue })} />
+                      <span>Hires</span>
+                    </label>
+                    <div className="col-span-8">
+                      <input
+                        type={planner.endType==='hires' ? 'number' : 'text'}
+                        className={`w-full text-sm border rounded px-2 py-1 outline-none text-right ${planner.endType!=='hires' ? 'bg-slate-100 text-blue-700' : ''}`}
+                        readOnly={planner.endType!=='hires'}
+                        value={planner.endType==='hires' ? Math.max(0, Number(planner.endValue||0)) : Math.round(derived.hires)}
+                        onChange={(e)=> setPlanner({ endValue: Math.max(0, Number(e.target.value||0)) })}
+                      />
+                    </div>
+                    <label className="col-span-4 flex items-center gap-2">
+                      <input type="radio" name="endc2" checked={planner.endType==='budget'} onChange={()=> setPlanner({ endType: 'budget', endValue: planner.endValue })} />
+                      <span>Budget</span>
+                    </label>
+                    <div className="col-span-8">
+                      <input
+                        type={planner.endType==='budget' ? 'number' : 'text'}
+                        className={`w-full text-sm border rounded px-2 py-1 outline-none text-right ${planner.endType!=='budget' ? 'bg-slate-100 text-blue-700' : ''}`}
+                        readOnly={planner.endType!=='budget'}
+                        value={planner.endType==='budget' ? Math.max(0, Number(planner.endValue||0)) : Math.round(derived.budget)}
+                        onChange={(e)=> setPlanner({ endValue: Math.max(0, Number(e.target.value||0)) })}
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[11px] text-gray-500 mb-1">Daily Spend</div>
+                  <div className="flex items-center gap-3">
+                    <input type="range" min={0} max={sliderMax} step={10} value={Math.min(planner.dailySpend, sliderMax)} onChange={e=> setPlanner({ dailySpend: Number(e.target.value||0) })} className="flex-1" />
+                    <input type="number" min={0} max={sliderMax} step={10} value={Math.min(planner.dailySpend, sliderMax)} onChange={e=> setPlanner({ dailySpend: Math.max(0, Math.min(sliderMax, Number(e.target.value||0))) })} className="w-28 text-sm border rounded px-2 py-1 outline-none text-right" />
+                  </div>
+                  {planner.dailySpend >= sliderMax && Number.isFinite(sliderMax) && (
+                    <div className="mt-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                      Maximum spend limit. To increase, enable more sources.
+                      <button
+                        className="ml-2 underline text-amber-800"
+                        onClick={()=>{
+                          if (onOpenSources) onOpenSources();
+                          else {
+                            try {
+                              localStorage.setItem('passcom-recruiting-active-tab','review');
+                              window.location.reload();
+                            } catch {}
+                          }
+                        }}
+                      >
+                        Open Sources
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* RIGHT COLUMN */}
+              <div className="space-y-3">
+                {/* Status + Actions */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    {(() => {
+                      const mapText = (s?: string) => s==='active' ? 'Active' : s==='suspended' ? 'Paused' : s==='draft' ? 'Launched' : 'Finished';
+                      const mapColor = (s?: string) => s==='active' ? 'bg-green-100 text-green-700' : s==='suspended' ? 'bg-yellow-100 text-yellow-700' : s==='draft' ? 'bg-blue-100 text-blue-700' : 'bg-gray-200 text-gray-700';
+                      return <span className={`px-3 py-1 rounded-full text-xs font-medium ${mapColor(current?.status)}`}>{mapText(current?.status)}</span>;
+                    })()}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button onClick={handleToggleStatus} className="px-3 py-1.5 rounded border text-sm">
+                      {current?.status === 'active' ? 'Pause' : 'Launch'}
+                    </button>
+                    <button onClick={handleCopy} className="text-sm text-gray-700 underline">Copy</button>
+                    <button onClick={handleDelete} className="text-sm text-red-600 underline">Delete</button>
+                  </div>
+                </div>
+                {/* Progress Graph */}
+                <div className="relative border rounded-lg p-3">
+                  <div className="absolute -top-2 left-2 bg-white px-1 text-sm font-semibold text-gray-700">Progress</div>
+                  <div className="w-full h-48">
+                    <svg viewBox="0 0 480 200" className="w-full h-full">
+                      <defs>
+                        <pattern id="dotline2" patternUnits="userSpaceOnUse" width="6" height="6">
+                          <circle cx="3" cy="3" r="1.1" fill="#9ca3af" />
+                        </pattern>
+                      </defs>
+                      {(() => {
+                        const left = 36, right = 12, top = 16, bottom = 30;
+                        const W = 480, H = 200;
+                        const pw = W - left - right;
+                        const ph = H - top - bottom;
+                        return (
+                          <>
+                            <line x1={left} y1={top} x2={left} y2={H - bottom} stroke="#e5e7eb" />
+                            <line x1={left} y1={H - bottom} x2={W - right} y2={H - bottom} stroke="#e5e7eb" />
+                            <text x={left} y={top - 3} textAnchor="start" className="fill-gray-600" style={{ fontSize: 11 }}>{progressChart.target}</text>
+                            <text x={left} y={H - 6} textAnchor="start" className="fill-gray-500" style={{ fontSize: 10 }}>{progressChart.startLabel}</text>
+                            <text x={W - right} y={H - 6} textAnchor="end" className="fill-gray-500" style={{ fontSize: 10 }}>{progressChart.endLabel}</text>
+                            <line x1={left} y1={H - bottom} x2={W - right} y2={top} stroke="url(#dotline2)" strokeWidth="2" />
+                            {(() => {
+                              const n = Math.max(1, progressChart.bins);
+                              const gap = 8;
+                              const barW = Math.max(6, (pw - gap * (n - 1)) / n);
+                              return progressChart.bars.map((b, i) => {
+                                const x = left + i * (barW + gap);
+                                const h = Math.max(0, b.ratioActual) * ph;
+                                const y = H - bottom - h;
+                                const color = b.isAhead ? '#21BF6B' : '#D72A4D';
+                                return <rect key={i} x={x} y={y} width={barW} height={h} fill={color} opacity="0.9" rx="2" />;
+                              });
+                            })()}
+                          </>
+                        );
+                      })()}
+                    </svg>
+                  </div>
+                </div>
+                {/* Sources Graph */}
+                <div className="relative border rounded-lg p-3">
+                  <div className="absolute -top-2 left-2 bg-white px-1 text-sm font-semibold text-gray-700">Sources</div>
+                  <SourceMixMini />
+                </div>
+                {/* Summary Squares */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="border rounded-lg p-3 text-center">
+                    <div className="text-xs text-gray-500 mb-1">Applicants</div>
+                    <div className="text-2xl font-semibold">{applicantsToDate}</div>
+                    <div className="text-xs text-gray-500 mt-1">${(applicantsToDate>0 ? Math.round((spendToDate/applicantsToDate)*100)/100 : 0)}/app</div>
+                  </div>
+                  <div className="border rounded-lg p-3 text-center">
+                    <div className="text-xs text-gray-500 mb-1">Hires</div>
+                    <div className="text-2xl font-semibold">{hiresToDate}</div>
+                    <div className="text-xs text-gray-500 mt-1">${(hiresToDate>0 ? Math.round((spendToDate/hiresToDate)*100)/100 : 0)}/hire</div>
+                  </div>
+                  <div className="border rounded-lg p-3 text-center">
+                    <div className="text-xs text-gray-500 mb-1">Spend</div>
+                    <div className="text-2xl font-semibold">${spendToDate}</div>
+                    <div className="text-xs text-gray-500 mt-1">${Math.round(spendPerDay)}/day</div>
+                  </div>
+                </div>
+              </div>
             </div>
+            {/* bottom analytics removed per request */}
           </div>
         </div>
+
+        {/* RIGHT column removed per request */}
       </div>
     </div>
   );
@@ -547,8 +874,6 @@ interface CampaignsWindowProps {
   activeId: string;
   setActiveId: (id: string) => void;
   setCampaigns: React.Dispatch<React.SetStateAction<Campaign[]>>;
-  dateRange: { start: string; end: string };
-  setDateRange: React.Dispatch<React.SetStateAction<{ start: string; end: string }>>;
   onSelectCampaign: (campaign: Campaign) => void;
   selectedLocations: string[];
   selectedJobs: string[];
@@ -561,69 +886,145 @@ function CampaignsWindow(props: CampaignsWindowProps){
     onSelectCampaign,
   } = props || {};
 
+  const [statusFilter, setStatusFilter] = useState<'all'|'active'|'suspended'|'draft'>('all');
+  const [query] = useState(''); // search removed per request
+  const [locationFilter, setLocationFilter] = useState<string>('all');
+  const [jobFilter, setJobFilter] = useState<string>('all');
+  const [sortField, setSortField] = useState<'job'|'campaign'|null>(null);
+  const [sortAsc, setSortAsc] = useState<boolean>(true);
+  const [showSortMenu, setShowSortMenu] = useState(false);
+
+  // Job colors for avatar circle
+  const JOB_COLORS: Record<string, string> = {
+    "Server": "#D72A4D",
+    "Cook": "#FB8331",
+    "Bartender": "#FFCB03",
+    "Security": "#21BF6B",
+    "Dishwasher": "#12B9B1",
+    "Manager": "#2E98DB",
+    "Cleaner": "#3967D6",
+    "Barista": "#8855D0"
+  };
+
+  const allLocations = useMemo(()=> {
+    const set = new Set<string>();
+    (campaigns||[]).forEach(c => (c.locations||[]).forEach(loc => set.add(loc)));
+    return ['all', ...Array.from(set).sort()];
+  }, [campaigns]);
+  const allJobs = useMemo(()=> {
+    const set = new Set<string>();
+    (campaigns||[]).forEach(c => (c.jobs||[]).forEach(j => set.add(j)));
+    return ['all', ...Array.from(set).sort()];
+  }, [campaigns]);
+
   const previewRows = useMemo(()=>{
-    return (campaigns || []).map((c)=>{
-      let right = '';
-      if(c.endMode==='date' && c.endDate)   right = `${formatDate(c.startDate)} - ${formatDate(c.endDate)}`;
-      if(c.endMode==='hires' && c.endHires)  right = `Target: ${c.endHires} hires`;
-      if(c.endMode==='budget' && c.endBudget) right = `Budget: $ ${c.endBudget.toLocaleString()}`;
-      return { id:c.id || '', name:c.name || 'Untitled Campaign', right, status: c.status };
-    });
-  },[campaigns]);
+    const q = query.trim().toLowerCase();
+    const statusOrder: Record<string, number> = { active: 0, pending: 1, suspended: 2, completed: 3 };
+    let rows = (campaigns || [])
+      .filter(c => statusFilter === 'all' ? true : c.status === statusFilter)
+      .filter(c => locationFilter === 'all' ? true : (c.locations||[]).includes(locationFilter))
+      .filter(c => jobFilter === 'all' ? true : (c.jobs||[]).includes(jobFilter))
+      .filter(c => q ? (c.name || '').toLowerCase().includes(q) : true)
+      .map((c)=>{
+        const hiresTotal = typeof c.endHires === 'number' ? c.endHires : null;
+        const job = (c.jobs && c.jobs.length > 0) ? c.jobs[0] : '';
+        const jobInitial = job ? job.charAt(0).toUpperCase() : '';
+        const jobColor = JOB_COLORS[job] || '#64748B';
+        // Normalize status to desired set
+        const status = (c.status === 'draft') ? ('pending' as const) : (c.status as any);
+        return { id:c.id || '', name:c.name || 'Untitled Campaign', hiresTotal, status, job, jobInitial, jobColor, statusRank: statusOrder[status] ?? 99 };
+      });
+    if (sortField) {
+      rows.sort((a,b)=>{
+        if (sortField === 'job') {
+          const A = (a.job||'').toLowerCase(); const B = (b.job||'').toLowerCase();
+          return sortAsc ? A.localeCompare(B) : B.localeCompare(A);
+        } else if (sortField === 'campaign') {
+          const A = (a.name||'').toLowerCase(); const B = (b.name||'').toLowerCase();
+          return sortAsc ? A.localeCompare(B) : B.localeCompare(A);
+        } else {
+          const diff = (a.statusRank - b.statusRank);
+          return sortAsc ? diff : -diff;
+        }
+      });
+    }
+    return rows;
+  },[campaigns, statusFilter, query, locationFilter, jobFilter, sortField, sortAsc]);
 
   return (
     <div className="bg-white border rounded-xl p-3">
-      {/* Title */}
-      <div className="text-sm font-semibold mb-3">Campaigns</div>
+      {/* Title with sort icon */}
+      <div className="flex items-center justify-between mb-3 relative">
+        <div className="text-sm font-semibold">Campaigns</div>
+        <button
+          type="button"
+          className="p-1.5 rounded hover:bg-gray-100"
+          title="Sort"
+          onClick={()=> setShowSortMenu(v=>!v)}
+        >
+          {/* Separate up and down arrows (larger) */}
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            {/* Up arrow (left) */}
+            <path d="M8 17V7" />
+            <path d="M8 7 L6 9" />
+            <path d="M8 7 L10 9" />
+            {/* Down arrow (right) */}
+            <path d="M16 7V17" />
+            <path d="M16 17 L14 15" />
+            <path d="M16 17 L18 15" />
+          </svg>
+        </button>
+        {showSortMenu && (
+          <div className="absolute right-0 top-7 w-56 bg-white border rounded shadow p-2 z-10">
+            <div className="text-xs text-gray-500 px-1 pb-1">Sort by</div>
+            <div className="divide-y">
+              <button className="w-full text-left px-2 py-2 text-sm hover:bg-gray-50" onClick={()=>{ setSortField('campaign'); setSortAsc(true); setShowSortMenu(false); }}>Campaign (A → Z)</button>
+              <button className="w-full text-left px-2 py-2 text-sm hover:bg-gray-50" onClick={()=>{ setSortField('campaign'); setSortAsc(false); setShowSortMenu(false); }}>Campaign (Z → A)</button>
+              <button className="w-full text-left px-2 py-2 text-sm hover:bg-gray-50" onClick={()=>{ setSortField('job'); setSortAsc(true); setShowSortMenu(false); }}>Job (A → Z)</button>
+              <button className="w-full text-left px-2 py-2 text-sm hover:bg-gray-50" onClick={()=>{ setSortField('job'); setSortAsc(false); setShowSortMenu(false); }}>Job (Z → A)</button>
+              <button className="w-full text-left px-2 py-2 text-sm hover:bg-gray-50" onClick={()=>{ setSortField('status'); setSortAsc(true); setShowSortMenu(false); }}>Status (Active → …)</button>
+              <button className="w-full text-left px-2 py-2 text-sm hover:bg-gray-50" onClick={()=>{ setSortField('status'); setSortAsc(false); setShowSortMenu(false); }}>Status (… → Active)</button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Toolbar removed per request */}
       
       {/* Scrollable Campaign List */}
-      <div className="border rounded-lg h-[calc(100vh-200px)] overflow-y-scroll pr-2">
+      <div className="border rounded-lg h-[calc(100vh-240px)] overflow-y-scroll pr-2">
         <div className="divide-y">
+          {previewRows.length === 0 && (
+            <div className="p-6 text-sm text-gray-500">
+              <div className="font-medium text-gray-700 mb-1">No campaigns match your filters.</div>
+              <div>Try clearing the search or choosing “All” for status, location, or job.</div>
+            </div>
+          )}
           {previewRows.map(row=> {
             const campaign = campaigns.find(c => c.id === row.id);
+            const statusBg =
+              row.status === 'active' ? 'bg-green-50' :
+              row.status === 'suspended' ? 'bg-red-50' :
+              row.status === 'completed' ? 'bg-gray-100' :
+              row.status === 'pending' ? 'bg-yellow-50' : 'bg-white';
             return (
-              <button 
-                key={row.id} 
-                onClick={()=> {
-                  if (campaign) {
-                    onSelectCampaign(campaign);
-                  }
-                }}
-                className={`w-full flex items-center justify-between px-3 py-2 text-sm text-left transition ${
-                  row.id===activeId
-                    ? row.status === 'active'
-                      ? 'bg-green-50 border-l-4 border-green-600'
-                      : row.status === 'suspended'
-                        ? 'bg-gray-50 border-l-4 border-gray-400'
-                        : 'bg-blue-50 border-l-4 border-blue-600'
-                    : row.status === 'active'
-                      ? 'hover:bg-green-50'
-                      : row.status === 'suspended'
-                        ? 'hover:bg-gray-50 opacity-60'
-                        : 'hover:bg-blue-50'
-                }`}
+              <button
+                key={row.id}
+                onClick={()=> { if (campaign) onSelectCampaign(campaign); }}
+                className={`w-full grid grid-cols-12 items-center px-3 py-2 text-sm text-left transition ${statusBg} ${row.id===activeId ? 'ring-1 ring-blue-400' : 'hover:opacity-90'}`}
               >
-                <div className="flex-1 truncate">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate">{row.name}</span>
-                    {row.status === 'active' && (
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-green-600 text-white">
-                        ACTIVE
-                      </span>
-                    )}
-                    {row.status === 'suspended' && (
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-gray-400 text-white">
-                        SUSPENDED
-                      </span>
-                    )}
-                  </div>
+                <div className="col-span-3 flex items-center gap-2 truncate">
+                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-semibold" style={{ background: row.jobColor, color: '#fff' }}>
+                    {row.jobInitial}
+                  </span>
                 </div>
-                <span className="text-gray-700 ml-3 shrink-0 text-xs">{row.right}</span>
+                <div className="col-span-9 truncate -ml-[25px]">{row.name}</div>
               </button>
             );
           })}
         </div>
       </div>
+      {/* Footer controls removed per request */}
     </div>
   );
 }
@@ -724,6 +1125,255 @@ function AreaSection({ series, sources, showPoints }: AreaSectionProps){
         return <text key={i} x={PADL-6} y={y+3} fontSize="10" textAnchor="end" fill="#475569">{v}</text>;
       })}
     </svg>
+  );
+}
+
+// Minimal hires vs target line chart
+function HiresVsTargetChart({ hiresPerDay, targetPerDay }: { hiresPerDay: number; targetPerDay: number }) {
+  const days = 28;
+  const seriesActual = Array.from({ length: days }, () => Math.max(0, hiresPerDay));
+  const seriesTarget = Array.from({ length: days }, () => Math.max(0, targetPerDay));
+  const maxY = Math.max(1, ...seriesActual, ...seriesTarget);
+  const W = 820, H = 160, PADL = 36, PADR = 8, PADT = 10, PADB = 22;
+  const innerW = W - PADL - PADR, innerH = H - PADT - PADB;
+  const X = (i: number) => PADL + (i / Math.max(1, days - 1)) * innerW;
+  const Y = (v: number) => PADT + innerH - (v / maxY) * innerH;
+  const pathFor = (arr: number[], color: string, dash = false) => {
+    let d = '';
+    arr.forEach((v, i) => {
+      const x = X(i), y = Y(v);
+      d += i === 0 ? `M ${x},${y}` : ` L ${x},${y}`;
+    });
+    return <path d={d} fill="none" stroke={color} strokeWidth={2} strokeDasharray={dash ? '4 3' : undefined} />;
+  };
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-36">
+      {[0, 0.5, 1].map((t, i) => {
+        const y = PADT + innerH - t * innerH;
+        return <line key={i} x1={PADL} y1={y} x2={W - PADR} y2={y} stroke="#e5e7eb" />;
+      })}
+      {pathFor(seriesTarget, '#6b7280', true)}
+      {pathFor(seriesActual, '#16a34a')}
+      {/* Y axis ticks */}
+      {[0, 0.5, 1].map((t, i) => {
+        const y = PADT + innerH - t * innerH;
+        const v = Math.round(t * maxY);
+        return <text key={i} x={PADL - 6} y={y + 3} fontSize="10" textAnchor="end" fill="#475569">{v}</text>;
+      })}
+      {/* X axis ticks: start/mid/end */}
+      {[0, Math.floor(days/2), days-1].map((i, idx) => {
+        const x = X(i);
+        return <line key={idx} x1={x} y1={H - PADB} x2={x} y2={H - PADB + 4} stroke="#94a3b8" />;
+      })}
+    </svg>
+  );
+}
+
+// Source mix mini visualization using shared planner state
+function SourceMixMini() {
+  const _ver = useCampaignPlanVersion();
+  const s = getStateSnapshot();
+  const planner = s.planner;
+  const dailyLimit = Math.max(0, Number(planner.dailySpend || 0));
+  const overallConv = Math.max(0, Math.min(1, Number(s.conversionRate) || 0));
+  const sources = (s.sources || []).filter(src => src.active);
+
+  if (sources.length === 0) {
+    return <div className="text-sm text-gray-500"><em>Enable at least one source to see allocation.</em></div>;
+  }
+
+  // Helpers aligned with campaignPlan allocator
+  const APPLY_CPC = 0.12;
+  const APPLY_DAILY = 0.10;
+  const CTR = 0.015;
+  const effectiveCPA = (src: SourceSnapshot): number => {
+    switch (src.spend_model) {
+      case 'cpa': return Math.max(0.0001, Number(src.cpa_bid || 10));
+      case 'cpc': return Math.max(0.0001, Number(src.cpc || 2)) / APPLY_CPC;
+      case 'cpm': return Math.max(0.0001, Number(src.cpm || 10)) / (1000 * CTR * APPLY_DAILY);
+      case 'daily_budget': return Math.max(0.0001, Number((src as any).cpa_bid || 10));
+      case 'referral': return Math.max(0.0001, Number(src.referral_bonus_per_hire || 0)) * Math.max(0.0001, overallConv);
+      default: return Number.POSITIVE_INFINITY;
+    }
+  };
+
+  // Allocate spend per the greedy rules
+  let remaining = dailyLimit;
+  const spendAlloc = new Map<string, number>();
+
+  // 1) Threshold daily_budget sources
+  const threshold = sources
+    .filter((src) => src.spend_model === 'daily_budget' && (src.daily_budget || 0) > 0 && ((src as any).cpa_bid || 0) > 0)
+    .sort((a, b) => effectiveCPA(a) - effectiveCPA(b));
+  for (const src of threshold) {
+    const need = Math.max(0, Number(src.daily_budget || 0));
+    if (remaining >= need) {
+      spendAlloc.set(src.id, need);
+      remaining -= need;
+    } else {
+      spendAlloc.set(src.id, 0);
+    }
+  }
+
+  // 2) Scalable sources by cheapest CPA first
+  const scalable = sources
+    .filter((src) => src.spend_model === 'referral' || src.spend_model === 'cpc' || src.spend_model === 'cpm' || src.spend_model === 'cpa')
+    .sort((a, b) => effectiveCPA(a) - effectiveCPA(b));
+  for (const src of scalable) {
+    if (remaining <= 0) break;
+    const cap = src.spend_model === 'referral'
+      ? Math.max(0, Number(src.referral_bonus_per_hire || 0)) * Math.max(0, Number(src.apps_override || 0)) * Math.max(0.0001, overallConv)
+      : (Number.isFinite(Number(src.daily_budget)) ? Math.max(0, Number(src.daily_budget)) : Number.POSITIVE_INFINITY);
+    const take = Math.min(remaining, cap);
+    if (take > 0) {
+      spendAlloc.set(src.id, (spendAlloc.get(src.id) || 0) + take);
+      remaining -= take;
+    }
+  }
+
+  // Build rows: include organic (spend 0, apps from override)
+  type Row = { id: string; name: string; color: string; spend: number; apps: number; cpa: number; };
+  const rows: Row[] = [];
+  for (const src of sources) {
+    const color = (src.color as string) || '#64748b';
+    const spend = spendAlloc.get(src.id) || 0;
+    let apps = 0;
+    let cpaEff = effectiveCPA(src);
+    if (src.spend_model === 'organic') {
+      apps = Math.max(0, Math.round(Number(src.apps_override || 0)));
+      cpaEff = 0;
+    } else if (src.spend_model === 'daily_budget') {
+      const need = Math.max(0, Number(src.daily_budget || 0));
+      const bid = Math.max(0.0001, Number((src as any).cpa_bid || 10));
+      apps = spend >= need ? Math.round(spend / bid) : 0;
+    } else if (src.spend_model === 'referral') {
+      const bounty = Math.max(0.0001, Number(src.referral_bonus_per_hire || 0));
+      const conv = Math.max(0.0001, overallConv);
+      const maxApps = Math.max(0, Number(src.apps_override || 0));
+      const appsFromSpend = spend > 0 ? spend / (bounty * conv) : 0;
+      apps = Math.round(Math.min(maxApps, appsFromSpend));
+    } else if (src.spend_model === 'cpa') {
+      const bid = Math.max(0.0001, Number(src.cpa_bid || 10));
+      apps = Math.round(spend / bid);
+    } else if (src.spend_model === 'cpc') {
+      const cpc = Math.max(0.0001, Number(src.cpc || 2));
+      const clicks = spend / cpc;
+      apps = Math.round(clicks * APPLY_CPC);
+    } else if (src.spend_model === 'cpm') {
+      const cpm = Math.max(0.0001, Number(src.cpm || 10));
+      const impressions = (spend / cpm) * 1000;
+      const clicks = impressions * CTR;
+      apps = Math.round(clicks * APPLY_DAILY);
+    }
+    rows.push({ id: src.id, name: src.name || src.id, color, spend, apps, cpa: cpaEff });
+  }
+
+  const totalSpend = rows.reduce((a, r) => a + r.spend, 0);
+  if (totalSpend <= 0 && rows.every(r => r.apps <= 0)) {
+    return <div className="text-sm text-gray-500"><em>No allocatable spend. Increase Daily Spend or enable sources.</em></div>;
+  }
+
+  // Sort by spend desc, then apps desc
+  rows.sort((a, b) => (b.spend - a.spend) || (b.apps - a.apps));
+
+  return (
+    <div className="w-full">
+      <div className="flex items-center justify-between text-xs text-gray-500 mb-2">
+        <span>Source mix</span>
+        <span>Daily Spend: ${Math.round(dailyLimit).toLocaleString()}</span>
+      </div>
+      <div className="space-y-2">
+        {rows.map(r => {
+          const pct = totalSpend > 0 ? (r.spend / totalSpend) : 0;
+          return (
+            <div key={r.id}>
+              <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full" style={{ background: r.color }}></span>
+                  <span className="text-gray-700">{r.name}</span>
+                </div>
+                <div className="text-gray-600">
+                  {r.apps > 0 ? <span className="mr-3">{r.apps} apps/day</span> : <span className="mr-3 text-gray-400">0 apps/day</span>}
+                  {r.spend > 0 ? <span>${Math.round(r.spend).toLocaleString()}/day</span> : <span className="text-gray-400">$0/day</span>}
+                </div>
+              </div>
+              <div className="h-2 bg-gray-200 rounded overflow-hidden mt-1">
+                <div className="h-full" style={{ width: `${Math.max(2, Math.round(pct * 100))}%`, background: r.color, opacity: 0.8 }}></div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// Related campaigns multi-select dropdown
+function RelatedCampaignsSelector({
+  campaigns,
+  currentId,
+  relatedIds,
+  onChange,
+}: {
+  campaigns: Campaign[];
+  currentId: string;
+  relatedIds: string[];
+  onChange: (ids: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const options = campaigns.filter(c => c.id !== currentId);
+  const toggle = (id: string) => {
+    const set = new Set(relatedIds || []);
+    if (set.has(id)) set.delete(id); else set.add(id);
+    onChange(Array.from(set));
+  };
+  const label = relatedIds.length === 0
+    ? 'Link related campaigns'
+    : `${relatedIds.length} linked`;
+  return (
+    <div className="relative">
+      <div className="text-[11px] text-gray-500 mb-1">Related Campaigns</div>
+      <button
+        type="button"
+        onClick={()=> setOpen(!open)}
+        className="w-full text-left text-sm border rounded px-2 py-1 hover:bg-gray-50"
+      >
+        {label}
+      </button>
+      {open && (
+        <div className="absolute z-10 mt-1 w-full bg-white border rounded shadow">
+          <div className="max-h-48 overflow-auto py-1">
+            {options.map(opt=>(
+              <label key={opt.id} className="flex items-center gap-2 px-2 py-1 hover:bg-gray-50 text-sm">
+                <input
+                  type="checkbox"
+                  checked={relatedIds.includes(opt.id)}
+                  onChange={()=> toggle(opt.id)}
+                />
+                <span className="truncate">{opt.name}</span>
+                <span className="ml-auto text-xs text-gray-500">{opt.status}</span>
+              </label>
+            ))}
+            {options.length===0 && (
+              <div className="px-2 py-2 text-xs text-gray-500">No other campaigns.</div>
+            )}
+          </div>
+        </div>
+      )}
+      {relatedIds.length>0 && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {relatedIds.map(id=>{
+            const c = campaigns.find(x=> x.id===id);
+            if (!c) return null;
+            return (
+              <span key={id} className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs border">
+                {c.name}
+              </span>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 

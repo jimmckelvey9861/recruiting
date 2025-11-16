@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import SankeyDiagram, { SankeySource, SankeyStage } from './SankeyDiagram'
-import { setConversionRate } from '../../state/campaignPlan'
+import { setConversionRate, setPlanner } from '../../state/campaignPlan'
 import { getStateSnapshot, useCampaignPlanVersion } from '../../state/campaignPlan'
 
 interface ReviewPanelProps {
@@ -63,12 +63,17 @@ export default function ReviewPanel({ selectedJobs, selectedLocations }: ReviewP
 
   const sliderMax = useMemo(() => {
     const max = Number.isFinite(maxSpendCapRaw) ? Math.round(maxSpendCapRaw) : 1000
-    return clamp(max, 0, 1000)
+    return Math.max(0, max)
   }, [maxSpendCapRaw])
 
-  const suggestedLimit = useMemo(() => Math.min(sliderMax, 500), [sliderMax])
-  const [dailyLimit, setDailyLimit] = useState<number>(suggestedLimit)
-  useEffect(() => { if (dailyLimit > sliderMax) setDailyLimit(sliderMax) }, [sliderMax])
+  // Read/write daily spend from planner to keep in sync with Data tab CampaignBuilder
+  const plannerDaily = getStateSnapshot().planner.dailySpend || 0
+  const dailyLimit = Math.min(plannerDaily, sliderMax)
+  useEffect(() => {
+    if (plannerDaily > sliderMax) {
+      setPlanner({ dailySpend: sliderMax })
+    }
+  }, [plannerDaily, sliderMax])
 
   // Effective CPA for scalable sources (heuristics match Sources KPIs)
   const APPLY_CPC = 0.12
@@ -197,15 +202,6 @@ export default function ReviewPanel({ selectedJobs, selectedLocations }: ReviewP
     <div className="h-full bg-gray-50 overflow-auto">
       <div className="max-w-7xl mx-auto px-6 py-8 space-y-6">
         <div className="bg-white border rounded-xl shadow-sm p-6">
-          <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-            <div>
-              <h2 className="text-xl font-semibold text-gray-800">Pipeline Health</h2>
-              <p className="text-sm text-gray-500">{jobsLabel} · {locationsLabel}</p>
-            </div>
-            <div className="text-xs text-gray-500 bg-gray-100 border border-gray-200 rounded-md px-3 py-1">
-              Allocate your Daily Spend across sources to maximize applicants.
-            </div>
-          </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
             {/* Sources + allocator */}
@@ -223,15 +219,17 @@ export default function ReviewPanel({ selectedJobs, selectedLocations }: ReviewP
                   max={sliderMax}
                   step={10}
                   value={dailyLimit}
-                  onChange={(e) => setDailyLimit(Number(e.target.value))}
+                  onChange={(e) => setPlanner({ dailySpend: Number(e.target.value) })}
                   className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"
                 />
-                {dailyLimit >= sliderMax && sliderMax < 1000 && (
+                {dailyLimit >= sliderMax && Number.isFinite(sliderMax) && (
                   <div className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
                     Maximum spend limit. To increase, add more sources.
                   </div>
                 )}
               </div>
+
+              {/* End Goal control removed per request; managed via Data/Needs tabs */}
 
               <div className="space-y-2">
                 {sankeySources.length === 0 && (
@@ -254,14 +252,14 @@ export default function ReviewPanel({ selectedJobs, selectedLocations }: ReviewP
 
               {/* Stats driven by allocation */}
               <div className="mt-4 grid grid-cols-3 gap-2 text-sm">
-                <div className="text-slate-600">Apps/day</div>
-                <div className="col-span-2 text-right font-semibold">{appsPerDay.toLocaleString()}</div>
-                <div className="text-slate-600">Hires/day</div>
-                <div className="col-span-2 text-right font-semibold">{hiresPerDay.toLocaleString()}</div>
-                <div className="text-slate-600">Spend/day</div>
-                <div className="col-span-2 text-right font-semibold">${Math.round(dailyLimit).toLocaleString()}</div>
-                <div className="text-slate-600">$/App</div>
-                <div className="col-span-2 text-right font-semibold">{appsPerDay > 0 ? `$${Math.round(dailyLimit / appsPerDay)}` : '—'}</div>
+                <div className="text-slate-600 whitespace-nowrap">Apps/day</div>
+                <div className="col-span-2 text-right font-semibold whitespace-nowrap">{appsPerDay.toLocaleString()}</div>
+                <div className="text-slate-600 whitespace-nowrap">Hires/day</div>
+                <div className="col-span-2 text-right font-semibold whitespace-nowrap">{hiresPerDay.toLocaleString()}</div>
+                <div className="text-slate-600 whitespace-nowrap">Spend/day</div>
+                <div className="col-span-2 text-right font-semibold whitespace-nowrap">${Math.round(dailyLimit).toLocaleString()}</div>
+                <div className="text-slate-600 whitespace-nowrap">$/App</div>
+                <div className="col-span-2 text-right font-semibold whitespace-nowrap">{appsPerDay > 0 ? `$${Math.round(dailyLimit / appsPerDay)}` : '—'}</div>
               </div>
             </div>
 

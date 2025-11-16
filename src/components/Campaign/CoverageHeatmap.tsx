@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react"
 import { getOverride, useOverrideVersion } from "../../state/dataOverrides"
+import { useCampaignPlanVersion, getExtraSupplyHalfHoursPerDay, isActiveOn, isScheduledOn } from "../../state/campaignPlan"
 
 export const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
 const HALF_HOUR_SLOTS = Array.from({ length: 48 }, (_, i) => {
@@ -32,6 +33,11 @@ const COLORS = {
 
 export const DISPLAY_START_HOUR = 7
 export const DISPLAY_END_HOUR = 23
+
+// Utility clamp
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value))
+}
 
 // Helper to convert hex to RGB
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
@@ -167,6 +173,26 @@ export function genWeek(role: string, weekOffset = 0, withCampaign = false) {
       const supplyMultiplier = Math.max(0, baselineMultiplier * attrFactor * variability)
       let supply = Math.max(0, Math.round(demand * supplyMultiplier))
 
+      // Apply campaign overlay (extra supply from new hires) when withCampaign is true
+      if (withCampaign) {
+        const dateForSlot = (() => {
+          const mon = mondayOf(weekOffset)
+          return new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + d)
+        })()
+        // Use isScheduledOn to check if date is within campaign period (ignores liveView state)
+        // Also check that there's actual spending configured
+        const hasSpend = getExtraSupplyHalfHoursPerDay() > 0
+        if (hasSpend && isScheduledOn(dateForSlot)) {
+          // distribute extra half-hour units evenly across open slots of the day
+          const openSlots = Array.from({ length: 48 }, (_, idx) => idx).filter(idx => isOpen(d, Math.floor(idx/2)))
+          const extraHalfHoursPerDay = getExtraSupplyHalfHoursPerDay()
+          const perSlot = openSlots.length > 0 ? extraHalfHoursPerDay / openSlots.length : 0
+          if (perSlot > 0 && openSlots.includes(s)) {
+            supply += Math.round(perSlot)
+          }
+        }
+      }
+
       const override = getOverride(role, weekOffset, d, s)
       if (override) {
         demand = Math.max(0, override.demand)
@@ -239,12 +265,13 @@ export default function CoverageHeatmap({ selectedJobs }: CoverageHeatmapProps) 
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth())
   const [showWithCampaign, setShowWithCampaign] = useState(false)
   const overrideVersion = useOverrideVersion()
+  const planVersion = useCampaignPlanVersion()
 
   // Generate week matrix for the selected job
   const selectedJob = selectedJobs.length > 0 ? selectedJobs[0] : null;
   const weekMatrix = useMemo(() =>
     selectedJob ? genWeek(selectedJob, weekOffset, showWithCampaign) : [],
-    [selectedJob, weekOffset, showWithCampaign, overrideVersion]
+    [selectedJob, weekOffset, showWithCampaign, overrideVersion, planVersion]
   )
   
   const weekStart = useMemo(() => mondayOf(weekOffset), [weekOffset])

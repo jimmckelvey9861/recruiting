@@ -328,10 +328,11 @@ export default function AdSourcesPanel() {
           {sources.map((source) => {
             const kpis = deriveKpis(source);
             const appsValue = source.apps_override != null ? source.apps_override : kpis.apps;
-            const hiresPerDay = appsValue * 0.25;
+            const conv = (getStateSnapshot().conversionRate as number) || 0;
+            const hiresPerDayFromConv = appsValue * conv;
             const referralSpend =
               source.spend_model === "referral" && source.referral_bonus_per_hire != null
-                ? source.referral_bonus_per_hire * hiresPerDay
+                ? source.referral_bonus_per_hire * hiresPerDayFromConv
                 : null;
             const spendUsed = referralSpend != null ? referralSpend : kpis.spendDay;
             const cpaValue = appsValue > 0 ? (spendUsed != null ? spendUsed / appsValue : null) : null;
@@ -446,7 +447,8 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
   const kpis = deriveKpis(s);
   const appsValue = s.apps_override != null ? s.apps_override : kpis.apps;
   const qualityValue = s.quality_percent != null ? s.quality_percent : 75;
-  const hiresPerDayKpi = appsValue * 0.25;
+  const conversion = getStateSnapshot().conversionRate || 0;
+  const hiresPerDayKpi = appsValue * conversion;
   const referralSpend =
     s.spend_model === "referral" && s.referral_bonus_per_hire != null
       ? s.referral_bonus_per_hire * hiresPerDayKpi
@@ -464,10 +466,11 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
   };
 
   // Derived end-criterion values for this source only
-  const conversion = getStateSnapshot().conversionRate || 0;
   const appsPerDay = (s.apps_override != null ? Math.max(0, Number(s.apps_override)) : Math.max(0, Number(kpis.apps || 0)));
   const hiresPerDay = appsPerDay * conversion;
-  const spendPerDay = kpis.spendDay || 0; // organic already normalized to daily in deriveKpis
+  const spendPerDay = (s.spend_model === 'referral' && s.referral_bonus_per_hire != null)
+    ? (s.referral_bonus_per_hire * hiresPerDayKpi)
+    : (kpis.spendDay || 0); // organic already normalized to daily in deriveKpis
   const daysBetween = (startISO?: string | null, endISO?: string | null) => {
     if (!startISO || !endISO) return 0;
     const a = new Date(startISO); a.setHours(0,0,0,0);
@@ -666,7 +669,6 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
 
       <section className="space-y-3">
         <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wide">Performance</h3>
-        <p className="text-xs text-slate-500">Blue values are computed from actual results.</p>
         <div className="grid grid-cols-12 gap-3 items-center">
           <FieldBox label="Apps/day" className="col-span-3">
             <input
