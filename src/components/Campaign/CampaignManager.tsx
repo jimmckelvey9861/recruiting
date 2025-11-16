@@ -70,6 +70,7 @@ const DEFAULT_SOURCES: Source[] = [
 ];
 
 const CAMPAIGNS: Campaign[] = [
+  { id:'c8', name:'Dummy for Jimmy', createdAt:'2025-11-10', sources: DEFAULT_SOURCES, status: 'active', locations: ['BOS'], jobs: ['Server'], startDate: '2025-11-10', endDate: '2025-11-22', endMode: 'date' },
   { id:'c7', name:'Summer Hiring Blitz', createdAt:'2025-11-01', sources: DEFAULT_SOURCES, status: 'active', locations: ['BOS', 'LGA'], jobs: ['Server', 'Host'], startDate: '2025-11-01', endDate: '2025-12-15', endMode: 'date' },
   { id:'c6', name:'Q4 Expansion', createdAt:'2025-10-25', sources: DEFAULT_SOURCES, status: 'suspended', locations: ['DCA'], jobs: ['Cook', 'Server'], startDate: '2025-10-25', endBudget: 5000, endMode: 'budget' },
   { id:'c5', name:'Weekend Warriors', createdAt:'2025-10-18', sources: DEFAULT_SOURCES, status: 'active', locations: ['BOS'], jobs: ['Bartender', 'Server'], startDate: '2025-10-18', endHires: 15, endMode: 'hires' },
@@ -399,7 +400,15 @@ export default function CampaignManager({ selectedLocations, setSelectedLocation
                   <div className="text-[11px] text-gray-500 mb-1">End Goal</div>
                   <div className="grid grid-cols-12 gap-2 items-center text-sm">
                     <label className="col-span-4 flex items-center gap-2">
-                      <input type="radio" name="endc2" checked={planner.endType==='date'} onChange={()=> setPlanner({ endType: 'date', endValue: planner.endValue })} />
+                      <input
+                        type="radio"
+                        name="endc2"
+                        checked={planner.endType==='date'}
+                        onChange={()=>{
+                          const seedDays = Math.max(0, Math.round(derived.days || 0));
+                          setPlanner({ endType: 'date', endValue: seedDays });
+                        }}
+                      />
                       <span>Date</span>
                     </label>
                     <div className="col-span-8">
@@ -420,7 +429,15 @@ export default function CampaignManager({ selectedLocations, setSelectedLocation
                       />
                     </div>
                     <label className="col-span-4 flex items-center gap-2">
-                      <input type="radio" name="endc2" checked={planner.endType==='hires'} onChange={()=> setPlanner({ endType: 'hires', endValue: planner.endValue })} />
+                      <input
+                        type="radio"
+                        name="endc2"
+                        checked={planner.endType==='hires'}
+                        onChange={()=>{
+                          const seedHires = Math.max(0, Math.round(derived.hires || 0));
+                          setPlanner({ endType: 'hires', endValue: seedHires });
+                        }}
+                      />
                       <span>Hires</span>
                     </label>
                     <div className="col-span-8">
@@ -433,7 +450,15 @@ export default function CampaignManager({ selectedLocations, setSelectedLocation
                       />
                     </div>
                     <label className="col-span-4 flex items-center gap-2">
-                      <input type="radio" name="endc2" checked={planner.endType==='budget'} onChange={()=> setPlanner({ endType: 'budget', endValue: planner.endValue })} />
+                      <input
+                        type="radio"
+                        name="endc2"
+                        checked={planner.endType==='budget'}
+                        onChange={()=>{
+                          const seedBudget = Math.max(0, Math.round(derived.budget || 0));
+                          setPlanner({ endType: 'budget', endValue: seedBudget });
+                        }}
+                      />
                       <span>Budget</span>
                     </label>
                     <div className="col-span-8">
@@ -453,7 +478,7 @@ export default function CampaignManager({ selectedLocations, setSelectedLocation
                     <input type="range" min={0} max={sliderMax} step={10} value={Math.min(planner.dailySpend, sliderMax)} onChange={e=> setPlanner({ dailySpend: Number(e.target.value||0) })} className="flex-1" />
                     <input type="number" min={0} max={sliderMax} step={10} value={Math.min(planner.dailySpend, sliderMax)} onChange={e=> setPlanner({ dailySpend: Math.max(0, Math.min(sliderMax, Number(e.target.value||0))) })} className="w-28 text-sm border rounded px-2 py-1 outline-none text-right" />
                   </div>
-                  {planner.dailySpend >= sliderMax && Number.isFinite(sliderMax) && (
+                  {Number.isFinite(sliderMax) && (planner.dailySpend >= sliderMax || Math.abs(Math.min(planner.dailySpend, sliderMax) - sliderMax) <= 5) && (
                     <div className="mt-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
                       Maximum spend limit. To increase, enable more sources.
                       <button
@@ -498,37 +523,82 @@ export default function CampaignManager({ selectedLocations, setSelectedLocation
                 <div className="relative border rounded-lg p-3">
                   <div className="absolute -top-2 left-2 bg-white px-1 text-sm font-semibold text-gray-700">Progress</div>
                   <div className="w-full h-48">
-                    <svg viewBox="0 0 480 200" className="w-full h-full">
-                      <defs>
-                        <pattern id="dotline2" patternUnits="userSpaceOnUse" width="6" height="6">
-                          <circle cx="3" cy="3" r="1.1" fill="#9ca3af" />
-                        </pattern>
-                      </defs>
+                    <svg viewBox="0 0 520 220" className="w-full h-full">
                       {(() => {
-                        const left = 36, right = 12, top = 16, bottom = 30;
-                        const W = 480, H = 200;
-                        const pw = W - left - right;
-                        const ph = H - top - bottom;
+                        // Plot box
+                        const W = 520, H = 220;
+                        // Placement: 15px from left, >=15px from bottom
+                        const PADL = 15, PADR = 14, PADT = 16, PADB = 28;
+                        const innerW = W - PADL - PADR, innerH = H - PADT - PADB;
+                        const D = Math.max(1, Math.round(derived.days || 1));
+                        const target = Math.max(0, Math.round(derived.hires || 0));
+                        const startLbl = startISO ? formatDate(startISO) : 'Start';
+                        const endLbl = derived.endDate ? formatDate(derived.endDate) : 'End';
+                        // Division logic
+                        const block = D <= 12 ? 1 : Math.ceil(D / 12);
+                        const N = Math.ceil(D / block);
+                        const dayEndFor = (i: number) => Math.min(D, (i + 1) * block);
+                        // Scales
+                        const barGap = 6;
+                        const barW = Math.max(8, (innerW - barGap * (N - 1)) / N);
+                        const Xbar = (i: number) => PADL + i * (barW + barGap); // first bar starts exactly PADL from left
+                        const Y = (v: number) => PADT + innerH - (target > 0 ? (v / target) * innerH : 0);
+                        // Labels: top Y, bottom X
+                        const daysNow = ((current?.name || '').toLowerCase() === 'dummy for jimmy')
+                          ? Math.min(D, 7)
+                          : Math.max(0, Math.min(D, daysSinceStart));
                         return (
                           <>
-                            <line x1={left} y1={top} x2={left} y2={H - bottom} stroke="#e5e7eb" />
-                            <line x1={left} y1={H - bottom} x2={W - right} y2={H - bottom} stroke="#e5e7eb" />
-                            <text x={left} y={top - 3} textAnchor="start" className="fill-gray-600" style={{ fontSize: 11 }}>{progressChart.target}</text>
-                            <text x={left} y={H - 6} textAnchor="start" className="fill-gray-500" style={{ fontSize: 10 }}>{progressChart.startLabel}</text>
-                            <text x={W - right} y={H - 6} textAnchor="end" className="fill-gray-500" style={{ fontSize: 10 }}>{progressChart.endLabel}</text>
-                            <line x1={left} y1={H - bottom} x2={W - right} y2={top} stroke="url(#dotline2)" strokeWidth="2" />
-                            {(() => {
-                              const n = Math.max(1, progressChart.bins);
-                              const gap = 8;
-                              const barW = Math.max(6, (pw - gap * (n - 1)) / n);
-                              return progressChart.bars.map((b, i) => {
-                                const x = left + i * (barW + gap);
-                                const h = Math.max(0, b.ratioActual) * ph;
-                                const y = H - bottom - h;
-                                const color = b.isAhead ? '#21BF6B' : '#D72A4D';
-                                return <rect key={i} x={x} y={y} width={barW} height={h} fill={color} opacity="0.9" rx="2" />;
-                              });
-                            })()}
+                            {/* Axes */}
+                            <line x1={PADL} y1={PADT} x2={PADL} y2={H - PADB} stroke="#e5e7eb" />
+                            <line x1={PADL} y1={H - PADB} x2={W - PADR} y2={H - PADB} stroke="#e5e7eb" />
+                            {/* Axis labels and ticks */}
+                            {/* Y top label = total hires */}
+                            <text x={PADL} y={PADT - 2} textAnchor="start" className="fill-gray-700" style={{ fontSize: 13, fontWeight: 600 }}>{target}</text>
+                            {/* X labels */}
+                            <text x={PADL} y={H - 6} textAnchor="start" className="fill-gray-600" style={{ fontSize: 14 }}>{startLbl}</text>
+                            <text x={W - PADR} y={H - 6} textAnchor="end" className="fill-gray-600" style={{ fontSize: 14 }}>{endLbl}</text>
+                            {/* Bars */}
+                            {Array.from({ length: N }).map((_, i) => {
+                              const x = Xbar(i);
+                              const dayEnd = dayEndFor(i);
+                              const expectedCum = D > 0 ? (target * (dayEnd / D)) : 0;
+                              const actualDays = Math.min(dayEnd, daysNow);
+                              let actualCum = Math.max(0, hiresPerDay * actualDays);
+                              // Dummy variation for "Dummy for Jimmmy": oscillate around expected
+                              if ((current?.name || '').toLowerCase() === 'dummy for jimmy') {
+                                const factor = 1 + 0.25 * Math.sin((i + 1) * 1.1);
+                                actualCum = Math.min(target, Math.max(0, expectedCum * factor));
+                              }
+                              const expH = Math.max(0, innerH - (Y(expectedCum) - PADT));
+                              const actH = Math.max(0, innerH - (Y(actualCum) - PADT));
+                              const baseY = Y(Math.max(expectedCum, actualCum)); // tallest top
+                              const expY = Y(expectedCum);
+                              const actY = Y(actualCum);
+                              // Draw baseline expected in gray up to expected
+                              const grayY = expY;
+                              const grayH = innerH - (grayY - PADT);
+                              // Overlay: green if actual >= expected else red (shortfall)
+                              const overColor = actualCum >= expectedCum ? '#21BF6B' : '#D72A4D';
+                              const overY = actY;
+                              const overH = innerH - (overY - PADT);
+                              return (
+                                <g key={i}>
+                                  {/* Gray expected */}
+                                  <rect x={x} y={grayY} width={barW} height={Math.max(0, grayH)} fill="#cbd5e1" rx="2" />
+                                  {/* Overlay actual */}
+                                  <rect
+                                    x={x}
+                                    y={overY}
+                                    width={barW}
+                                    height={Math.max(0, overH)}
+                                    fill={overColor}
+                                    opacity={actualCum >= expectedCum ? 0.55 : 0.9}
+                                    rx="2"
+                                  />
+                                </g>
+                              );
+                            })}
                           </>
                         );
                       })()}
@@ -538,6 +608,21 @@ export default function CampaignManager({ selectedLocations, setSelectedLocation
                 {/* Sources Graph */}
                 <div className="relative border rounded-lg p-3">
                   <div className="absolute -top-2 left-2 bg-white px-1 text-sm font-semibold text-gray-700">Sources</div>
+                  <button
+                    className="absolute -top-2 right-2 bg-white px-1 text-[11px] text-blue-600 underline"
+                    onClick={()=>{
+                      if (onOpenSources) onOpenSources();
+                      else {
+                        try {
+                          localStorage.setItem('passcom-recruiting-active-tab','review');
+                          window.location.reload();
+                        } catch {}
+                      }
+                    }}
+                    title="Manage sources"
+                  >
+                    Manage sources
+                  </button>
                   <SourceMixMini />
                 </div>
                 {/* Summary Squares */}
@@ -884,6 +969,8 @@ function CampaignsWindow(props: CampaignsWindowProps){
     campaigns = [],
     activeId,
     onSelectCampaign,
+    setCampaigns,
+    setActiveId,
   } = props || {};
 
   const [statusFilter, setStatusFilter] = useState<'all'|'active'|'suspended'|'draft'>('all');
@@ -951,11 +1038,41 @@ function CampaignsWindow(props: CampaignsWindowProps){
     return rows;
   },[campaigns, statusFilter, query, locationFilter, jobFilter, sortField, sortAsc]);
 
+  const handleCreateCampaign = () => {
+    const id = `c${Date.now()}`;
+    const newC: Campaign = {
+      id,
+      name: 'New Campaign',
+      createdAt: safeISO(new Date()),
+      sources: [],
+      status: 'draft',
+      locations: [],
+      jobs: [],
+      startDate: safeISO(new Date()),
+      endMode: 'date',
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (setCampaigns as any)?.((prev: Campaign[]) => [newC, ...(prev || [])]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (setActiveId as any)?.(id);
+  };
+
   return (
     <div className="bg-white border rounded-xl p-3">
       {/* Title with sort icon */}
       <div className="flex items-center justify-between mb-3 relative">
-        <div className="text-sm font-semibold">Campaigns</div>
+        <div className="flex items-center gap-2">
+          <div className="text-sm font-semibold">Campaigns</div>
+          <button
+            type="button"
+            className="w-5 h-5 inline-flex items-center justify-center rounded-full border text-gray-700 hover:bg-gray-50"
+            title="New Campaign"
+            aria-label="New Campaign"
+            onClick={handleCreateCampaign}
+          >
+            +
+          </button>
+        </div>
         <button
           type="button"
           className="p-1.5 rounded hover:bg-gray-100"

@@ -140,7 +140,7 @@ export default function CampaignBuilder() {
   };
 
   return (
-    <div className="h-full overflow-auto bg-white max-w-[320px]">
+    <div className="h-full overflow-auto bg-white max-w-[350px]">
       <div className="p-5 space-y-5">
         <h2 className="text-lg font-semibold text-gray-800">Campaign Planner</h2>
         
@@ -152,7 +152,7 @@ export default function CampaignBuilder() {
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="ml-auto w-40 px-3 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 text-sm"
+              className="ml-auto w-28 px-3 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 text-sm"
             />
           </div>
 
@@ -174,7 +174,7 @@ export default function CampaignBuilder() {
                 background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${sliderMax ? (dailyBudget / sliderMax) * 100 : 0}%, #e5e7eb ${sliderMax ? (dailyBudget / sliderMax) * 100 : 0}%, #e5e7eb 100%)`
               }}
             />
-            {dailyBudget >= sliderMax && Number.isFinite(sliderMax) && (
+            {Number.isFinite(sliderMax) && (dailyBudget >= sliderMax || Math.abs(dailyBudget - sliderMax) <= 5) && (
               <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
                 Maximum spend limit. To increase, enable more sources.
                 <button
@@ -195,7 +195,13 @@ export default function CampaignBuilder() {
           {/* Estimated hires/day from current limit */}
           <div className="flex items-center justify-between text-sm text-gray-700">
             <span>Estimated Hires/day</span>
-            <span className="font-semibold">{getHiresPerDay().toFixed(2)}</span>
+            <span className="font-semibold">
+              {(() => {
+                const v = getHiresPerDay();
+                if (v >= 3) return Math.round(v);
+                return v.toFixed(1);
+              })()}
+            </span>
           </div>
         </div>
 

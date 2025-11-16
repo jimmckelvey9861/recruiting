@@ -188,7 +188,7 @@ export default function PasscomRecruitingApp() {
   }, [needsRangeIdx, overrideVersion]);
 
   const tabs: { id: Tab; label: string }[] = [
-    { id: 'needs', label: 'Needs' },
+    { id: 'needs', label: 'Plan' },
     { id: 'campaign', label: 'Campaign' },
     { id: 'advertisement', label: 'Posting' },
     { id: 'review', label: 'Sources' },

@@ -69,6 +69,8 @@ export default function ReviewPanel({ selectedJobs, selectedLocations }: ReviewP
   // Read/write daily spend from planner to keep in sync with Data tab CampaignBuilder
   const plannerDaily = getStateSnapshot().planner.dailySpend || 0
   const dailyLimit = Math.min(plannerDaily, sliderMax)
+  const step = 10
+  const atMaxLimit = Number.isFinite(sliderMax) && (dailyLimit >= sliderMax || Math.abs(dailyLimit - sliderMax) <= step / 2)
   useEffect(() => {
     if (plannerDaily > sliderMax) {
       setPlanner({ dailySpend: sliderMax })
@@ -222,7 +224,7 @@ export default function ReviewPanel({ selectedJobs, selectedLocations }: ReviewP
                   onChange={(e) => setPlanner({ dailySpend: Number(e.target.value) })}
                   className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"
                 />
-                {dailyLimit >= sliderMax && Number.isFinite(sliderMax) && (
+                {atMaxLimit && (
                   <div className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
                     Maximum spend limit. To increase, add more sources.
                   </div>
