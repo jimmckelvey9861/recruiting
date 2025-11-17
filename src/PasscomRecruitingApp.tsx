@@ -490,6 +490,19 @@ function JobIconsBar({
     coverageData.forEach(d => m.set(d.job, d.coverage));
     return m;
   }, [coverageData]);
+  const shadeColor = (hex: string, amount = 0.2) => {
+    // darken towards black by 'amount' (0..1)
+    const h = hex.replace('#','');
+    const bigint = parseInt(h.length === 3 ? h.split('').map(c=>c+c).join('') : h, 16);
+    const r = (bigint >> 16) & 255;
+    const g = (bigint >> 8) & 255;
+    const b = bigint & 255;
+    const dr = Math.max(0, Math.min(255, Math.round(r * (1 - amount))));
+    const dg = Math.max(0, Math.min(255, Math.round(g * (1 - amount))));
+    const db = Math.max(0, Math.min(255, Math.round(b * (1 - amount))));
+    const toHex = (v:number) => v.toString(16).padStart(2,'0');
+    return `#${toHex(dr)}${toHex(dg)}${toHex(db)}`;
+  };
 
   return (
     <div className="w-full overflow-x-auto">
@@ -505,15 +518,18 @@ function JobIconsBar({
             : '#dc2626';
 
           const size = 72; // enlarged circle
-          // Ensure strokes never clip by leaving safe margins
-          const rInner = (size / 2) - 12;    // inner ring radius
-          const rOuter = (size / 2) - 6;     // outer ring radius (for >100%)
+          // Inner ring as large as previous outer; outer ring sits just outside without overlap
+          const innerSW = 6;
+          const outerSW = 2; // thin overflow ring to avoid clipping
+          const rInner = (size / 2) - 6;                   // inner ring radius (large)
+          const rOuter = rInner + (innerSW / 2) + (outerSW / 2); // touches outer edge of inner ring
           const cInner = 2 * Math.PI * rInner;
           const cOuter = 2 * Math.PI * rOuter;
           const innerPct = Math.max(0, Math.min(100, coverage));
           const overflow = Math.max(0, coverage - 100);
           const outerPct = Math.max(0, Math.min(100, overflow));
           const selected = selectedJob === job;
+          const outerShade = shadeColor(baseColor, 0.2);
 
           return (
             <button
@@ -524,10 +540,10 @@ function JobIconsBar({
               title={`${job}: ${coverage}% coverage`}
             >
               <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ display: 'block' }}>
-                <circle cx={size/2} cy={size/2} r={rInner} fill="#ffffff" stroke="#e5e7eb" strokeWidth="5" />
+                <circle cx={size/2} cy={size/2} r={rInner} fill="#ffffff" stroke="#e5e7eb" strokeWidth={innerSW - 1} />
                 <circle
                   cx={size/2} cy={size/2} r={rInner}
-                  fill="none" stroke={baseColor} strokeWidth="8"
+                  fill="none" stroke={baseColor} strokeWidth={innerSW}
                   strokeDasharray={`${(innerPct/100)*cInner} ${cInner}`}
                   strokeLinecap="round"
                   transform={`rotate(-90 ${size/2} ${size/2})`}
@@ -535,8 +551,8 @@ function JobIconsBar({
                 {overflow > 0 && (
                   <circle
                     cx={size/2} cy={size/2} r={rOuter}
-                    // 20% black overlay shade for overflow
-                    fill="none" stroke="#000000" strokeWidth="6" opacity={0.2}
+                    // 20% shade of base color (darken by 20%)
+                    fill="none" stroke={outerShade} strokeWidth={outerSW}
                     strokeDasharray={`${(outerPct/100)*cOuter} ${cOuter}`}
                     strokeLinecap="round"
                     transform={`rotate(-90 ${size/2} ${size/2})`}
