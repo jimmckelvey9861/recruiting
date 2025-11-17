@@ -387,7 +387,16 @@ export default function PasscomRecruitingApp() {
                     <CampaignBuilder />
                   </section>
                   <section className="bg-white border rounded-xl shadow-sm p-4 overflow-y-auto">
-                    <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Zones</h2>
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Zones</h2>
+                      <button
+                        className="text-xs text-blue-600 hover:underline"
+                        onClick={() => setZones({ lowRed: 70, lowYellow: 95, highYellow: 120, highRed: 150 })}
+                        type="button"
+                      >
+                        Reset to defaults
+                      </button>
+                    </div>
                     <p className="text-xs text-gray-500 mt-1">Warning zones for over/under-staffing.</p>
                     <ZonesController zones={zones} onChange={setZones} />
                   </section>

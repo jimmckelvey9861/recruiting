@@ -133,15 +133,19 @@ export default function ZonesController({ zones, onChange, min = 0, max = 200 }:
             <div
               key={key}
               onMouseDown={startDrag(key)}
-              className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 rounded-full border-2 border-white shadow cursor-ew-resize"
+              className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-6 h-6 flex items-center justify-center cursor-ew-resize"
               style={{
                 left: `${pct(s[key])}%`,
-                background: "#111827",
                 zIndex: (dragKey === key ? 10 : BASE_Z[key]) as any,
                 pointerEvents: "auto"
               }}
               title={`${key}: ${s[key]}%`}
-            />
+            >
+              <div
+                className="w-4 h-4 rounded-full border-2 border-white shadow"
+                style={{ background: "#111827" }}
+              />
+            </div>
           ))}
           {/* scale ticks: show start and infinity at the end */}
           {[min, max].map((v,i)=>(
