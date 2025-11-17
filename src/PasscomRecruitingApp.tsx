@@ -394,7 +394,7 @@ export default function PasscomRecruitingApp() {
                         onClick={() => setZones({ lowRed: 70, lowYellow: 95, highYellow: 120, highRed: 150 })}
                         type="button"
                       >
-                        Reset to defaults
+                        reset
                       </button>
                     </div>
                     <p className="text-xs text-gray-500 mt-1">Warning zones for over/under-staffing.</p>
