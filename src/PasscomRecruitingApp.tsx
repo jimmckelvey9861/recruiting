@@ -504,9 +504,10 @@ function JobIconsBar({
             : coverage <= zones.highRed ? '#ca8a04'
             : '#dc2626';
 
-          const size = 72; // 50% larger than previous 48
-          const rInner = (size / 2) - 9;
-          const rOuter = rInner + 7;
+          const size = 72; // enlarged circle
+          // Ensure strokes never clip by leaving safe margins
+          const rInner = (size / 2) - 12;    // inner ring radius
+          const rOuter = (size / 2) - 6;     // outer ring radius (for >100%)
           const cInner = 2 * Math.PI * rInner;
           const cOuter = 2 * Math.PI * rOuter;
           const innerPct = Math.max(0, Math.min(100, coverage));
@@ -522,7 +523,7 @@ function JobIconsBar({
               style={{ width: 96 }}
               title={`${job}: ${coverage}% coverage`}
             >
-              <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+              <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ display: 'block' }}>
                 <circle cx={size/2} cy={size/2} r={rInner} fill="#ffffff" stroke="#e5e7eb" strokeWidth="5" />
                 <circle
                   cx={size/2} cy={size/2} r={rInner}
@@ -534,27 +535,26 @@ function JobIconsBar({
                 {overflow > 0 && (
                   <circle
                     cx={size/2} cy={size/2} r={rOuter}
-                    fill="none" stroke={baseColor} strokeWidth="6" opacity={0.7}
+                    // 20% black overlay shade for overflow
+                    fill="none" stroke="#000000" strokeWidth="6" opacity={0.2}
                     strokeDasharray={`${(outerPct/100)*cOuter} ${cOuter}`}
                     strokeLinecap="round"
                     transform={`rotate(-90 ${size/2} ${size/2})`}
                   />
                 )}
+                {/* Centered percentage label with % sign */}
+                <text
+                  x={size/2}
+                  y={size/2}
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                  fill={numColor}
+                  fontWeight={700}
+                  fontSize="18"
+                >
+                  {`${coverage}%`}
+                </text>
               </svg>
-              <span
-                className="absolute"
-                style={{
-                  left: '50%',
-                  top: '50%',
-                  transform: 'translate(-50%, -50%)',
-                  color: numColor,
-                  fontWeight: 700,
-                  fontSize: 16,
-                  lineHeight: '16px'
-                }}
-              >
-                {coverage}
-              </span>
               <span className="mt-1 text-[10px] text-gray-700">{job}</span>
             </button>
           );
