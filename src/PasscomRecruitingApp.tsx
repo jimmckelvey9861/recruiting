@@ -569,6 +569,9 @@ function JobIconsBar({
                   fill={numColor}
                   fontWeight={700}
                   fontSize="16"
+                  fontFamily="'Inter Tight','Arial Narrow','Helvetica Neue',Arial,sans-serif"
+                  fontStretch="semi-condensed"
+                  letterSpacing="-0.5px"
                 >
                   {`${coverage}%`}
                 </text>
