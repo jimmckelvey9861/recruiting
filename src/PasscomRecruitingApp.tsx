@@ -547,7 +547,7 @@ function JobIconsBar({
                   cx={size/2} cy={size/2} r={rInner}
                   fill="none" stroke={baseColor} strokeWidth={innerSW}
                   strokeDasharray={`${(innerPct/100)*cInner} ${cInner}`}
-                  strokeLinecap="round"
+                  strokeLinecap="butt"
                   transform={`rotate(-90 ${size/2} ${size/2})`}
                 />
                 {overflow > 0 && (
@@ -556,7 +556,7 @@ function JobIconsBar({
                     // 20% shade of base color (darken by 20%), same thickness as inner
                     fill="none" stroke={outerShade} strokeWidth={outerSW}
                     strokeDasharray={`${(outerPct/100)*cOuter} ${cOuter}`}
-                    strokeLinecap="round"
+                    strokeLinecap="butt"
                     transform={`rotate(-90 ${size/2} ${size/2})`}
                   />
                 )}
