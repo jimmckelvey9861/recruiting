@@ -743,7 +743,7 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
       <section className="space-y-3">
         <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wide">Funnel Metrics</h3>
         <div className="grid grid-cols-12 gap-3 items-center">
-          <FieldBox label="App → Interview" className="col-span-6">
+          <FieldBox label="App → Interview" className="col-span-12 sm:col-span-6 md:col-span-4 lg:col-span-3">
             <div className="relative flex justify-end">
               <input
                 type="number"
@@ -757,7 +757,7 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
               <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 select-none">%</span>
             </div>
           </FieldBox>
-          <FieldBox label="Interview → Offer" className="col-span-6">
+          <FieldBox label="Interview → Offer" className="col-span-12 sm:col-span-6 md:col-span-4 lg:col-span-3">
             <div className="relative flex justify-end">
               <input
                 type="number"
@@ -771,7 +771,7 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
               <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 select-none">%</span>
             </div>
           </FieldBox>
-          <FieldBox label="Offer → Background" className="col-span-6">
+          <FieldBox label="Offer → Background" className="col-span-12 sm:col-span-6 md:col-span-4 lg:col-span-3">
             <div className="relative flex justify-end">
               <input
                 type="number"
@@ -785,7 +785,7 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
               <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 select-none">%</span>
             </div>
           </FieldBox>
-          <FieldBox label="Background → Hire" className="col-span-6">
+          <FieldBox label="Background → Hire" className="col-span-12 sm:col-span-6 md:col-span-4 lg:col-span-3">
             <div className="relative flex justify-end">
               <input
                 type="number"
