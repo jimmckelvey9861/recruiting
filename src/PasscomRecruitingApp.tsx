@@ -7,7 +7,7 @@ import CenterVisuals, { RANGE_WEEKS as NEEDS_RANGE_WEEKS, RANGE_LABELS as NEEDS_
 import ReviewPanel from './components/Review/ReviewPanel';
 import DataInspector from './components/Data/DataInspector';
 import { useOverrideVersion } from './state/dataOverrides';
-import { getStateSnapshot, setPlanner } from './state/campaignPlan';
+import { getStateSnapshot, setPlanner, useCampaignPlanVersion } from './state/campaignPlan';
 import AdSourcesPanel from './components/Sources/AdSourcesPanel';
 import DataOverview from './components/Data/DataOverview';
 
@@ -41,16 +41,16 @@ const JOB_REQUIREMENT_BASE: Record<string, number> = {
 
 const HALF_HOURS_PER_DAY = 48;
 
-function calculateCoverage(job: string, weeks: number): number {
+function calculateCoverage(job: string, weeks: number, withCampaign = false): number {
   let total = 0;
   let count = 0;
   for (let w = 0; w < weeks; w++) {
-    const matrix = genWeek(job, w, false);
+    const matrix = genWeek(job, w, withCampaign);
     for (const day of matrix) {
       for (const slot of day) {
         if (slot.closed || slot.demand <= 0) continue;
-        const ratio = Math.min(slot.supply / Math.max(1, slot.demand), 1);
-        total += ratio * 100;
+        const ratio = (slot.supply / Math.max(1, slot.demand)) * 100; // allow >100% to reflect overflow
+        total += ratio;
         count++;
       }
     }
@@ -83,6 +83,7 @@ export default function PasscomRecruitingApp() {
   const [dataRangeIdx, setDataRangeIdx] = useState<number>(1);
   const [dataInspectorJob, setDataInspectorJob] = useState<string>(AVAILABLE_JOBS[0]);
   const overrideVersion = useOverrideVersion();
+  const planVersion = useCampaignPlanVersion();
   
   // ---- Plan Zones (coverage color thresholds) ----
   type Zones = { lowRed: number; lowYellow: number; highYellow: number; highRed: number };
@@ -201,12 +202,16 @@ export default function PasscomRecruitingApp() {
 
   const jobCoverageData = useMemo(() => {
     const weeks = NEEDS_RANGE_WEEKS[needsRangeIdx] ?? NEEDS_RANGE_WEEKS[1];
-    return AVAILABLE_JOBS.map(job => ({
-      job,
-      color: JOB_BASE_COLORS[job] || '#2563eb',
-      coverage: calculateCoverage(job, weeks)
-    }));
-  }, [needsRangeIdx, overrideVersion]);
+    const withCampaign = !!getStateSnapshot().liveView;
+    return AVAILABLE_JOBS.map(job => {
+      const coverage = calculateCoverage(job, weeks, withCampaign);
+      return {
+        job,
+        color: JOB_BASE_COLORS[job] || '#2563eb',
+        coverage
+      };
+    });
+  }, [needsRangeIdx, overrideVersion, planVersion]);
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'needs', label: 'Plan' },
@@ -488,7 +493,7 @@ function JobIconsBar({
 
   return (
     <div className="w-full overflow-x-auto">
-      <div className="flex items-center gap-3 min-w-max py=2">
+      <div className="flex items-center gap-4 min-w-max py-2">
         {jobs.map((job) => {
           const coverage = covMap.get(job) ?? 0;
           const baseColor = colors[job] || '#64748B';
@@ -499,9 +504,9 @@ function JobIconsBar({
             : coverage <= zones.highRed ? '#ca8a04'
             : '#dc2626';
 
-          const size = 48;
-          const rInner = (size / 2) - 6;
-          const rOuter = rInner + 5;
+          const size = 72; // 50% larger than previous 48
+          const rInner = (size / 2) - 9;
+          const rOuter = rInner + 7;
           const cInner = 2 * Math.PI * rInner;
           const cOuter = 2 * Math.PI * rOuter;
           const innerPct = Math.max(0, Math.min(100, coverage));
@@ -514,14 +519,14 @@ function JobIconsBar({
               key={job}
               onClick={() => onSelect(job)}
               className={`relative inline-flex flex-col items-center justify-center rounded-md border px-2 py-2 ${selected ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
-              style={{ width: 64 }}
+              style={{ width: 96 }}
               title={`${job}: ${coverage}% coverage`}
             >
               <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-                <circle cx={size/2} cy={size/2} r={rInner} fill="#ffffff" stroke="#e5e7eb" strokeWidth="4" />
+                <circle cx={size/2} cy={size/2} r={rInner} fill="#ffffff" stroke="#e5e7eb" strokeWidth="5" />
                 <circle
                   cx={size/2} cy={size/2} r={rInner}
-                  fill="none" stroke={baseColor} strokeWidth="6"
+                  fill="none" stroke={baseColor} strokeWidth="8"
                   strokeDasharray={`${(innerPct/100)*cInner} ${cInner}`}
                   strokeLinecap="round"
                   transform={`rotate(-90 ${size/2} ${size/2})`}
@@ -529,7 +534,7 @@ function JobIconsBar({
                 {overflow > 0 && (
                   <circle
                     cx={size/2} cy={size/2} r={rOuter}
-                    fill="none" stroke={baseColor} strokeWidth="4" opacity={0.7}
+                    fill="none" stroke={baseColor} strokeWidth="6" opacity={0.7}
                     strokeDasharray={`${(outerPct/100)*cOuter} ${cOuter}`}
                     strokeLinecap="round"
                     transform={`rotate(-90 ${size/2} ${size/2})`}
@@ -544,8 +549,8 @@ function JobIconsBar({
                   transform: 'translate(-50%, -50%)',
                   color: numColor,
                   fontWeight: 700,
-                  fontSize: 12,
-                  lineHeight: '12px'
+                  fontSize: 16,
+                  lineHeight: '16px'
                 }}
               >
                 {coverage}
