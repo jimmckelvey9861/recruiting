@@ -388,7 +388,7 @@ export default function PasscomRecruitingApp() {
                   </section>
                   <section className="bg-white border rounded-xl shadow-sm p-4 overflow-y-auto">
                     <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Zones</h2>
-                    <p className="text-xs text-gray-500 mt-1">Set warning and danger zones for both over and understaffing.</p>
+                    <p className="text-xs text-gray-500 mt-1">Warning zones for over/under-staffing.</p>
                     <ZonesController zones={zones} onChange={setZones} />
                   </section>
                 </div>
