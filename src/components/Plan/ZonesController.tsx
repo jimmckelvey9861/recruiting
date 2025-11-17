@@ -21,6 +21,7 @@ export default function ZonesController({ zones, onChange, min = 0, max = 200 }:
   const [local, setLocal] = useState<Zones>(zones);
   const trackRef = useRef<HTMLDivElement | null>(null);
   const [dragKey, setDragKey] = useState<keyof Zones | null>(null);
+  const MIN_GAP = 1; // prevent overlapping handles
 
   useEffect(() => {
     setLocal(zones);
@@ -28,10 +29,10 @@ export default function ZonesController({ zones, onChange, min = 0, max = 200 }:
 
   const ordered = useMemo(() => {
     // Ensure monotonic order locally
-    const a = clamp(local.lowRed, min, max);
-    const b = clamp(Math.max(local.lowYellow, a), min, max);
-    const c = clamp(Math.max(local.highYellow, b), min, max);
-    const d = clamp(Math.max(local.highRed, c), min, max);
+    const a = clamp(local.lowRed, min, max - 3 * MIN_GAP);
+    const b = clamp(Math.max(local.lowYellow, a + MIN_GAP), min + MIN_GAP, max - 2 * MIN_GAP);
+    const c = clamp(Math.max(local.highYellow, b + MIN_GAP), min + 2 * MIN_GAP, max - MIN_GAP);
+    const d = clamp(Math.max(local.highRed, c + MIN_GAP), min + 3 * MIN_GAP, max);
     return { lowRed: a, lowYellow: b, highYellow: c, highRed: d };
   }, [local, min, max]);
 
@@ -55,13 +56,13 @@ export default function ZonesController({ zones, onChange, min = 0, max = 200 }:
     const raw = fromClientX(e.clientX);
     let next = { ...ordered };
     if (dragKey === "lowRed") {
-      next.lowRed = clamp(raw, min, next.lowYellow);
+      next.lowRed = clamp(raw, min, next.lowYellow - MIN_GAP);
     } else if (dragKey === "lowYellow") {
-      next.lowYellow = clamp(raw, next.lowRed, next.highYellow);
+      next.lowYellow = clamp(raw, next.lowRed + MIN_GAP, next.highYellow - MIN_GAP);
     } else if (dragKey === "highYellow") {
-      next.highYellow = clamp(raw, next.lowYellow, next.highRed);
+      next.highYellow = clamp(raw, next.lowYellow + MIN_GAP, next.highRed - MIN_GAP);
     } else if (dragKey === "highRed") {
-      next.highRed = clamp(raw, next.highYellow, max);
+      next.highRed = clamp(raw, next.highYellow + MIN_GAP, max);
     }
     setLocal(next);
   }, [dragKey, fromClientX, ordered, min, max]);
@@ -134,7 +135,8 @@ export default function ZonesController({ zones, onChange, min = 0, max = 200 }:
               className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 rounded-full border-2 border-white shadow cursor-ew-resize"
               style={{
                 left: `${pct(s[key])}%`,
-                background: "#111827"
+                background: "#111827",
+                zIndex: dragKey === key ? 2 as any : 1 as any
               }}
               title={`${key}: ${s[key]}%`}
             />
