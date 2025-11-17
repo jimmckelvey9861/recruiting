@@ -91,7 +91,7 @@ export default function ReviewPanel({ selectedJobs, selectedLocations }: ReviewP
     }
   }
 
-  const { stages, flowData, totals, alloc, sankeySources, appsPerDay, hiresPerDay } = useMemo(() => {
+  const { stages, flowData, totals, alloc, sankeySources, appsPerDay, hiresPerDay, perSourceConvProducts } = useMemo(() => {
     const alloc = new Map<string, number>()
     let remaining = Math.max(0, dailyLimit)
 
@@ -172,10 +172,15 @@ export default function ReviewPanel({ selectedJobs, selectedLocations }: ReviewP
       return clamp(apps, 0, 999999)
     })
 
-    const toInterview = firstRow.map((v) => Math.round(v * clamp(conversionRates.toInterview, 0, 1)))
-    const toOffer = toInterview.map((v) => Math.round(v * clamp(conversionRates.toOffer, 0, 1)))
-    const toBg = toOffer.map((v) => Math.round(v * clamp(conversionRates.toBackground, 0, 1)))
-    const toHire = toBg.map((v) => Math.round(v * clamp(conversionRates.toHire, 0, 1)))
+    // Per-source funnel rates (percent → fraction), fallback to defaults
+    const r1 = liveSources.map((s) => clamp(((s as any).funnel_app_to_interview ?? (DEFAULT_CONVERSION_RATES.toInterview * 100)) / 100, 0, 1))
+    const r2 = liveSources.map((s) => clamp(((s as any).funnel_interview_to_offer ?? (DEFAULT_CONVERSION_RATES.toOffer * 100)) / 100, 0, 1))
+    const r3 = liveSources.map((s) => clamp(((s as any).funnel_offer_to_background ?? (DEFAULT_CONVERSION_RATES.toBackground * 100)) / 100, 0, 1))
+    const r4 = liveSources.map((s) => clamp(((s as any).funnel_background_to_hire ?? (DEFAULT_CONVERSION_RATES.toHire * 100)) / 100, 0, 1))
+    const toInterview = firstRow.map((v, i) => Math.round(v * r1[i]))
+    const toOffer = toInterview.map((v, i) => Math.round(v * r2[i]))
+    const toBg = toOffer.map((v, i) => Math.round(v * r3[i]))
+    const toHire = toBg.map((v, i) => Math.round(v * r4[i]))
 
     const flowData = [firstRow, toInterview, toOffer, toBg, toHire]
     const totals = flowData.map((row) => row.reduce((sum, v) => sum + v, 0))
@@ -186,16 +191,22 @@ export default function ReviewPanel({ selectedJobs, selectedLocations }: ReviewP
 
     const appsPerDay = totals[0]
     const hiresPerDay = totals[totals.length - 1]
+    const perSourceConvProducts = r1.map((_, i) => r1[i] * r2[i] * r3[i] * r4[i])
 
-    return { stages, flowData, totals, alloc, sankeySources, appsPerDay, hiresPerDay }
+    return { stages, flowData, totals, alloc, sankeySources, appsPerDay, hiresPerDay, perSourceConvProducts }
   }, [liveSources, conversionRates, dailyLimit])
 
-  // Publish overall conversion = product across stages
+  // Publish overall conversion to shared store.
+  // With per-source funnel metrics, derive a weighted overall conversion based on current mix.
   useEffect(() => {
-    const overall = [conversionRates.toInterview, conversionRates.toOffer, conversionRates.toBackground, conversionRates.toHire]
-      .reduce((acc, r) => acc * clamp(r, 0, 1), 1)
-    setConversionRate(overall)
-  }, [conversionRates])
+    const overall = appsPerDay > 0 ? (hiresPerDay / Math.max(1, appsPerDay)) : (
+      DEFAULT_CONVERSION_RATES.toInterview *
+      DEFAULT_CONVERSION_RATES.toOffer *
+      DEFAULT_CONVERSION_RATES.toBackground *
+      DEFAULT_CONVERSION_RATES.toHire
+    )
+    setConversionRate(clamp(overall, 0, 1))
+  }, [appsPerDay, hiresPerDay])
 
   const locationsLabel = selectedLocations.length ? selectedLocations.join(', ') : 'All Locations'
   const jobsLabel = selectedJobs.length ? selectedJobs.join(', ') : 'All Jobs'

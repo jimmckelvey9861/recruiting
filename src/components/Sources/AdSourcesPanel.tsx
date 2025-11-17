@@ -43,6 +43,11 @@ type AdSource = {
   end_date?: string | null;
   end_hires?: number | null;
   end_budget?: number | null;
+  // Funnel metrics (percent values 0..100)
+  funnel_app_to_interview?: number | null;
+  funnel_interview_to_offer?: number | null;
+  funnel_offer_to_background?: number | null;
+  funnel_background_to_hire?: number | null;
 };
 
 const nonNeg = (n: unknown, def = 0) => (Number.isFinite(Number(n)) ? Math.max(0, Number(n)) : def);
@@ -174,6 +179,10 @@ function seed(): AdSource[] {
       end_date: null,
       apps_override: null,
       quality_percent: 78,
+      funnel_app_to_interview: 5,
+      funnel_interview_to_offer: 40,
+      funnel_offer_to_background: 90,
+      funnel_background_to_hire: 90,
     },
     {
       id: "src_fb_001",
@@ -192,6 +201,10 @@ function seed(): AdSource[] {
       end_hires: null,
       apps_override: null,
       quality_percent: 74,
+      funnel_app_to_interview: 5,
+      funnel_interview_to_offer: 40,
+      funnel_offer_to_background: 90,
+      funnel_background_to_hire: 90,
     },
     {
       id: "src_ref_001",
@@ -210,6 +223,10 @@ function seed(): AdSource[] {
       organic_per_day: 1.5,
       apps_override: 5,
       quality_percent: 88,
+      funnel_app_to_interview: 5,
+      funnel_interview_to_offer: 40,
+      funnel_offer_to_background: 90,
+      funnel_background_to_hire: 90,
     },
     {
       id: "src_org_001",
@@ -227,6 +244,10 @@ function seed(): AdSource[] {
       end_hires: null,
       apps_override: 3,
       quality_percent: 82,
+      funnel_app_to_interview: 5,
+      funnel_interview_to_offer: 40,
+      funnel_offer_to_background: 90,
+      funnel_background_to_hire: 90,
     },
   ];
 }
@@ -304,6 +325,10 @@ export default function AdSourcesPanel() {
     daily_budget: s.daily_budget,
     referral_bonus_per_hire: s.referral_bonus_per_hire,
     apps_override: s.apps_override ?? null,
+    funnel_app_to_interview: s.funnel_app_to_interview ?? null,
+    funnel_interview_to_offer: s.funnel_interview_to_offer ?? null,
+    funnel_offer_to_background: s.funnel_offer_to_background ?? null,
+    funnel_background_to_hire: s.funnel_background_to_hire ?? null,
   })), [sources]);
   // Publish snapshot and persist to localStorage on change
   useEffect(() => {
@@ -456,6 +481,12 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
   const spendUsed = referralSpend != null ? referralSpend : kpis.spendDay;
   const cpaValue = appsValue > 0 ? (spendUsed != null ? spendUsed / appsValue : null) : null;
   const input = "w-full bg-transparent border border-gray-200 rounded-md px-2 py-1 text-sm";
+  const pctInput = "w-full bg-transparent border border-gray-200 rounded-md px-2 py-1 text-sm text-right";
+  const clampPct = (v: number | null | undefined, def = 0) => {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return def;
+    return Math.max(0, Math.min(100, n));
+  };
 
   const show = {
     dailyBudget: ["daily_budget", "cpc", "cpm", "cpa"].includes(s.spend_model),
@@ -705,6 +736,70 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
           </FieldBox>
           <FieldBox label="90-Day Retention" className="col-span-3">
             <div className="py-1 px-2 text-sm text-right text-blue-600 bg-slate-100 rounded-md">82%</div>
+          </FieldBox>
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wide">Funnel Metrics</h3>
+        <div className="grid grid-cols-12 gap-3 items-center">
+          <FieldBox label="Application → Interview (%)" className="col-span-6">
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step="0.1"
+              className={pctInput}
+              value={clampPct(s.funnel_app_to_interview, 5)}
+              onChange={(e) => set({ funnel_app_to_interview: clampPct(Number(e.target.value), 5) })}
+            />
+          </FieldBox>
+          <FieldBox label="Interview → Offer (%)" className="col-span-6">
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step="0.1"
+              className={pctInput}
+              value={clampPct(s.funnel_interview_to_offer, 40)}
+              onChange={(e) => set({ funnel_interview_to_offer: clampPct(Number(e.target.value), 40) })}
+            />
+          </FieldBox>
+          <FieldBox label="Offer → Background (%)" className="col-span-6">
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step="0.1"
+              className={pctInput}
+              value={clampPct(s.funnel_offer_to_background, 90)}
+              onChange={(e) => set({ funnel_offer_to_background: clampPct(Number(e.target.value), 90) })}
+            />
+          </FieldBox>
+          <FieldBox label="Background → Hire (%)" className="col-span-6">
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step="0.1"
+              className={pctInput}
+              value={clampPct(s.funnel_background_to_hire, 90)}
+              onChange={(e) => set({ funnel_background_to_hire: clampPct(Number(e.target.value), 90) })}
+            />
+          </FieldBox>
+          <FieldBox label="Applications → Hire (derived)" className="col-span-12">
+            {(() => {
+              const r1 = clampPct(s.funnel_app_to_interview ?? 5, 5) / 100;
+              const r2 = clampPct(s.funnel_interview_to_offer ?? 40, 40) / 100;
+              const r3 = clampPct(s.funnel_offer_to_background ?? 90, 90) / 100;
+              const r4 = clampPct(s.funnel_background_to_hire ?? 90, 90) / 100;
+              const total = r1 * r2 * r3 * r4;
+              return (
+                <div className="py-1 px-2 text-sm text-right text-blue-600 bg-slate-100 rounded-md">
+                  {(total * 100).toFixed(2)}%
+                </div>
+              );
+            })()}
           </FieldBox>
         </div>
       </section>

@@ -21,6 +21,11 @@ export interface SourceSnapshot {
   daily_budget?: number | null
   referral_bonus_per_hire?: number | null
   apps_override?: number | null
+  // Optional funnel metrics (percent values 0..100 from Sources tab)
+  funnel_app_to_interview?: number | null
+  funnel_interview_to_offer?: number | null
+  funnel_offer_to_background?: number | null
+  funnel_background_to_hire?: number | null
 }
 
 interface PlanState {
