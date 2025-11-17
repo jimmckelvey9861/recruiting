@@ -88,7 +88,7 @@ export default function PasscomRecruitingApp() {
   
   // ---- Plan Zones (coverage color thresholds) ----
   type Zones = { lowRed: number; lowYellow: number; highYellow: number; highRed: number };
-  const DEFAULT_ZONES: Zones = { lowRed: 80, lowYellow: 95, highYellow: 120, highRed: 140 };
+  const DEFAULT_ZONES: Zones = { lowRed: 70, lowYellow: 95, highYellow: 120, highRed: 150 };
   const [zones, setZones] = useState<Zones>(() => {
     try {
       const raw = localStorage.getItem('passcom-plan-zones');

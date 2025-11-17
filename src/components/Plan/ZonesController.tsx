@@ -22,6 +22,7 @@ export default function ZonesController({ zones, onChange, min = 0, max = 200 }:
   const trackRef = useRef<HTMLDivElement | null>(null);
   const [dragKey, setDragKey] = useState<keyof Zones | null>(null);
   const MIN_GAP = 1; // prevent overlapping handles
+  const BASE_Z: Record<keyof Zones, number> = { lowRed: 1, lowYellow: 2, highYellow: 3, highRed: 4 };
 
   useEffect(() => {
     setLocal(zones);
@@ -136,14 +137,14 @@ export default function ZonesController({ zones, onChange, min = 0, max = 200 }:
               style={{
                 left: `${pct(s[key])}%`,
                 background: "#111827",
-                zIndex: dragKey === key ? 2 as any : 1 as any
+                zIndex: (dragKey === key ? 10 : BASE_Z[key]) as any
               }}
               title={`${key}: ${s[key]}%`}
             />
           ))}
           {/* scale ticks: show start and infinity at the end */}
           {[min, max].map((v,i)=>(
-            <div key={i} className="absolute text-[10px] text-gray-500" style={{ left: `${pct(v)}%`, top: "100%", transform: "translate(-50%, 2px)"}}>
+            <div key={i} className="absolute text-[10px] text-gray-500" style={{ left: `${pct(v)}%`, top: "100%", transform: "translate(-50%, 2px)", pointerEvents: "none" }}>
               {v === max ? '∞' : `${v}%`}
             </div>
           ))}
@@ -152,7 +153,7 @@ export default function ZonesController({ zones, onChange, min = 0, max = 200 }:
             <div
               key={`${key}-val`}
               className="absolute text-[11px] font-medium text-gray-700"
-              style={{ left: `${pct(s[key])}%`, top: "135%", transform: "translateX(-50%)" }}
+              style={{ left: `${pct(s[key])}%`, top: "135%", transform: "translateX(-50%)", pointerEvents: "none" }}
             >
               {s[key]}%
             </div>
