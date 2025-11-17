@@ -8,6 +8,7 @@ import ReviewPanel from './components/Review/ReviewPanel';
 import DataInspector from './components/Data/DataInspector';
 import { useOverrideVersion } from './state/dataOverrides';
 import { getStateSnapshot, setPlanner, useCampaignPlanVersion } from './state/campaignPlan';
+import ZonesController from './components/Plan/ZonesController';
 import AdSourcesPanel from './components/Sources/AdSourcesPanel';
 import DataOverview from './components/Data/DataOverview';
 
@@ -377,9 +378,9 @@ export default function PasscomRecruitingApp() {
                   <section className="bg-white border rounded-xl shadow-sm p-4 overflow-y-auto">
                     <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Zones</h2>
                     <p className="text-xs text-gray-500 mt-1">
-                      Configure coverage thresholds (percent). Used to color the numbers in the job circles above.
+                      Drag the handles or edit values to set the 5 zone ranges. Segments update live.
                     </p>
-                    <ZonesConfig zones={zones} onChange={setZones} />
+                    <ZonesController zones={zones} onChange={setZones} />
                   </section>
                 </div>
                 <section className="bg-white border rounded-xl shadow-sm p-4">
