@@ -201,18 +201,29 @@ export default function PasscomRecruitingApp() {
     setShowJobDropdown(false);
   };
 
-  const jobCoverageData = useMemo(() => {
+  const activeJob = selectedJobs[0] || AVAILABLE_JOBS[0];
+  // Baseline coverage for all jobs (no campaign overlay), depends only on range + overrides
+  const baseCoverageMap = useMemo(() => {
+    const weeks = NEEDS_RANGE_WEEKS[needsRangeIdx] ?? NEEDS_RANGE_WEEKS[1];
+    const map: Record<string, number> = {};
+    for (const job of AVAILABLE_JOBS) {
+      map[job] = calculateCoverage(job, weeks, false);
+    }
+    return map;
+  }, [needsRangeIdx, overrideVersion]);
+  // Active job coverage; if liveView ON, apply overlay using planVersion to recompute
+  const activeJobCoverage = useMemo(() => {
     const weeks = NEEDS_RANGE_WEEKS[needsRangeIdx] ?? NEEDS_RANGE_WEEKS[1];
     const withCampaign = !!getStateSnapshot().liveView;
-    return AVAILABLE_JOBS.map(job => {
-      const coverage = calculateCoverage(job, weeks, withCampaign);
-      return {
-        job,
-        color: JOB_BASE_COLORS[job] || '#2563eb',
-        coverage
-      };
-    });
-  }, [needsRangeIdx, overrideVersion, planVersion]);
+    return withCampaign ? calculateCoverage(activeJob, weeks, true) : baseCoverageMap[activeJob];
+  }, [activeJob, needsRangeIdx, overrideVersion, planVersion, baseCoverageMap]);
+  const jobCoverageData = useMemo(() => {
+    return AVAILABLE_JOBS.map(job => ({
+      job,
+      color: JOB_BASE_COLORS[job] || '#2563eb',
+      coverage: job === activeJob ? (activeJobCoverage ?? baseCoverageMap[job]) : baseCoverageMap[job]
+    }));
+  }, [activeJob, activeJobCoverage, baseCoverageMap]);
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'needs', label: 'Plan' },
