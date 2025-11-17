@@ -367,6 +367,21 @@ export default function CampaignManager({ selectedLocations, setSelectedLocation
     }
   }, [current?.startDate]);
 
+  // When the global job selector changes, reflect it into the CURRENT campaign's jobs
+  useEffect(() => {
+    if (!current) return;
+    const curJobs = Array.isArray(current.jobs) ? current.jobs : [];
+    const selJobs = Array.isArray(selectedJobs) ? selectedJobs : [];
+    const same =
+      curJobs.length === selJobs.length &&
+      curJobs.every((j, i) => j === selJobs[i]);
+    if (!same) {
+      setCampaigns(prev =>
+        prev.map(c => c.id === current.id ? ({ ...c, jobs: [...selJobs] }) : c)
+      );
+    }
+  }, [activeId, selectedJobs]);
+
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 p-6">
       <div className="max-w-7xl mx-auto grid grid-cols-12 gap-4">
