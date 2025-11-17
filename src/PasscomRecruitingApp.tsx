@@ -518,12 +518,13 @@ function JobIconsBar({
             : '#dc2626';
 
           const size = 72; // enlarged circle
-          // Thicken strokes by ~50% and keep geometry within viewBox without clipping
-          const innerSW = 9;   // was 6
-          const outerSW = 3;   // was 2
-          const MARGIN = 2;    // pixel margin to avoid clipping at viewBox edge
-          const rOuter = (size / 2) - MARGIN;                           // outer ring radius
-          const rInner = Math.max(0, rOuter - (innerSW + outerSW) / 2); // so outer ring starts at edge of inner ring
+          // Thicken strokes and keep geometry within viewBox without clipping
+          const innerSW = 9;   // inner ring stroke width
+          const outerSW = 9;   // make outer overflow ring same thickness as inner
+          const MARGIN = 6;    // margin to avoid clipping (>= outerSW/2)
+          const rOuter = (size / 2) - MARGIN;                           // outer ring centerline radius
+          // Choose rInner so the outer ring begins exactly at the outer edge of the inner ring (no overlap)
+          const rInner = Math.max(0, rOuter - (innerSW + outerSW) / 2);
           const cInner = 2 * Math.PI * rInner;
           const cOuter = 2 * Math.PI * rOuter;
           const innerPct = Math.max(0, Math.min(100, coverage));
@@ -552,7 +553,7 @@ function JobIconsBar({
                 {overflow > 0 && (
                   <circle
                     cx={size/2} cy={size/2} r={rOuter}
-                    // 20% shade of base color (darken by 20%)
+                    // 20% shade of base color (darken by 20%), same thickness as inner
                     fill="none" stroke={outerShade} strokeWidth={outerSW}
                     strokeDasharray={`${(outerPct/100)*cOuter} ${cOuter}`}
                     strokeLinecap="round"
@@ -567,7 +568,7 @@ function JobIconsBar({
                   dominantBaseline="middle"
                   fill={numColor}
                   fontWeight={700}
-                  fontSize="18"
+                  fontSize="16"
                 >
                   {`${coverage}%`}
                 </text>
