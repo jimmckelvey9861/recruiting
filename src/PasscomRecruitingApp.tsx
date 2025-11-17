@@ -518,11 +518,12 @@ function JobIconsBar({
             : '#dc2626';
 
           const size = 72; // enlarged circle
-          // Inner ring as large as previous outer; outer ring sits just outside without overlap
-          const innerSW = 6;
-          const outerSW = 2; // thin overflow ring to avoid clipping
-          const rInner = (size / 2) - 6;                   // inner ring radius (large)
-          const rOuter = rInner + (innerSW / 2) + (outerSW / 2); // touches outer edge of inner ring
+          // Thicken strokes by ~50% and keep geometry within viewBox without clipping
+          const innerSW = 9;   // was 6
+          const outerSW = 3;   // was 2
+          const MARGIN = 2;    // pixel margin to avoid clipping at viewBox edge
+          const rOuter = (size / 2) - MARGIN;                           // outer ring radius
+          const rInner = Math.max(0, rOuter - (innerSW + outerSW) / 2); // so outer ring starts at edge of inner ring
           const cInner = 2 * Math.PI * rInner;
           const cOuter = 2 * Math.PI * rOuter;
           const innerPct = Math.max(0, Math.min(100, coverage));
