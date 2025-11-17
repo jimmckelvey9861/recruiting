@@ -84,6 +84,27 @@ export default function PasscomRecruitingApp() {
   const [dataInspectorJob, setDataInspectorJob] = useState<string>(AVAILABLE_JOBS[0]);
   const overrideVersion = useOverrideVersion();
   
+  // ---- Plan Zones (coverage color thresholds) ----
+  type Zones = { lowRed: number; lowYellow: number; highYellow: number; highRed: number };
+  const DEFAULT_ZONES: Zones = { lowRed: 80, lowYellow: 95, highYellow: 120, highRed: 140 };
+  const [zones, setZones] = useState<Zones>(() => {
+    try {
+      const raw = localStorage.getItem('passcom-plan-zones');
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return DEFAULT_ZONES;
+  });
+  useEffect(() => {
+    try { localStorage.setItem('passcom-plan-zones', JSON.stringify(zones)); } catch {}
+  }, [zones]);
+  const zoneTextColor = (coverage: number, z: Zones) => {
+    if (coverage <= z.lowRed) return '#dc2626';        // red
+    if (coverage < z.lowYellow) return '#ca8a04';      // yellow (82–95)
+    if (coverage <= z.highYellow) return '#16a34a';    // green (95–120)
+    if (coverage <= z.highRed) return '#ca8a04';       // yellow (120–140)
+    return '#dc2626';                                  // red (>=140)
+  };
+
   // Dropdown states
   const [showLocationDropdown, setShowLocationDropdown] = useState(false);
   const [showJobDropdown, setShowJobDropdown] = useState(false);
@@ -332,48 +353,29 @@ export default function PasscomRecruitingApp() {
         {activeTab === 'needs' && (
           <div className="h-full bg-gray-50">
             <div className="h-full max-w-7xl mx-auto px-6 py-8">
+              {/* Compact Jobs Icons Bar */}
+              <section className="mb-3 -mx-6 px-6">
+                <JobIconsBar
+                  jobs={AVAILABLE_JOBS}
+                  colors={JOB_BASE_COLORS}
+                  coverageData={jobCoverageData}
+                  selectedJob={selectedJobs[0]}
+                  onSelect={(job) => setSelectedJobs([job])}
+                  zones={zones}
+                />
+              </section>
               <div className="h-full grid gap-6 grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)]">
                 <div className="flex flex-col gap-6">
                   <section className="bg-white border rounded-xl shadow-sm p-0 overflow-hidden">
                     <CampaignBuilder />
                   </section>
                   <section className="bg-white border rounded-xl shadow-sm p-4 overflow-y-auto">
-                  <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Jobs</h2>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Coverage for the next {NEEDS_RANGE_LABELS[needsRangeIdx].toLowerCase()}.
-                  </p>
-                  <div className="mt-4 space-y-3">
-                    {jobCoverageData.map(({ job, color, coverage }) => {
-                      const isSelected = selectedJobs[0] === job;
-                      return (
-                        <button
-                          key={job}
-                          onClick={() => setSelectedJobs([job])}
-                          className={`w-full text-left border rounded-lg p-3 transition-colors ${
-                            isSelected ? 'border-blue-400 bg-blue-50' : 'border-gray-200 hover:border-blue-200'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between text-sm font-medium text-gray-700">
-                            <span className="flex items-center gap-2">
-                              <span className="w-2.5 h-2.5 rounded-full" style={{ background: color }} />
-                              {job}
-                            </span>
-                            <span>{coverage}%</span>
-                          </div>
-                          <div className="mt-2 h-2.5 rounded-full bg-gray-200 overflow-hidden">
-                            <div
-                              className="h-full rounded-full"
-                              style={{
-                                width: `${Math.min(coverage, 150) / 150 * 100}%`,
-                                background: color
-                              }}
-                            />
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </section>
+                    <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Zones</h2>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Configure coverage thresholds (percent). Used to color the numbers in the job circles above.
+                    </p>
+                    <ZonesConfig zones={zones} onChange={setZones} />
+                  </section>
                 </div>
                 <section className="bg-white border rounded-xl shadow-sm p-4">
                   <CenterVisuals
@@ -457,6 +459,146 @@ export default function PasscomRecruitingApp() {
             </div>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ---- Compact Job Icons Bar ----
+function JobIconsBar({
+  jobs,
+  colors,
+  coverageData,
+  selectedJob,
+  onSelect,
+  zones
+}: {
+  jobs: string[];
+  colors: Record<string, string>;
+  coverageData: { job: string; color: string; coverage: number }[];
+  selectedJob?: string;
+  onSelect: (job: string) => void;
+  zones: { lowRed: number; lowYellow: number; highYellow: number; highRed: number };
+}) {
+  const covMap = useMemo(() => {
+    const m = new Map<string, number>();
+    coverageData.forEach(d => m.set(d.job, d.coverage));
+    return m;
+  }, [coverageData]);
+
+  return (
+    <div className="w-full overflow-x-auto">
+      <div className="flex items-center gap-3 min-w-max py=2">
+        {jobs.map((job) => {
+          const coverage = covMap.get(job) ?? 0;
+          const baseColor = colors[job] || '#64748B';
+          const numColor =
+            coverage <= zones.lowRed ? '#dc2830'
+            : coverage < zones.lowYellow ? '#ca8a04'
+            : coverage <= zones.highYellow ? '#16a34a'
+            : coverage <= zones.highRed ? '#ca8a04'
+            : '#dc2626';
+
+          const size = 48;
+          const rInner = (size / 2) - 6;
+          const rOuter = rInner + 5;
+          const cInner = 2 * Math.PI * rInner;
+          const cOuter = 2 * Math.PI * rOuter;
+          const innerPct = Math.max(0, Math.min(100, coverage));
+          const overflow = Math.max(0, coverage - 100);
+          const outerPct = Math.max(0, Math.min(100, overflow));
+          const selected = selectedJob === job;
+
+          return (
+            <button
+              key={job}
+              onClick={() => onSelect(job)}
+              className={`relative inline-flex flex-col items-center justify-center rounded-md border px-2 py-2 ${selected ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
+              style={{ width: 64 }}
+              title={`${job}: ${coverage}% coverage`}
+            >
+              <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+                <circle cx={size/2} cy={size/2} r={rInner} fill="#ffffff" stroke="#e5e7eb" strokeWidth="4" />
+                <circle
+                  cx={size/2} cy={size/2} r={rInner}
+                  fill="none" stroke={baseColor} strokeWidth="6"
+                  strokeDasharray={`${(innerPct/100)*cInner} ${cInner}`}
+                  strokeLinecap="round"
+                  transform={`rotate(-90 ${size/2} ${size/2})`}
+                />
+                {overflow > 0 && (
+                  <circle
+                    cx={size/2} cy={size/2} r={rOuter}
+                    fill="none" stroke={baseColor} strokeWidth="4" opacity={0.7}
+                    strokeDasharray={`${(outerPct/100)*cOuter} ${cOuter}`}
+                    strokeLinecap="round"
+                    transform={`rotate(-90 ${size/2} ${size/2})`}
+                  />
+                )}
+              </svg>
+              <span
+                className="absolute"
+                style={{
+                  left: '50%',
+                  top: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  color: numColor,
+                  fontWeight: 700,
+                  fontSize: 12,
+                  lineHeight: '12px'
+                }}
+              >
+                {coverage}
+              </span>
+              <span className="mt-1 text-[10px] text-gray-700">{job}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ---- Zones Config Panel ----
+function ZonesConfig({
+  zones,
+  onChange
+}: {
+  zones: { lowRed: number; lowYellow: number; highYellow: number; highRed: number };
+  onChange: (z: { lowRed: number; lowYellow: number; highYellow: number; highRed: number }) => void;
+}) {
+  const [draft, setDraft] = useState(zones);
+  useEffect(() => { setDraft(zones); }, [zones]);
+
+  const apply = () => {
+    const z = { ...draft };
+    z.lowRed = Math.max(0, Math.min(1000, z.lowRed));
+    z.lowYellow = Math.max(z.lowRed, Math.min(1000, z.lowYellow));
+    z.highYellow = Math.max(z.lowYellow, Math.min(1000, z.highYellow));
+    z.highRed = Math.max(z.highYellow, Math.min(1000, z.highRed));
+    onChange(z);
+  };
+
+  const inputCls = "w-20 px-2 py-1 border rounded text-sm text-right";
+
+  return (
+    <div className="mt-3 space-y-2">
+      <div className="grid grid-cols-2 gap-2 items-center">
+        <label className="text-xs text-gray-600">Red ≤</label>
+        <input type="number" className={inputCls} value={draft.lowRed} onChange={e=>setDraft({...draft, lowRed: Number(e.target.value||0)})}/>
+        <label className="text-xs text-gray-600">Yellow to</label>
+        <input type="number" className={inputCls} value={draft.lowYellow} onChange={e=>setDraft({...draft, lowYellow: Number(e.target.value||0)})}/>
+        <label className="text-xs text-gray-600">Green to</label>
+        <input type="number" className={inputCls} value={draft.highYellow} onChange={e=>setDraft({...draft, highYellow: Number(e.target.value||0)})}/>
+        <label className="text-xs text-gray-600">Yellow to</label>
+        <input type="number" className={inputCls} value={draft.highRed} onChange={e=>setDraft({...draft, highRed: Number(e.target.value||0)})}/>
+      </div>
+      <div className="flex items-center gap-2">
+        <button onClick={apply} className="px-3 py-1.5 border rounded text-sm">Apply</button>
+        <button onClick={() => setDraft(zones)} className="px-3 py-1.5 border rounded text-sm">Reset</button>
+        <span className="text-xs text-gray-500 ml-2">
+          Zones: Red ≤ {zones.lowRed} • Yellow &lt; {zones.lowYellow} • Green ≤ {zones.highYellow} • Yellow ≤ {zones.highRed} • Red &gt; {zones.highRed}
+        </span>
       </div>
     </div>
   );
