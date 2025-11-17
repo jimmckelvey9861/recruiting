@@ -121,7 +121,12 @@ function noise(seed: number, d: number, s: number) {
 }
 
 // Box-Muller transform to generate normally distributed random numbers
-export function genWeek(role: string, weekOffset = 0, withCampaign = false) {
+export function genWeek(
+  role: string,
+  weekOffset = 0,
+  withCampaign = false,
+  overlayForRole?: string
+) {
   // Base demand levels for each role
   const baseMap: Record<string, number> = {
     "Server": 8,
@@ -174,7 +179,8 @@ export function genWeek(role: string, weekOffset = 0, withCampaign = false) {
       let supply = Math.max(0, Math.round(demand * supplyMultiplier))
 
       // Apply campaign overlay (extra supply from new hires) when withCampaign is true
-      if (withCampaign) {
+      const allowOverlay = withCampaign && (!overlayForRole || overlayForRole === role)
+      if (allowOverlay) {
         const dateForSlot = (() => {
           const mon = mondayOf(weekOffset)
           return new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + d)
@@ -270,7 +276,7 @@ export default function CoverageHeatmap({ selectedJobs }: CoverageHeatmapProps) 
   // Generate week matrix for the selected job
   const selectedJob = selectedJobs.length > 0 ? selectedJobs[0] : null;
   const weekMatrix = useMemo(() =>
-    selectedJob ? genWeek(selectedJob, weekOffset, showWithCampaign) : [],
+    selectedJob ? genWeek(selectedJob, weekOffset, showWithCampaign, selectedJob) : [],
     [selectedJob, weekOffset, showWithCampaign, overrideVersion, planVersion]
   )
   
@@ -511,7 +517,7 @@ function MonthGrid(
   const weeksFromNow = Math.round(monthsFromNow * 4.33) // ~4.33 weeks per month
   
   // Generate data for this specific month and calculate distribution
-  const monthMatrix = genWeek(jobRole, weeksFromNow, withCampaign)
+  const monthMatrix = genWeek(jobRole, weeksFromNow, withCampaign, jobRole)
   const divisionsByWeekday = monthMatrix.map(daySlots => {
     const counts = Array(7).fill(0) // 7 divisions (-3 to +3)
     for (const { demand, supply, closed } of daySlots) {
@@ -598,7 +604,7 @@ function YearGridDays(
         const weeksFromNow = Math.round(monthsFromNow * 4.33) // ~4.33 weeks per month
         
         // Generate data for this specific month's offset
-        const monthMatrix = genWeek(jobRole, weeksFromNow, withCampaign)
+        const monthMatrix = genWeek(jobRole, weeksFromNow, withCampaign, jobRole)
         const divisionsByWeekday = monthMatrix.map(daySlots => {
           const counts = Array(7).fill(0) // 7 divisions (-3 to +3)
           for (const { demand, supply, closed } of daySlots) {
