@@ -1086,11 +1086,8 @@ function CampaignsWindow(props: CampaignsWindowProps){
       .filter(c => q ? (c.name || '').toLowerCase().includes(q) : true)
       .map((c)=>{
         const hiresTotal = typeof c.endHires === 'number' ? c.endHires : null;
-        // Prefer the campaign's own job for the circle; if none, fall back to a single globally selected job
-        const campaignJob = (c.jobs && c.jobs.length > 0) ? c.jobs[0] : '';
-        const singleSelected = (props.selectedJobs && props.selectedJobs.length === 1) ? props.selectedJobs[0] : '';
-        const fallbackJob = (props.selectedJobs && props.selectedJobs[0]) || '';
-        const job = campaignJob || singleSelected || fallbackJob;
+        // Show the campaign's own job only; if none, leave neutral (gray)
+        const job = (c.jobs && c.jobs.length > 0) ? c.jobs[0] : '';
         const jobInitial = job ? job.charAt(0).toUpperCase() : '';
         const jobColor = JOB_COLORS[job] || '#64748B';
         // Normalize status to desired set
