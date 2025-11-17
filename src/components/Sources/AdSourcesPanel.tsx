@@ -743,49 +743,61 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
       <section className="space-y-3">
         <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wide">Funnel Metrics</h3>
         <div className="grid grid-cols-12 gap-3 items-center">
-          <FieldBox label="Application → Interview (%)" className="col-span-6">
-            <input
-              type="number"
-              min={0}
-              max={100}
-              step="0.1"
-              className={pctInput}
-              value={clampPct(s.funnel_app_to_interview, 5)}
-              onChange={(e) => set({ funnel_app_to_interview: clampPct(Number(e.target.value), 5) })}
-            />
+          <FieldBox label="App → Interview" className="col-span-6">
+            <div className="relative flex justify-end">
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step={1}
+                className={`${pctInput} pr-6 w-[calc(100%-150px)] min-w-[120px]`}
+                value={clampPct(s.funnel_app_to_interview, 5)}
+                onChange={(e) => set({ funnel_app_to_interview: clampPct(Number(e.target.value), 5) })}
+              />
+              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 select-none">%</span>
+            </div>
           </FieldBox>
-          <FieldBox label="Interview → Offer (%)" className="col-span-6">
-            <input
-              type="number"
-              min={0}
-              max={100}
-              step="0.1"
-              className={pctInput}
-              value={clampPct(s.funnel_interview_to_offer, 40)}
-              onChange={(e) => set({ funnel_interview_to_offer: clampPct(Number(e.target.value), 40) })}
-            />
+          <FieldBox label="Interview → Offer" className="col-span-6">
+            <div className="relative flex justify-end">
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step={1}
+                className={`${pctInput} pr-6 w-[calc(100%-150px)] min-w-[120px]`}
+                value={clampPct(s.funnel_interview_to_offer, 40)}
+                onChange={(e) => set({ funnel_interview_to_offer: clampPct(Number(e.target.value), 40) })}
+              />
+              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 select-none">%</span>
+            </div>
           </FieldBox>
-          <FieldBox label="Offer → Background (%)" className="col-span-6">
-            <input
-              type="number"
-              min={0}
-              max={100}
-              step="0.1"
-              className={pctInput}
-              value={clampPct(s.funnel_offer_to_background, 90)}
-              onChange={(e) => set({ funnel_offer_to_background: clampPct(Number(e.target.value), 90) })}
-            />
+          <FieldBox label="Offer → Background" className="col-span-6">
+            <div className="relative flex justify-end">
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step={1}
+                className={`${pctInput} pr-6 w-[calc(100%-150px)] min-w-[120px]`}
+                value={clampPct(s.funnel_offer_to_background, 90)}
+                onChange={(e) => set({ funnel_offer_to_background: clampPct(Number(e.target.value), 90) })}
+              />
+              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 select-none">%</span>
+            </div>
           </FieldBox>
-          <FieldBox label="Background → Hire (%)" className="col-span-6">
-            <input
-              type="number"
-              min={0}
-              max={100}
-              step="0.1"
-              className={pctInput}
-              value={clampPct(s.funnel_background_to_hire, 90)}
-              onChange={(e) => set({ funnel_background_to_hire: clampPct(Number(e.target.value), 90) })}
-            />
+          <FieldBox label="Background → Hire" className="col-span-6">
+            <div className="relative flex justify-end">
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step={1}
+                className={`${pctInput} pr-6 w-[calc(100%-150px)] min-w-[120px]`}
+                value={clampPct(s.funnel_background_to_hire, 90)}
+                onChange={(e) => set({ funnel_background_to_hire: clampPct(Number(e.target.value), 90) })}
+              />
+              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 select-none">%</span>
+            </div>
           </FieldBox>
           <FieldBox label="Applications → Hire (derived)" className="col-span-12">
             {(() => {
