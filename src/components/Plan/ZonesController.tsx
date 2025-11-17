@@ -140,34 +140,26 @@ export default function ZonesController({ zones, onChange, min = 0, max = 200 }:
               title={`${key}: ${s[key]}%`}
             />
           ))}
-          {/* scale ticks */}
-          {[min, (min+max)/2, max].map((v,i)=>(
+          {/* scale ticks: show start and infinity at the end */}
+          {[min, max].map((v,i)=>(
             <div key={i} className="absolute text-[10px] text-gray-500" style={{ left: `${pct(v)}%`, top: "100%", transform: "translate(-50%, 2px)"}}>
-              {v}%
+              {v === max ? '∞' : `${v}%`}
+            </div>
+          ))}
+          {/* numeric value labels below each handle */}
+          {(["lowRed","lowYellow","highYellow","highRed"] as (keyof Zones)[]).map((key)=>(
+            <div
+              key={`${key}-val`}
+              className="absolute text-[11px] font-medium text-gray-700"
+              style={{ left: `${pct(s[key])}%`, top: "135%", transform: "translateX(-50%)" }}
+            >
+              {s[key]}%
             </div>
           ))}
         </div>
       </div>
 
-      {/* Numeric inputs */}
-      <div className="grid grid-cols-4 gap-2">
-        <div className="flex flex-col">
-          <label className="text-xs text-gray-600">Red ≤</label>
-          <input className="border rounded px-2 py-1 text-sm text-right" type="number" value={s.lowRed} onChange={handleInput("lowRed")} onBlur={applyInputs}/>
-        </div>
-        <div className="flex flex-col">
-          <label className="text-xs text-gray-600">Yellow to</label>
-          <input className="border rounded px-2 py-1 text-sm text-right" type="number" value={s.lowYellow} onChange={handleInput("lowYellow")} onBlur={applyInputs}/>
-        </div>
-        <div className="flex flex-col">
-          <label className="text-xs text-gray-600">Green to</label>
-          <input className="border rounded px-2 py-1 text-sm text-right" type="number" value={s.highYellow} onChange={handleInput("highYellow")} onBlur={applyInputs}/>
-        </div>
-        <div className="flex flex-col">
-          <label className="text-xs text-gray-600">Yellow to</label>
-          <input className="border rounded px-2 py-1 text-sm text-right" type="number" value={s.highRed} onChange={handleInput("highRed")} onBlur={applyInputs}/>
-        </div>
-      </div>
+      {/* no numeric boxes; values are shown under the slider */}
     </div>
   );
 }
