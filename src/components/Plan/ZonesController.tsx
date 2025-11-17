@@ -123,7 +123,7 @@ export default function ZonesController({ zones, onChange, min = 0, max = 200 }:
               <div
                 key={idx}
                 className="absolute top-1/2 -translate-y-1/2 h-4 rounded-full"
-                style={{ left: `${left}%`, width: `${width}%`, background: seg.color, opacity: 0.6 }}
+                style={{ left: `${left}%`, width: `${width}%`, background: seg.color, opacity: 0.6, pointerEvents: "none" }}
                 title={seg.label}
               />
             );
@@ -137,7 +137,8 @@ export default function ZonesController({ zones, onChange, min = 0, max = 200 }:
               style={{
                 left: `${pct(s[key])}%`,
                 background: "#111827",
-                zIndex: (dragKey === key ? 10 : BASE_Z[key]) as any
+                zIndex: (dragKey === key ? 10 : BASE_Z[key]) as any,
+                pointerEvents: "auto"
               }}
               title={`${key}: ${s[key]}%`}
             />
