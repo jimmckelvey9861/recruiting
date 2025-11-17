@@ -563,7 +563,7 @@ function JobIconsBar({
                 {/* Centered percentage label with % sign */}
                 <text
                   x={size/2}
-                  y={size/2 + 3}
+                  y={size/2 + 2}
                   textAnchor="middle"
                   dominantBaseline="middle"
                   fill={numColor}
