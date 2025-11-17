@@ -108,11 +108,10 @@ export default function ZonesController({ zones, onChange, min = 0, max = 200 }:
   return (
     <div className="space-y-3">
       {/* Visual slider */}
-      <div className="w-full">
+      <div className="w-full pb-8">
         <div
           ref={trackRef}
           className="relative h-8 rounded-full"
-          style={{ background: "#e5e7eb" }}
         >
           {/* colored segments */}
           {segments.map((seg, idx) => {
