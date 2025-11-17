@@ -517,11 +517,11 @@ function JobIconsBar({
             : coverage <= zones.highRed ? '#ca8a04'
             : '#dc2626';
 
-          const size = 72; // enlarged circle
+          const size = 90; // larger circle so percentage fits comfortably
           // Thicken strokes and keep geometry within viewBox without clipping
           const innerSW = 9;   // inner ring stroke width
           const outerSW = 9;   // make outer overflow ring same thickness as inner
-          const MARGIN = 6;    // margin to avoid clipping (>= outerSW/2)
+          const MARGIN = 8;    // margin to avoid clipping (>= outerSW/2)
           const rOuter = (size / 2) - MARGIN;                           // outer ring centerline radius
           // Choose rInner so the outer ring begins exactly at the outer edge of the inner ring (no overlap)
           const rInner = Math.max(0, rOuter - (innerSW + outerSW) / 2);
@@ -538,7 +538,7 @@ function JobIconsBar({
               key={job}
               onClick={() => onSelect(job)}
               className={`relative inline-flex flex-col items-center justify-center rounded-md border px-2 py-2 ${selected ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
-              style={{ width: 96 }}
+              style={{ width: 118 }}
               title={`${job}: ${coverage}% coverage`}
             >
               <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ display: 'block' }}>
