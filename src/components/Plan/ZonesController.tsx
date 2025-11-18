@@ -93,9 +93,9 @@ export default function ZonesController({ zones, onChange, min = 0, max = 200 }:
   const applyInputs = () => onChange(ordered);
 
   const SEG_COLORS = {
-    red: "#dc2626",
-    yellow: "#ca8a04",
-    green: "#16a34a",
+    red: "#ff0000",
+    yellow: "#ffff00",
+    green: "#00ff00",
   };
 
   const s = ordered;
@@ -123,7 +123,7 @@ export default function ZonesController({ zones, onChange, min = 0, max = 200 }:
               <div
                 key={idx}
                 className="absolute top-1/2 -translate-y-1/2 h-4 rounded-full"
-                style={{ left: `${left}%`, width: `${width}%`, background: seg.color, opacity: 0.6, pointerEvents: "none" }}
+                style={{ left: `${left}%`, width: `${width}%`, background: seg.color, pointerEvents: "none" }}
                 title={seg.label}
               />
             );
