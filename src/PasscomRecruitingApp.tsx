@@ -406,6 +406,7 @@ export default function PasscomRecruitingApp() {
                     job={selectedJobs[0] || AVAILABLE_JOBS[0]}
                     rangeIdx={needsRangeIdx}
                     onRangeChange={setNeedsRangeIdx}
+                    zones={zones}
                   />
                 </section>
               </div>

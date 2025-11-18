@@ -1,9 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { genWeek } from "../Campaign/CoverageHeatmap";
 import { useOverrideVersion } from '../../state/dataOverrides'
-import { useCampaignPlanVersion, getExtraSupplyHalfHoursPerDay, getStateSnapshot, getHiresPerDay, setLiveView } from '../../state/campaignPlan'
+import { useCampaignPlanVersion, getStateSnapshot, getHiresPerDay, setLiveView } from '../../state/campaignPlan'
 
-const clamp = (n: number, a: number, b: number) => Math.max(a, Math.min(b, n));
 const addDays = (date: Date, delta: number) => {
   const d = new Date(date);
   d.setDate(d.getDate() + delta);
@@ -15,7 +14,6 @@ export const RANGE_LABELS = ["Month", "Quarter", "Six Months", "Year"];
 export const RANGE_WEEKS = [4, 13, 26, 52];
 const DISPLAY_START_HOUR = 7;
 const DISPLAY_END_HOUR = 23;
-const ROW_COUNT = (DISPLAY_END_HOUR - DISPLAY_START_HOUR) * 2;
 const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 
 function buildLineSeries(job: string, weeks: number) {
@@ -39,7 +37,6 @@ function buildLineSeries(job: string, weeks: number) {
 
       const daySlots = weekMatrix[day] || [];
       const slots = daySlots.filter(slot => !slot.closed && slot.demand > 0);
-      const slotCount = Math.max(slots.length, 1);
       const demandTotal = slots.reduce((sum, slot) => sum + slot.demand, 0);
       const supplyTotal = slots.reduce((sum, slot) => sum + slot.supply, 0);
 
@@ -98,22 +95,25 @@ function buildLineSeries(job: string, weeks: number) {
   return series;
 }
 
+type HeatCell = { demand: number; supply: number; delta: number; coveragePct: number } | null;
+
 function buildHeatGrid(job: string, weekOffset: number, withCampaign: boolean) {
   const weekMatrix = genWeek(job, weekOffset, withCampaign);
   const startSlot = DISPLAY_START_HOUR * 2;
   const endSlot = DISPLAY_END_HOUR * 2;
-  const grid: (number | null)[][] = [];
+  const grid: HeatCell[][] = [];
 
   for (let slotIdx = startSlot; slotIdx < endSlot; slotIdx++) {
-    const row: (number | null)[] = [];
+    const row: HeatCell[] = [];
     for (let day = 0; day < 7; day++) {
       const daySlots = weekMatrix[day] || [];
       const cell = daySlots[slotIdx];
       if (!cell || cell.closed || cell.demand <= 0) {
         row.push(null);
       } else {
-        const ratio = (cell.supply - cell.demand) / Math.max(1, cell.demand);
-        row.push(clamp(ratio, -1, 1));
+        const delta = Math.round((cell.supply || 0) - (cell.demand || 0));
+        const coveragePct = ((cell.supply || 0) / Math.max(1, (cell.demand || 0))) * 100;
+        row.push({ demand: cell.demand, supply: cell.supply, delta, coveragePct });
       }
     }
     grid.push(row);
@@ -122,15 +122,13 @@ function buildHeatGrid(job: string, weekOffset: number, withCampaign: boolean) {
   return grid;
 }
 
-function cellColor(v: number) {
-  if (Number.isNaN(v)) return "#e2e8f0";
-  if (v >= 0.3) return "#2e5202"; // +30%
-  if (v >= 0.2) return "#5fab02"; // +20%
-  if (v >= 0.1) return "#b4ed6d"; // +10%
-  if (v > -0.1) return "#f5f547"; // 0%
-  if (v > -0.2) return "#f5676c"; // -10%
-  if (v > -0.3) return "#b81a1f"; // -20%
-  return "#7d0105"; // -30% or less
+const ZCOLORS = { red: "#c21313", yellow: "#f5be18", green: "#0d9e1b" };
+function colorFromZones(coveragePct: number, z: Zones) {
+  if (coveragePct <= z.lowRed) return ZCOLORS.red;
+  if (coveragePct < z.lowYellow) return ZCOLORS.yellow;
+  if (coveragePct <= z.highYellow) return ZCOLORS.green;
+  if (coveragePct <= z.highRed) return ZCOLORS.yellow;
+  return ZCOLORS.red;
 }
 
 function IconLines({ active }: { active?: boolean }) {
@@ -157,11 +155,12 @@ function IconHeatmap({ active }: { active?: boolean }) {
   );
 }
 
-export default function CenterVisuals({ job, rangeIdx, onRangeChange }: { job: string; rangeIdx: number; onRangeChange: (idx: number) => void }) {
+type Zones = { lowRed: number; lowYellow: number; highYellow: number; highRed: number };
+
+export default function CenterVisuals({ job, rangeIdx, onRangeChange, zones }: { job: string; rangeIdx: number; onRangeChange: (idx: number) => void; zones: Zones }) {
   const role = job || "Server";
   const [view, setView] = useState<"lines" | "heatmap">("lines");
   const weeks = RANGE_WEEKS[rangeIdx];
-  const days = weeks * 7;
   const overrideVersion = useOverrideVersion();
   const planVersion = useCampaignPlanVersion();
 
@@ -265,10 +264,10 @@ export default function CenterVisuals({ job, rangeIdx, onRangeChange }: { job: s
       </div>
 
       {view === "lines" ? (
-        <LinesChart series={lineSeries} height={433} role={role} yMax={yMax} />
+        <LinesChart series={lineSeries} height={433} yMax={yMax} />
       ) : (
         <div>
-          <WeekHeatmap grid={heatGrid} rowHeight={11} role={role} headerMeta={headerMeta} />
+          <WeekHeatmap grid={heatGrid} rowHeight={11} headerMeta={headerMeta} zones={zones} />
           <div className="mt-3 flex items-center gap-3">
             <button
               className="text-xs px-2 py-1 border rounded w-20 text-center"
@@ -322,12 +321,10 @@ function RangeLegend() {
 function LinesChart({
   series,
   height = 360,
-  role,
   yMax = 150,
 }: {
   series: { date: string; demand: number; supply: number; newHire: number }[];
   height?: number;
-  role: string;
   yMax?: number;
 }) {
   if (series.length === 0) {
@@ -419,7 +416,7 @@ function LinesChart({
       ))}
 
       {/* Week separators on each Monday (every 7 days) */}
-      {series.map((s, i) => (i % 7 === 0) && (
+      {series.map((_p, i) => (i % 7 === 0) && (
         <line key={`wk-${i}`} x1={X(i)} x2={X(i)} y1={PADT} y2={H - PADB} stroke="#e2e8f0" />
       ))}
 
@@ -471,13 +468,13 @@ function LinesChart({
 function WeekHeatmap({
   grid,
   rowHeight = 11,
-  role,
-  headerMeta
+  headerMeta,
+  zones
 }: {
-  grid: (number | null)[][];
+  grid: HeatCell[][];
   rowHeight?: number;
-  role: string;
   headerMeta: { date: Date; demandH: number; supplyH: number }[];
+  zones: Zones;
 }) {
   const labelForRow = (r: number) => {
     const slotIdx = DISPLAY_START_HOUR * 2 + r;
@@ -512,16 +509,27 @@ function WeekHeatmap({
             <div className="flex items-center justify-end pr-1 text-[11px] text-gray-600" style={{ height: rowHeight }}>
               {labelForRow(r)}
             </div>
-            {range(7).map((c) => (
-              <div
-                key={`${r}-${c}`}
-                className="border-l border-t"
-                style={{
-                  height: rowHeight,
-                  background: grid[r][c] === null ? '#e5e7eb' : cellColor(grid[r][c]!)
-                }}
-              />
-            ))}
+            {range(7).map((c) => {
+              const cell = grid[r][c];
+              const bg = cell ? colorFromZones(cell.coveragePct, zones) : '#e5e7eb';
+              const label = cell ? (cell.delta > 0 ? `+${cell.delta}` : String(cell.delta)) : '';
+              return (
+                <div
+                  key={`${r}-${c}`}
+                  className="border-l border-t relative"
+                  style={{
+                    height: rowHeight,
+                    background: bg
+                  }}
+                >
+                  {cell && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span className="text-[10px] font-semibold text-white leading-none select-none">{label}</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         ))}
       </div>
