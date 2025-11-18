@@ -97,14 +97,35 @@ export default function ZonesController({ zones, onChange, min = 0, max = 200 }:
     yellow: "#f5be18",
     green: "#0d9e1b",
   };
+  const hexToRgb = (hex: string) => {
+    const h = hex.replace('#','');
+    const v = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
+    const num = parseInt(v, 16);
+    return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255 };
+  };
+  const rgbToHex = (r: number, g: number, b: number) => {
+    const toHex = (n: number) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0');
+    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+  };
+  const blend = (hex: string, targetHex: string, alpha: number): string => {
+    const a = hexToRgb(hex);
+    const b = hexToRgb(targetHex);
+    const r = a.r * (1 - alpha) + b.r * alpha;
+    const g = a.g * (1 - alpha) + b.g * alpha;
+    const bl = a.b * (1 - alpha) + b.b * alpha;
+    return rgbToHex(r, g, bl);
+  };
 
   const s = ordered;
   const segments = [
-    { from: min, to: s.lowRed, color: SEG_COLORS.red, label: "≤" + s.lowRed + "%" },
-    { from: s.lowRed, to: s.lowYellow, color: SEG_COLORS.yellow, label: `${s.lowRed}-${s.lowYellow}%` },
+    // Undersupply: red/yellow tinted with 40% white
+    { from: min, to: s.lowRed, color: blend(SEG_COLORS.red, "#ffffff", 0.4), label: "≤" + s.lowRed + "%" },
+    { from: s.lowRed, to: s.lowYellow, color: blend(SEG_COLORS.yellow, "#ffffff", 0.4), label: `${s.lowRed}-${s.lowYellow}%` },
+    // Balanced: green base
     { from: s.lowYellow, to: s.highYellow, color: SEG_COLORS.green, label: `${s.lowYellow}-${s.highYellow}%` },
-    { from: s.highYellow, to: s.highRed, color: SEG_COLORS.yellow, label: `${s.highYellow}-${s.highRed}%` },
-    { from: s.highRed, to: max, color: SEG_COLORS.red, label: `≥${s.highRed}%` },
+    // Oversupply: yellow/red shaded with 40% black
+    { from: s.highYellow, to: s.highRed, color: blend(SEG_COLORS.yellow, "#000000", 0.4), label: `${s.highYellow}-${s.highRed}%` },
+    { from: s.highRed, to: max, color: blend(SEG_COLORS.red, "#000000", 0.4), label: `≥${s.highRed}%` },
   ];
 
   return (
