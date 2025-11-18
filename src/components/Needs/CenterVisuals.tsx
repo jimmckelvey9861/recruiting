@@ -230,26 +230,35 @@ export default function CenterVisuals({ job, rangeIdx, onRangeChange, zones }: {
   const withCampaign = !!state.liveView;
   const heatGrid = useMemo(() => buildHeatGrid(role, safeWeekIndex, withCampaign), [role, safeWeekIndex, withCampaign, overrideVersion, planVersion]);
   const headerMeta = useMemo(() => {
-    const wm = genWeek(role, safeWeekIndex, withCampaign);
-    const mon = (() => {
-      const now = new Date();
-      const day = (now.getDay() + 6) % 7;
-      const m = new Date(now);
-      m.setDate(now.getDate() - day + safeWeekIndex * 7);
-      m.setHours(0,0,0,0);
-      return m;
-    })();
+    // Compute baseline then apply the same overlay as heatGrid for consistency with the toggle
+    const wm = genWeek(role, safeWeekIndex, false);
+    const now = new Date();
+    const day = (now.getDay() + 6) % 7;
+    const mon = new Date(now);
+    mon.setDate(now.getDate() - day + safeWeekIndex * 7);
+    mon.setHours(0,0,0,0);
     const arr = [];
     for (let d = 0; d < 7; d++) {
+      const date = new Date(mon); date.setDate(mon.getDate() + d);
       const daySlots = wm[d] || [];
+      // distribute extra supply across open slots if campaign is active
+      let extraPerSlot = 0;
+      if (withCampaign && isActiveOn(date)) {
+        const openSlots = Array.from({ length: 48 }, (_, idx) => idx).filter(idx => {
+          const c = wm[d]?.[idx];
+          return c && !c.closed && (c.demand || 0) > 0;
+        });
+        const extra = getExtraSupplyHalfHoursPerDay();
+        extraPerSlot = openSlots.length > 0 ? (extra / openSlots.length) : 0;
+      }
       let demandH = 0, supplyH = 0;
       for (let s = DISPLAY_START_HOUR * 2; s < DISPLAY_END_HOUR * 2; s++) {
         const cell = daySlots[s];
         if (!cell || cell.closed) continue;
+        const supply = (cell.supply || 0) + (extraPerSlot > 0 ? Math.round(extraPerSlot) : 0);
         demandH += (cell.demand || 0) * 0.5;
-        supplyH += (cell.supply || 0) * 0.5;
+        supplyH += supply * 0.5;
       }
-      const date = new Date(mon); date.setDate(mon.getDate() + d);
       arr.push({ date, demandH: Math.round(demandH), supplyH: Math.round(supplyH) });
     }
     return arr;
