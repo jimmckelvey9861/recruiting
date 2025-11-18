@@ -269,8 +269,10 @@ export default function ReviewPanel({ selectedJobs, selectedLocations }: ReviewP
                 <div className="col-span-2 text-right font-semibold whitespace-nowrap">{appsPerDay.toLocaleString()}</div>
                 <div className="text-slate-600 whitespace-nowrap">Hires/day</div>
                 <div className="col-span-2 text-right font-semibold whitespace-nowrap">{hiresPerDay.toLocaleString()}</div>
-                <div className="text-slate-600 whitespace-nowrap">Spend/day</div>
-                <div className="col-span-2 text-right font-semibold whitespace-nowrap">${Math.round(dailyLimit).toLocaleString()}</div>
+                <div className="text-slate-600 whitespace-nowrap">$/Hire</div>
+                <div className="col-span-2 text-right font-semibold whitespace-nowrap">
+                  {hiresPerDay > 0 ? `$${Math.round(dailyLimit / hiresPerDay).toLocaleString()}` : '—'}
+                </div>
                 <div className="text-slate-600 whitespace-nowrap">$/App</div>
                 <div className="col-span-2 text-right font-semibold whitespace-nowrap">{appsPerDay > 0 ? `$${Math.round(dailyLimit / appsPerDay)}` : '—'}</div>
               </div>
