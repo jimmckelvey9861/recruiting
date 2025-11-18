@@ -93,9 +93,9 @@ export default function ZonesController({ zones, onChange, min = 0, max = 200 }:
   const applyInputs = () => onChange(ordered);
 
   const SEG_COLORS = {
-    red: "#ff0000",
-    yellow: "#ffff00",
-    green: "#00ff00",
+    red: "#c21313",
+    yellow: "#f5be18",
+    green: "#0d9e1b",
   };
 
   const s = ordered;
