@@ -123,12 +123,33 @@ function buildHeatGrid(job: string, weekOffset: number, withCampaign: boolean) {
 }
 
 const ZCOLORS = { red: "#c21313", yellow: "#f5be18", green: "#0d9e1b" };
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  const h = hex.replace('#','');
+  const v = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
+  const num = parseInt(v, 16);
+  return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255 };
+}
+function rgbToHex(r: number, g: number, b: number): string {
+  const toHex = (n: number) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0');
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+function blend(hex: string, targetHex: string, alpha: number): string {
+  const a = hexToRgb(hex);
+  const b = hexToRgb(targetHex);
+  const r = a.r * (1 - alpha) + b.r * alpha;
+  const g = a.g * (1 - alpha) + b.g * alpha;
+  const bl = a.b * (1 - alpha) + b.b * alpha;
+  return rgbToHex(r, g, bl);
+}
 function colorFromZones(coveragePct: number, z: Zones) {
-  if (coveragePct <= z.lowRed) return ZCOLORS.red;
-  if (coveragePct < z.lowYellow) return ZCOLORS.yellow;
+  // Undersupply ranges: ≤ lowRed (red), (lowRed..lowYellow) (yellow) → apply 40% white tint
+  // Balanced: (lowYellow..highYellow] (green) → base
+  // Oversupply: (highYellow..highRed] (yellow), > highRed (red) → apply 40% black shade
+  if (coveragePct <= z.lowRed) return blend(ZCOLORS.red, "#ffffff", 0.4);
+  if (coveragePct < z.lowYellow) return blend(ZCOLORS.yellow, "#ffffff", 0.4);
   if (coveragePct <= z.highYellow) return ZCOLORS.green;
-  if (coveragePct <= z.highRed) return ZCOLORS.yellow;
-  return ZCOLORS.red;
+  if (coveragePct <= z.highRed) return blend(ZCOLORS.yellow, "#000000", 0.4);
+  return blend(ZCOLORS.red, "#000000", 0.4);
 }
 
 function IconLines({ active }: { active?: boolean }) {
@@ -513,6 +534,7 @@ function WeekHeatmap({
               const cell = grid[r][c];
               const bg = cell ? colorFromZones(cell.coveragePct, zones) : '#e5e7eb';
               const label = cell ? (cell.delta > 0 ? `+${cell.delta}` : String(cell.delta)) : '';
+              const txt = cell && cell.delta < 0 ? '#000000' : '#ffffff';
               return (
                 <div
                   key={`${r}-${c}`}
@@ -524,7 +546,7 @@ function WeekHeatmap({
                 >
                   {cell && (
                     <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="text-[10px] font-semibold text-white leading-none select-none">{label}</span>
+                      <span className="text-[10px] font-semibold leading-none select-none" style={{ color: txt }}>{label}</span>
                     </div>
                   )}
                 </div>
