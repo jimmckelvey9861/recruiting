@@ -110,7 +110,8 @@ export default function CampaignBuilder() {
       }
     }
     const raw = hasInfinite ? 1000 : Math.round(cap);
-    return Math.max(0, raw);
+    // Allow adjustment from zero-state by providing a provisional max
+    return Math.max(0, raw || 1000);
   }, [planVersion]);
 
   // Clamp dailyBudget when cap changes
@@ -161,7 +162,7 @@ export default function CampaignBuilder() {
             <div className="ml-auto text-sm font-semibold text-gray-900">${Math.round(dailyBudget)}</div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div>
             <input
               type="range"
               min="0"
@@ -169,13 +170,13 @@ export default function CampaignBuilder() {
               step="10"
               value={dailyBudget}
               onChange={(e) => setDailyBudget(Number(e.target.value))}
-              className="flex-1 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+              className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer"
               style={{
                 background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${sliderMax ? (dailyBudget / sliderMax) * 100 : 0}%, #e5e7eb ${sliderMax ? (dailyBudget / sliderMax) * 100 : 0}%, #e5e7eb 100%)`
               }}
             />
-            {Number.isFinite(sliderMax) && (dailyBudget >= sliderMax || Math.abs(dailyBudget - sliderMax) <= 5) && (
-              <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+            {Number.isFinite(sliderMax) && sliderMax > 0 && (dailyBudget >= sliderMax || Math.abs(dailyBudget - sliderMax) <= 5) && (
+              <div className="mt-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
                 Maximum spend limit. To increase, enable more sources.
                 <button
                   className="ml-2 underline text-amber-800"

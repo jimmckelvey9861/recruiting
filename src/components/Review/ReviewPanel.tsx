@@ -63,7 +63,8 @@ export default function ReviewPanel({ selectedJobs, selectedLocations }: ReviewP
 
   const sliderMax = useMemo(() => {
     const max = Number.isFinite(maxSpendCapRaw) ? Math.round(maxSpendCapRaw) : 1000
-    return Math.max(0, max)
+    // Provisional cap to allow adjustment from zero-state
+    return Math.max(0, max || 1000)
   }, [maxSpendCapRaw])
 
   // Read/write daily spend from planner to keep in sync with Data tab CampaignBuilder

@@ -250,7 +250,7 @@ export default function CampaignManager({ selectedLocations, setSelectedLocation
       }
     }
     const raw = hasInfinite ? 1000 : Math.round(cap);
-    return Math.max(0, raw);
+    return Math.max(0, raw || 1000);
   }, [_ver]);
 
   // Mini progress chart data (10 bars max, 45° dotted target)
@@ -367,43 +367,8 @@ export default function CampaignManager({ selectedLocations, setSelectedLocation
     }
   }, [current?.startDate]);
 
-  // When the global job selector changes, reflect it into the CURRENT campaign's jobs (with guard)
-  useEffect(() => {
-    if (!current) return;
-    const curJobs = Array.isArray(current.jobs) ? current.jobs : [];
-    const selJobs = Array.isArray(selectedJobs) ? selectedJobs : [];
-    const curPrimary = curJobs[0] || '';
-    const selPrimary = selJobs[0] || '';
-    if (selPrimary && selPrimary !== curPrimary) {
-      // Determine if campaign has started
-      let started = false;
-      if (current.startDate) {
-        const today = new Date(); today.setHours(0,0,0,0);
-        const start = new Date(current.startDate); start.setHours(0,0,0,0);
-        started = start.getTime() <= today.getTime();
-      }
-      if (started) {
-        // Revert header to campaign's primary job; disallow change
-        try { alert('This campaign has already started; you cannot change its job focus.'); } catch {}
-        if (setSelectedJobs) {
-          setSelectedJobs(curPrimary ? [curPrimary] : []);
-        }
-        return;
-      }
-      // Not started: confirm change
-      const ok = typeof window !== 'undefined'
-        ? window.confirm(`Change this campaign's job focus to "${selPrimary}"?`)
-        : true;
-      if (!ok) {
-        if (setSelectedJobs) setSelectedJobs(curPrimary ? [curPrimary] : []);
-        return;
-      }
-      // Apply change to campaign (single primary job)
-      setCampaigns(prev =>
-        prev.map(c => c.id === current.id ? ({ ...c, jobs: [selPrimary] }) : c)
-      );
-    }
-  }, [activeId, selectedJobs]);
+  // Do not auto-sync or warn on header job changes when switching tabs.
+  // Job focus changes should only occur via an explicit editor control (not implemented here).
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 p-6">
