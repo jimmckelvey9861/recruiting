@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { genWeek } from "../Campaign/CoverageHeatmap";
 import { useOverrideVersion } from '../../state/dataOverrides'
-import { useCampaignPlanVersion, getStateSnapshot, getHiresPerDay, setLiveView } from '../../state/campaignPlan'
+import { useCampaignPlanVersion, getStateSnapshot, getHiresPerDay, setLiveView, isActiveOn, getExtraSupplyHalfHoursPerDay } from '../../state/campaignPlan'
 
 const addDays = (date: Date, delta: number) => {
   const d = new Date(date);
@@ -98,10 +98,17 @@ function buildLineSeries(job: string, weeks: number) {
 type HeatCell = { demand: number; supply: number; delta: number; coveragePct: number } | null;
 
 function buildHeatGrid(job: string, weekOffset: number, withCampaign: boolean) {
-  const weekMatrix = genWeek(job, weekOffset, withCampaign);
+  // Always start from baseline; we'll add overlay ourselves for Plan heatmap
+  const weekMatrix = genWeek(job, weekOffset, false);
   const startSlot = DISPLAY_START_HOUR * 2;
   const endSlot = DISPLAY_END_HOUR * 2;
   const grid: HeatCell[][] = [];
+  // Monday of this offset week (align with genWeek)
+  const now = new Date();
+  const day = (now.getDay() + 6) % 7;
+  const mon = new Date(now);
+  mon.setDate(now.getDate() - day + weekOffset * 7);
+  mon.setHours(0,0,0,0);
 
   for (let slotIdx = startSlot; slotIdx < endSlot; slotIdx++) {
     const row: HeatCell[] = [];
@@ -111,9 +118,29 @@ function buildHeatGrid(job: string, weekOffset: number, withCampaign: boolean) {
       if (!cell || cell.closed || cell.demand <= 0) {
         row.push(null);
       } else {
-        const delta = Math.round((cell.supply || 0) - (cell.demand || 0));
-        const coveragePct = ((cell.supply || 0) / Math.max(1, (cell.demand || 0))) * 100;
-        row.push({ demand: cell.demand, supply: cell.supply, delta, coveragePct });
+        let supply = cell.supply || 0;
+        const demand = cell.demand || 0;
+        if (withCampaign) {
+          const dateForDay = new Date(mon); dateForDay.setDate(mon.getDate() + day);
+          if (isActiveOn(dateForDay)) {
+            // Distribute extra half-hours evenly across open slots of that day
+            const openSlots = Array.from({ length: 48 }, (_, idx) => idx).filter(idx => {
+              const c = weekMatrix[day]?.[idx];
+              return c && !c.closed && (c.demand || 0) > 0;
+            });
+            const extra = getExtraSupplyHalfHoursPerDay();
+            const perSlot = openSlots.length > 0 ? extra / openSlots.length : 0;
+            if (perSlot > 0) {
+              // Add only to matching slot
+              if (openSlots.includes(slotIdx)) {
+                supply += Math.round(perSlot);
+              }
+            }
+          }
+        }
+        const delta = Math.round(supply - demand);
+        const coveragePct = (supply / Math.max(1, demand)) * 100;
+        row.push({ demand, supply, delta, coveragePct });
       }
     }
     grid.push(row);
@@ -497,6 +524,8 @@ function WeekHeatmap({
   headerMeta: { date: Date; demandH: number; supplyH: number }[];
   zones: Zones;
 }) {
+  const [hover, setHover] = useState<{ x: number; y: number; demand: number; supply: number } | null>(null);
+  const containerRef = React.useRef<HTMLDivElement | null>(null);
   const labelForRow = (r: number) => {
     const slotIdx = DISPLAY_START_HOUR * 2 + r;
     if (slotIdx % 2 === 1) return "";
@@ -505,7 +534,7 @@ function WeekHeatmap({
   };
 
   return (
-    <div>
+    <div ref={containerRef} className="relative">
       <div className="grid" style={{ gridTemplateColumns: "50px repeat(7, 1fr)" }}>
         <div className="h-10 text-[11px] text-gray-600 flex items-center justify-end pr-1">Time</div>
         {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d, idx) => {
@@ -543,6 +572,12 @@ function WeekHeatmap({
                     height: rowHeight,
                     background: bg
                   }}
+                  onMouseMove={(e) => {
+                    if (!cell || !containerRef.current) { setHover(null); return; }
+                    const rect = containerRef.current.getBoundingClientRect();
+                    setHover({ x: e.clientX - rect.left + 10, y: e.clientY - rect.top + 10, demand: cell.demand, supply: cell.supply });
+                  }}
+                  onMouseLeave={() => setHover(null)}
                 >
                   {cell && (
                     <div className="absolute inset-0 flex items-center justify-center">
@@ -555,6 +590,15 @@ function WeekHeatmap({
           </div>
         ))}
       </div>
+      {hover && (
+        <div
+          className="absolute pointer-events-none bg-white border border-slate-300 shadow-sm rounded px-2 py-1 text-[11px] text-slate-800"
+          style={{ left: hover.x, top: hover.y, zIndex: 20 }}
+        >
+          <div>Demand: <b>{hover.demand}</b></div>
+          <div>Supply: <b>{hover.supply}</b></div>
+        </div>
+      )}
     </div>
   );
 }
