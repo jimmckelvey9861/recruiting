@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { genWeek } from "../Campaign/CoverageHeatmap";
 import { useOverrideVersion } from '../../state/dataOverrides'
-import { useCampaignPlanVersion, getStateSnapshot, getHiresPerDay, setLiveView, isActiveOn, getExtraSupplyHalfHoursPerDay } from '../../state/campaignPlan'
+import { useCampaignPlanVersion, getStateSnapshot, getHiresPerDay, setLiveView, isActiveOn } from '../../state/campaignPlan'
 
 const addDays = (date: Date, delta: number) => {
   const d = new Date(date);
@@ -109,6 +109,13 @@ function buildHeatGrid(job: string, weekOffset: number, withCampaign: boolean) {
   const mon = new Date(now);
   mon.setDate(now.getDate() - day + weekOffset * 7);
   mon.setHours(0,0,0,0);
+  // Accumulation parameters (mirror Lines logic)
+  const onboardingDelayDays = 3;
+  const dailyQuitRate = 0.10 / 30; // ~10%/month
+  const hiresPerDay = getHiresPerDay();
+  const planner = getStateSnapshot().planner;
+  const plannerStart = planner.startDate ? new Date(planner.startDate) : null;
+  if (plannerStart) plannerStart.setHours(0,0,0,0);
 
   for (let slotIdx = startSlot; slotIdx < endSlot; slotIdx++) {
     const row: HeatCell[] = [];
@@ -122,20 +129,29 @@ function buildHeatGrid(job: string, weekOffset: number, withCampaign: boolean) {
         const demand = cell.demand || 0;
         if (withCampaign) {
           const dateForDay = new Date(mon); dateForDay.setDate(mon.getDate() + day);
-          if (isActiveOn(dateForDay)) {
-            // Distribute extra half-hours evenly across open slots of that day
-            const openSlots = Array.from({ length: 48 }, (_, idx) => idx).filter(idx => {
-              const c = weekMatrix[day]?.[idx];
-              return c && !c.closed && (c.demand || 0) > 0;
-            });
-            const extra = getExtraSupplyHalfHoursPerDay();
-            const perSlot = openSlots.length > 0 ? extra / openSlots.length : 0;
-            if (perSlot > 0) {
-              // Add only to matching slot
-              if (openSlots.includes(slotIdx)) {
-                supply += Math.round(perSlot);
+          // Compute accumulated employees as of this day (onboarding + attrition)
+          let accumulated = 0;
+          if (plannerStart && dateForDay.getTime() >= plannerStart.getTime()) {
+            const daysSinceStart = Math.floor((dateForDay.getTime() - plannerStart.getTime()) / (1000*60*60*24));
+            for (let i = 0; i <= daysSinceStart; i++) {
+              // daily attrition
+              accumulated *= (1 - dailyQuitRate);
+              // add hires when campaign active and after onboarding delay
+              const current = new Date(plannerStart); current.setDate(plannerStart.getDate() + i);
+              if (i >= onboardingDelayDays && isActiveOn(current)) {
+                accumulated += hiresPerDay;
               }
             }
+          }
+          const extraHalfHoursPerDay = accumulated * (30/7) * 2;
+          // Distribute across open slots for this day
+          const openSlots = Array.from({ length: 48 }, (_, idx) => idx).filter(idx => {
+            const c = weekMatrix[day]?.[idx];
+            return c && !c.closed && (c.demand || 0) > 0;
+          });
+          const perSlot = openSlots.length > 0 ? (extraHalfHoursPerDay / openSlots.length) : 0;
+          if (perSlot > 0 && openSlots.includes(slotIdx)) {
+            supply += Math.round(perSlot);
           }
         }
         const delta = Math.round(supply - demand);
@@ -230,32 +246,47 @@ export default function CenterVisuals({ job, rangeIdx, onRangeChange, zones }: {
   const withCampaign = !!state.liveView;
   const heatGrid = useMemo(() => buildHeatGrid(role, safeWeekIndex, withCampaign), [role, safeWeekIndex, withCampaign, overrideVersion, planVersion]);
   const headerMeta = useMemo(() => {
-    // Compute baseline then apply the same overlay as heatGrid for consistency with the toggle
+    // Compute baseline then apply accumulated overlay (same as cell logic)
     const wm = genWeek(role, safeWeekIndex, false);
     const now = new Date();
     const day = (now.getDay() + 6) % 7;
     const mon = new Date(now);
     mon.setDate(now.getDate() - day + safeWeekIndex * 7);
     mon.setHours(0,0,0,0);
+    const onboardingDelayDays = 3;
+    const dailyQuitRate = 0.10 / 30;
+    const hiresPerDay = getHiresPerDay();
+    const planner = getStateSnapshot().planner;
+    const plannerStart = planner.startDate ? new Date(planner.startDate) : null;
+    if (plannerStart) plannerStart.setHours(0,0,0,0);
     const arr = [];
     for (let d = 0; d < 7; d++) {
       const date = new Date(mon); date.setDate(mon.getDate() + d);
-      const daySlots = wm[d] || [];
-      // distribute extra supply across open slots if campaign is active
-      let extraPerSlot = 0;
-      if (withCampaign && isActiveOn(date)) {
-        const openSlots = Array.from({ length: 48 }, (_, idx) => idx).filter(idx => {
-          const c = wm[d]?.[idx];
-          return c && !c.closed && (c.demand || 0) > 0;
-        });
-        const extra = getExtraSupplyHalfHoursPerDay();
-        extraPerSlot = openSlots.length > 0 ? (extra / openSlots.length) : 0;
+      // accumulate employees as of this day
+      let accumulated = 0;
+      if (plannerStart && date.getTime() >= plannerStart.getTime()) {
+        const daysSinceStart = Math.floor((date.getTime() - plannerStart.getTime()) / (1000*60*60*24));
+        for (let i = 0; i <= daysSinceStart; i++) {
+          accumulated *= (1 - dailyQuitRate);
+          const current = new Date(plannerStart); current.setDate(plannerStart.getDate() + i);
+          if (i >= onboardingDelayDays && isActiveOn(current)) {
+            accumulated += hiresPerDay;
+          }
+        }
       }
+      const extraHalfHoursPerDay = accumulated * (30/7) * 2;
+      const daySlots = wm[d] || [];
       let demandH = 0, supplyH = 0;
+      let openCount = 0;
+      for (let s = DISPLAY_START_HOUR * 2; s < DISPLAY_END_HOUR * 2; s++) {
+        const cell = daySlots[s];
+        if (cell && !cell.closed && (cell.demand || 0) > 0) openCount++;
+      }
+      const perSlot = openCount > 0 ? (extraHalfHoursPerDay / openCount) : 0;
       for (let s = DISPLAY_START_HOUR * 2; s < DISPLAY_END_HOUR * 2; s++) {
         const cell = daySlots[s];
         if (!cell || cell.closed) continue;
-        const supply = (cell.supply || 0) + (extraPerSlot > 0 ? Math.round(extraPerSlot) : 0);
+        const supply = (cell.supply || 0) + (perSlot > 0 ? Math.round(perSlot) : 0);
         demandH += (cell.demand || 0) * 0.5;
         supplyH += supply * 0.5;
       }
