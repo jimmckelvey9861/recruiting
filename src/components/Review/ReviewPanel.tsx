@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import SankeyDiagram, { SankeySource, SankeyStage } from './SankeyDiagram'
-import { setConversionRate, setPlanner } from '../../state/campaignPlan'
+import { setConversionRate, setPlanner, getMaxDailySpendCap } from '../../state/campaignPlan'
 import { getStateSnapshot, useCampaignPlanVersion } from '../../state/campaignPlan'
 
 interface ReviewPanelProps {
@@ -62,10 +62,9 @@ export default function ReviewPanel({ selectedJobs, selectedLocations }: ReviewP
   }, [liveSources, overallConvForCaps])
 
   const sliderMax = useMemo(() => {
-    const max = Number.isFinite(maxSpendCapRaw) ? Math.round(maxSpendCapRaw) : 1000
-    // Provisional cap to allow adjustment from zero-state
-    return Math.max(0, max || 1000)
-  }, [maxSpendCapRaw])
+    const cap = getMaxDailySpendCap()
+    return Math.max(0, cap || 1000)
+  }, [planVersion])
 
   // Read/write daily spend from planner to keep in sync with Data tab CampaignBuilder
   const plannerDaily = getStateSnapshot().planner.dailySpend || 0

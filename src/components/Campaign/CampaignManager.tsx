@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { SOURCE_COLORS } from '../../constants/sourceColors';
-import { useCampaignPlanVersion, getApplicantsPerDay as getAppsPerDay, getHiresPerDay, getStateSnapshot, getDerivedFromCriterion, setPlanner, setConversionRate } from '../../state/campaignPlan';
+import { useCampaignPlanVersion, getApplicantsPerDay as getAppsPerDay, getHiresPerDay, getStateSnapshot, getDerivedFromCriterion, setPlanner, setConversionRate, getMaxDailySpendCap } from '../../state/campaignPlan';
 
 // ===============================
 // Campaign Manager – compact, robust single file (JSX only)
@@ -225,32 +225,8 @@ export default function CampaignManager({ selectedLocations, setSelectedLocation
 
   // Compute slider cap from active sources (mirrors Review panel)
   const sliderMax = useMemo(() => {
-    const state = getStateSnapshot();
-    const sources = state.sources || [];
-    const overallConvForCaps = Math.max(0, Math.min(1,
-      Number(state.conversionRate) || 0
-    ));
-    let cap = 0;
-    let hasInfinite = false;
-    for (const s of sources) {
-      if (!s.active) continue;
-      if (s.spend_model === 'organic') continue;
-      if (s.spend_model === 'referral') {
-        const bounty = Math.max(0, Number(s.referral_bonus_per_hire || 0));
-        const apps = Math.max(0, Number(s.apps_override || 0));
-        cap += bounty * apps * Math.max(0.0001, overallConvForCaps);
-      } else if (s.spend_model === 'daily_budget') {
-        cap += Math.max(0, Number(s.daily_budget || 0));
-      } else {
-        if (Number.isFinite(Number(s.daily_budget)) && Number(s.daily_budget) > 0) {
-          cap += Math.max(0, Number(s.daily_budget));
-        } else {
-          hasInfinite = true;
-        }
-      }
-    }
-    const raw = hasInfinite ? 1000 : Math.round(cap);
-    return Math.max(0, raw || 1000);
+    const cap = getMaxDailySpendCap();
+    return Math.max(0, cap || 1000);
   }, [_ver]);
 
   // Mini progress chart data (10 bars max, 45° dotted target)

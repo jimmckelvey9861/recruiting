@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { setPlanner, setLiveView } from '../../state/campaignPlan';
 import { getDerivedFromCriterion } from '../../state/campaignPlan';
-import { useCampaignPlanVersion, getStateSnapshot, getHiresPerDay } from '../../state/campaignPlan';
+import { useCampaignPlanVersion, getStateSnapshot, getHiresPerDay, getMaxDailySpendCap } from '../../state/campaignPlan';
 
 export default function CampaignBuilder() {
   const planVersion = useCampaignPlanVersion();
@@ -86,32 +86,8 @@ export default function CampaignBuilder() {
 
   // Compute slider cap based on active sources (mirrors Review panel allocator cap)
   const sliderMax = useMemo(() => {
-    const state = getStateSnapshot();
-    const sources = state.sources || [];
-    const conv = Math.max(0, Math.min(1, Number(state.conversionRate) || 0));
-    let cap = 0;
-    let hasInfinite = false;
-    for (const s of sources) {
-      if (!s.active) continue;
-      if (s.spend_model === 'organic') continue;
-      if (s.spend_model === 'referral') {
-        const bounty = Math.max(0, Number(s.referral_bonus_per_hire || 0));
-        const apps = Math.max(0, Number(s.apps_override || 0));
-        cap += bounty * apps * Math.max(0.0001, conv);
-      } else if (s.spend_model === 'daily_budget') {
-        cap += Math.max(0, Number(s.daily_budget || 0));
-      } else {
-        // scalable sources
-        if (Number.isFinite(Number(s.daily_budget)) && Number(s.daily_budget) > 0) {
-          cap += Math.max(0, Number(s.daily_budget));
-        } else {
-          hasInfinite = true;
-        }
-      }
-    }
-    const raw = hasInfinite ? 1000 : Math.round(cap);
-    // Allow adjustment from zero-state by providing a provisional max
-    return Math.max(0, raw || 1000);
+    const cap = getMaxDailySpendCap();
+    return Math.max(0, cap || 1000);
   }, [planVersion]);
 
   // Clamp dailyBudget when cap changes

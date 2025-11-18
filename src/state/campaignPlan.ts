@@ -324,3 +324,33 @@ export function getDerivedFromCriterion(opts: {
   const endDate = toISO(addDays(start, Math.round(days)));
   return { days, budget, hires, endDate };
 }
+
+// ---- Shared cap calculator for Daily Spend Limit sliders across tabs ----
+export function getMaxDailySpendCap(): number {
+  const stateSnap = getStateSnapshot();
+  const sources = stateSnap.sources || [];
+  // Use a consistent conversion for referral caps (align with Review panel defaults)
+  const DEFAULT_CONV_FOR_CAP = 0.64 * 0.84 * 0.86 * 0.60; // ~0.277
+  let cap = 0;
+  let hasInfinite = false;
+  for (const s of sources) {
+    if (!s || !s.active) continue;
+    if (s.spend_model === 'organic') continue;
+    if (s.spend_model === 'referral') {
+      const bounty = Math.max(0, Number(s.referral_bonus_per_hire || 0));
+      const apps = Math.max(0, Number(s.apps_override || 0));
+      cap += bounty * apps * Math.max(0.0001, DEFAULT_CONV_FOR_CAP);
+    } else if (s.spend_model === 'daily_budget') {
+      cap += Math.max(0, Number(s.daily_budget || 0));
+    } else {
+      // scalable; if a per-source daily_budget exists, treat as cap; otherwise unbounded
+      if (Number.isFinite(Number(s.daily_budget)) && Number(s.daily_budget) > 0) {
+        cap += Math.max(0, Number(s.daily_budget));
+      } else {
+        hasInfinite = true;
+      }
+    }
+  }
+  const raw = hasInfinite ? 1000 : Math.round(cap);
+  return Math.max(0, raw);
+}
