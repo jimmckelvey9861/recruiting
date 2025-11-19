@@ -356,7 +356,7 @@ export default function CenterVisuals({ job, rangeIdx, onRangeChange, zones }: {
               onChange={(e) => setWeekIndex(Number(e.target.value))}
               className="flex-1"
             />
-            <span className="text-xs text-gray-600 w-16 text-right">
+            <span className="text-xs text-gray-600 w-[164px] text-right">
               Week {heatWeeks > 0 ? safeWeekIndex + 1 : 0}/{heatWeeks}
             </span>
           </div>
