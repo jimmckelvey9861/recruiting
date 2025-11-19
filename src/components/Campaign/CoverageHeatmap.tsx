@@ -1,13 +1,9 @@
 import { useMemo, useState } from "react"
 import { getOverride, useOverrideVersion } from "../../state/dataOverrides"
-import { useCampaignPlanVersion, getExtraSupplyHalfHoursPerDay, isActiveOn, isScheduledOn } from "../../state/campaignPlan"
+import { useCampaignPlanVersion, getExtraSupplyHalfHoursPerDay, isScheduledOn } from "../../state/campaignPlan"
 
 export const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
-const HALF_HOUR_SLOTS = Array.from({ length: 48 }, (_, i) => {
-  const h = Math.floor(i / 2)
-  const m = i % 2 === 0 ? "00" : "30"
-  return `${h.toString().padStart(2,'0')}:${m}`
-})
+// (Removed unused HALF_HOUR_SLOTS to eliminate linter warnings)
 
 // Base colors for each job role (exact colors from user specification)
 export const JOB_BASE_COLORS: Record<string, string> = {
