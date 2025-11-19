@@ -66,28 +66,10 @@ export default function CampaignBuilder() {
     }
   }, [planVersion]);
 
-  // Bootstrap default sources if spend is increased from zero and no sources exist
-  useEffect(() => {
-    const snapshot = getStateSnapshot();
-    const hasSources = (snapshot.sources || []).length > 0;
-    if (dailyBudget > 0 && !hasSources) {
-      try {
-        const defaults = [
-          { id:'seed_cpc', name:'Indeed Sponsored', active:true, spend_model:'cpc', color:'#2563eb', cpc:1.8, daily_budget:300 },
-          { id:'seed_cpm', name:'Facebook Ads', active:true, spend_model:'cpm', color:'#4f46e5', cpm:9, daily_budget:200 },
-          { id:'seed_ref', name:'Employee Referrals', active:true, spend_model:'referral', color:'#10b981', referral_bonus_per_hire:300, apps_override:5 }
-        ] as any[];
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const { setSourcesSnapshot } = require('../../state/campaignPlan');
-        setSourcesSnapshot(defaults);
-      } catch {}
-    }
-  }, [dailyBudget]);
-
   // Compute slider cap based on active sources (mirrors Review panel allocator cap)
   const sliderMax = useMemo(() => {
     const cap = getMaxDailySpendCap();
-    // On Plan tab, use the true cap without provisional fallback so initial state reflects actual sources
+    // No fallback; if cap is 0, the slider will remain at 0 and show guidance
     return Math.max(0, cap);
   }, [planVersion]);
 
@@ -152,22 +134,46 @@ export default function CampaignBuilder() {
                 background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${sliderMax ? (dailyBudget / sliderMax) * 100 : 0}%, #e5e7eb ${sliderMax ? (dailyBudget / sliderMax) * 100 : 0}%, #e5e7eb 100%)`
               }}
             />
-            {Number.isFinite(sliderMax) && sliderMax > 0 && (dailyBudget >= sliderMax || Math.abs(dailyBudget - sliderMax) <= 5) && (
-              <div className="mt-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
-                Maximum spend limit. To increase, enable more sources.
-                <button
-                  className="ml-2 underline text-amber-800"
-                  onClick={()=>{
-                    try {
-                      localStorage.setItem('passcom-recruiting-active-tab','review');
-                      window.location.reload();
-                    } catch {}
-                  }}
-                >
-                  Open Sources
-                </button>
-              </div>
-            )}
+            {(() => {
+              const actualCap = getMaxDailySpendCap();
+              const atActualCap = actualCap > 0 && (dailyBudget >= actualCap || Math.abs(dailyBudget - actualCap) <= 5);
+              const showNoSources = actualCap === 0;
+              return (showNoSources || atActualCap) && (
+                <div className="mt-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                  {showNoSources ? (
+                    <>
+                      No active sources configured. Enable sources to increase daily spend.
+                      <button
+                        className="ml-2 underline text-amber-800"
+                        onClick={()=>{
+                          try {
+                            localStorage.setItem('passcom-recruiting-active-tab','review');
+                            window.location.reload();
+                          } catch {}
+                        }}
+                      >
+                        Open Sources
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      Maximum spend limit. To increase, enable more sources.
+                      <button
+                        className="ml-2 underline text-amber-800"
+                        onClick={()=>{
+                          try {
+                            localStorage.setItem('passcom-recruiting-active-tab','review');
+                            window.location.reload();
+                          } catch {}
+                        }}
+                      >
+                        Open Sources
+                      </button>
+                    </>
+                  )}
+                </div>
+              );
+            })()}
           </div>
 
           {/* Estimated hires/day from current limit */}

@@ -7,10 +7,11 @@ import CenterVisuals, { RANGE_WEEKS as NEEDS_RANGE_WEEKS, RANGE_LABELS as NEEDS_
 import ReviewPanel from './components/Review/ReviewPanel';
 import DataInspector from './components/Data/DataInspector';
 import { useOverrideVersion } from './state/dataOverrides';
-import { getStateSnapshot, setPlanner, useCampaignPlanVersion } from './state/campaignPlan';
+import { getStateSnapshot, setPlanner, useCampaignPlanVersion, getHiresPerDay, isActiveOn } from './state/campaignPlan';
 import ZonesController from './components/Plan/ZonesController';
-import AdSourcesPanel from './components/Sources/AdSourcesPanel';
+import AdSourcesPanel, { getDefaultAdSources } from './components/Sources/AdSourcesPanel';
 import DataOverview from './components/Data/DataOverview';
+import { setSourcesSnapshot } from './state/campaignPlan';
 
 type Tab = 'needs' | 'campaign' | 'advertisement' | 'review' | 'data';
 
@@ -42,22 +43,70 @@ const JOB_REQUIREMENT_BASE: Record<string, number> = {
 
 const HALF_HOURS_PER_DAY = 48;
 
-function calculateCoverage(job: string, weeks: number, withCampaign = false): number {
-  let total = 0;
-  let count = 0;
+function calculateCoverage(job: string, weeks: number, withCampaign = false, campaignForRole?: string): number {
+  // Compute coverage using the same accumulation model used in CenterVisuals heatmap/lines
+  // This aligns the circles with the visible chart behavior.
+  let totalPct = 0;
+  let openCount = 0;
+
+  const onboardingDelayDays = 3;
+  const dailyQuitRate = 0.10 / 30; // ~10% monthly
+  const planner = getStateSnapshot().planner;
+  const plannerStart = planner.startDate ? new Date(planner.startDate) : null;
+  if (plannerStart) plannerStart.setHours(0,0,0,0);
+  const hiresPerDay = getHiresPerDay();
+  const applyOverlay = withCampaign && (!!campaignForRole ? campaignForRole === job : true);
+
   for (let w = 0; w < weeks; w++) {
-    const matrix = genWeek(job, w, withCampaign);
-    for (const day of matrix) {
-      for (const slot of day) {
-        if (slot.closed || slot.demand <= 0) continue;
-        const ratio = (slot.supply / Math.max(1, slot.demand)) * 100; // allow >100% to reflect overflow
-        total += ratio;
-        count++;
+    // Start from baseline (no campaign overlay)
+    const weekMatrix = genWeek(job, w, false);
+    // Compute Monday for this offset; mirror CoverageHeatmap's week alignment
+    const now = new Date();
+    const day = (now.getDay() + 6) % 7;
+    const mon = new Date(now);
+    mon.setDate(now.getDate() - day + w * 7);
+    mon.setHours(0,0,0,0);
+
+    for (let d = 0; d < 7; d++) {
+      const dateForDay = new Date(mon); dateForDay.setDate(mon.getDate() + d);
+
+      // Accumulate employees as of this day (onboarding + attrition), if overlay applies
+      let accumulated = 0;
+      if (applyOverlay && plannerStart && dateForDay.getTime() >= plannerStart.getTime()) {
+        const daysSinceStart = Math.floor((dateForDay.getTime() - plannerStart.getTime()) / (1000*60*60*24));
+        for (let i = 0; i <= daysSinceStart; i++) {
+          // daily attrition
+          accumulated *= (1 - dailyQuitRate);
+          // add hires when campaign active and after onboarding delay
+          const current = new Date(plannerStart); current.setDate(plannerStart.getDate() + i);
+          if (i >= onboardingDelayDays && isActiveOn(current)) {
+            accumulated += hiresPerDay;
+          }
+        }
+      }
+
+      const extraHalfHoursPerDay = accumulated * (30/7) * 2;
+      const daySlots = weekMatrix[d] || [];
+      // Distribute extra half-hours evenly across open slots for this day
+      const openSlots = Array.from({ length: 48 }, (_, idx) => idx).filter(idx => {
+        const c = daySlots[idx];
+        return c && !c.closed && (c.demand || 0) > 0;
+      });
+      const perSlot = openSlots.length > 0 ? (extraHalfHoursPerDay / openSlots.length) : 0;
+
+      for (let s = 0; s < daySlots.length; s++) {
+        const cell = daySlots[s];
+        if (!cell || cell.closed || (cell.demand || 0) <= 0) continue;
+        const supply = (cell.supply || 0) + (perSlot > 0 && openSlots.includes(s) ? Math.round(perSlot) : 0);
+        const ratioPct = (supply / Math.max(1, cell.demand)) * 100;
+        totalPct += ratioPct;
+        openCount++;
       }
     }
   }
-  if (count === 0) return 0;
-  return Math.round(total / count);
+
+  if (openCount === 0) return 0;
+  return Math.round(totalPct / openCount);
 }
 
 interface JobFormData {
@@ -183,6 +232,63 @@ export default function PasscomRecruitingApp() {
     }
   }, []);
 
+  // Initialize Ad Sources globally on app startup
+  useEffect(() => {
+    try {
+      // If sources already exist in state, do nothing
+      const existing = getStateSnapshot().sources || [];
+      if (existing.length > 0) return;
+      // Load last session
+      const raw = localStorage.getItem('passcom-sources-v1');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length) {
+          // Map to SourceSnapshot shape
+          const snapshot = parsed.map((s: any) => ({
+            id: s.id,
+            name: s.name,
+            active: !!s.active,
+            spend_model: s.spend_model,
+            color: s.color,
+            cpa_bid: s.cpa_bid ?? null,
+            cpc: s.cpc ?? null,
+            cpm: s.cpm ?? null,
+            daily_budget: s.daily_budget ?? null,
+            referral_bonus_per_hire: s.referral_bonus_per_hire ?? null,
+            apps_override: s.apps_override ?? null,
+            funnel_app_to_interview: s.funnel_app_to_interview ?? null,
+            funnel_interview_to_offer: s.funnel_interview_to_offer ?? null,
+            funnel_offer_to_background: s.funnel_offer_to_background ?? null,
+            funnel_background_to_hire: s.funnel_background_to_hire ?? null,
+          }));
+          setSourcesSnapshot(snapshot);
+          return;
+        }
+      }
+      // No previous session: seed defaults and turn all on
+      const defaults = getDefaultAdSources().map((s) => ({ ...s, active: true }));
+      const snapshot = defaults.map((s: any) => ({
+        id: s.id,
+        name: s.name,
+        active: !!s.active,
+        spend_model: s.spend_model,
+        color: s.color,
+        cpa_bid: s.cpa_bid ?? null,
+        cpc: s.cpc ?? null,
+        cpm: s.cpm ?? null,
+        daily_budget: s.daily_budget ?? null,
+        referral_bonus_per_hire: s.referral_bonus_per_hire ?? null,
+        apps_override: s.apps_override ?? null,
+        funnel_app_to_interview: s.funnel_app_to_interview ?? null,
+        funnel_interview_to_offer: s.funnel_interview_to_offer ?? null,
+        funnel_offer_to_background: s.funnel_offer_to_background ?? null,
+        funnel_background_to_hire: s.funnel_background_to_hire ?? null,
+      }));
+      setSourcesSnapshot(snapshot);
+      try { localStorage.setItem('passcom-sources-v1', JSON.stringify(defaults)); } catch {}
+    } catch {}
+  }, []);
+
   const toggleLocationSelection = (location: string) => {
     setSelectedLocations(prev =>
       prev.includes(location)
@@ -202,28 +308,21 @@ export default function PasscomRecruitingApp() {
   };
 
   const activeJob = selectedJobs[0] || AVAILABLE_JOBS[0];
-  // Baseline coverage for all jobs (no campaign overlay), depends only on range + overrides
-  const baseCoverageMap = useMemo(() => {
-    const weeks = NEEDS_RANGE_WEEKS[needsRangeIdx] ?? NEEDS_RANGE_WEEKS[1];
-    const map: Record<string, number> = {};
-    for (const job of AVAILABLE_JOBS) {
-      map[job] = calculateCoverage(job, weeks, false);
-    }
-    return map;
-  }, [needsRangeIdx, overrideVersion]);
-  // Active job coverage; if liveView ON, apply overlay using planVersion to recompute
-  const activeJobCoverage = useMemo(() => {
-    const weeks = NEEDS_RANGE_WEEKS[needsRangeIdx] ?? NEEDS_RANGE_WEEKS[1];
-    const withCampaign = !!getStateSnapshot().liveView;
-    return withCampaign ? calculateCoverage(activeJob, weeks, true) : baseCoverageMap[activeJob];
-  }, [activeJob, needsRangeIdx, overrideVersion, planVersion, baseCoverageMap]);
+  
+  // Calculate coverage for all jobs
+  // Campaign overlay only affects the currently selected job when liveView is enabled
   const jobCoverageData = useMemo(() => {
+    const weeks = NEEDS_RANGE_WEEKS[needsRangeIdx] ?? NEEDS_RANGE_WEEKS[1];
+    const state = getStateSnapshot();
+    const liveViewEnabled = !!state.liveView;
+    
     return AVAILABLE_JOBS.map(job => ({
       job,
       color: JOB_BASE_COLORS[job] || '#2563eb',
-      coverage: job === activeJob ? (activeJobCoverage ?? baseCoverageMap[job]) : baseCoverageMap[job]
+      // Pass activeJob as campaignForRole so only that job gets the campaign overlay
+      coverage: calculateCoverage(job, weeks, liveViewEnabled, liveViewEnabled ? activeJob : undefined)
     }));
-  }, [activeJob, activeJobCoverage, baseCoverageMap]);
+  }, [needsRangeIdx, overrideVersion, planVersion, activeJob]);
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'needs', label: 'Plan' },

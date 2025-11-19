@@ -259,6 +259,11 @@ function seed(): AdSource[] {
   ];
 }
 
+// Export a reusable initializer for defaults so other tabs can seed sources at app startup
+export function getDefaultAdSources(): AdSource[] {
+  return seed();
+}
+
 export default function AdSourcesPanel() {
   const [sources, setSources] = useState<AdSource[]>(seed());
   const [activeId, setActiveId] = useState<string>(sources[0]?.id || "");

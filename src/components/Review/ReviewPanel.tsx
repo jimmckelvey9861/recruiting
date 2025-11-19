@@ -63,7 +63,7 @@ export default function ReviewPanel({ selectedJobs, selectedLocations }: ReviewP
 
   const sliderMax = useMemo(() => {
     const cap = getMaxDailySpendCap()
-    return Math.max(0, cap || 1000)
+    return Math.max(0, cap)
   }, [planVersion])
 
   // Read/write daily spend from planner to keep in sync with Data tab CampaignBuilder
@@ -171,7 +171,7 @@ export default function ReviewPanel({ selectedJobs, selectedLocations }: ReviewP
         if (spent >= need) apps += Math.round(spent / cpa)
       } else if (s.spend_model === 'referral' && spent > 0) {
         const bounty = Math.max(0.0001, Number(s.referral_bonus_per_hire || 0))
-        const conv = Math.max(0.0001, overallConv)
+        const conv = Math.max(0.0001, funnelConvToHire(s))
         const maxApps = Math.max(0, Number(s.apps_override || 0))
         const appsFromSpend = spent / (bounty * conv)
         apps += Math.round(Math.min(maxApps, appsFromSpend))

@@ -147,7 +147,9 @@ export function genWeek(
     const losses = Math.floor(weekOffset / attr.lossEveryWeeks) * attr.lossAmount
     const available = Math.max(attr.base - losses, 0)
     let factor = attr.base > 0 ? available / attr.base : 1
-    if (withCampaign) {
+    // Only apply campaign bump to the targeted role (or all if overlayForRole not specified)
+    const campaignApplies = withCampaign && (!overlayForRole || overlayForRole === role)
+    if (campaignApplies) {
       factor = clamp(factor + 0.1, 0, 1.25)
     }
     return factor

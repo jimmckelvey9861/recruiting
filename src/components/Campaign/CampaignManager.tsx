@@ -226,7 +226,7 @@ export default function CampaignManager({ selectedLocations, setSelectedLocation
   // Compute slider cap from active sources (mirrors Review panel)
   const sliderMax = useMemo(() => {
     const cap = getMaxDailySpendCap();
-    return Math.max(0, cap || 1000);
+    return Math.max(0, cap);
   }, [_ver]);
 
   // Mini progress chart data (10 bars max, 45° dotted target)
