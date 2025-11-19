@@ -77,17 +77,42 @@ export default function ReviewPanel({ selectedJobs, selectedLocations }: ReviewP
     }
   }, [plannerDaily, sliderMax])
 
-  // Effective CPA for scalable sources (heuristics match Sources KPIs)
+  // Effective $/hire prioritization
   const APPLY_CPC = 0.12
   const APPLY_DAILY = 0.10
   const CTR = 0.015
-  const effectiveCPA = (s: any) => {
+  const funnelConvToHire = (s: any) => {
+    const r1 = Math.max(0, Math.min(1, (s.funnel_app_to_interview ?? 5) / 100))
+    const r2 = Math.max(0, Math.min(1, (s.funnel_interview_to_offer ?? 40) / 100))
+    const r3 = Math.max(0, Math.min(1, (s.funnel_offer_to_background ?? 90) / 100))
+    const r4 = Math.max(0, Math.min(1, (s.funnel_background_to_hire ?? 90) / 100))
+    return r1 * r2 * r3 * r4
+  }
+  const effectiveCPH = (s: any) => {
+    const conv = Math.max(0.0001, funnelConvToHire(s))
     switch (s.spend_model) {
-      case 'cpa': return Math.max(0.0001, Number(s.cpa_bid || 10))
-      case 'cpc': return Math.max(0.0001, Number(s.cpc || 2)) / APPLY_CPC
-      case 'cpm': return Math.max(0.0001, Number(s.cpm || 10)) / (1000 * CTR * APPLY_DAILY)
-      case 'daily_budget': return Math.max(0.0001, Number(s.cpa_bid || 10))
-      default: return Number.POSITIVE_INFINITY
+      case 'referral':
+        return Math.max(0.0001, Number(s.referral_bonus_per_hire || 0))
+      case 'cpa': {
+        const cpa = Math.max(0.0001, Number(s.cpa_bid || 10))
+        return cpa / conv
+      }
+      case 'cpc': {
+        const cpc = Math.max(0.0001, Number(s.cpc || 2))
+        const cpa = cpc / APPLY_CPC
+        return cpa / conv
+      }
+      case 'cpm': {
+        const cpm = Math.max(0.0001, Number(s.cpm || 10))
+        const cpa = cpm / (1000 * CTR * APPLY_DAILY)
+        return cpa / conv
+      }
+      case 'daily_budget': {
+        const cpa = Math.max(0.0001, Number(s.cpa_bid || 10))
+        return cpa / conv
+      }
+      default:
+        return Number.POSITIVE_INFINITY
     }
   }
 
@@ -98,7 +123,7 @@ export default function ReviewPanel({ selectedJobs, selectedLocations }: ReviewP
     // 1) Thresholded daily_budget sources: allocate only if we can fully fund the daily budget
     const threshold = liveSources
       .filter((s) => s.active && s.spend_model === 'daily_budget' && (s.daily_budget || 0) > 0 && (s.cpa_bid || 0) > 0)
-      .sort((a, b) => effectiveCPA(a) - effectiveCPA(b))
+      .sort((a, b) => effectiveCPH(a) - effectiveCPH(b))
 
     for (const s of threshold) {
       const need = Math.max(0, Number(s.daily_budget || 0))
@@ -110,21 +135,16 @@ export default function ReviewPanel({ selectedJobs, selectedLocations }: ReviewP
       }
     }
 
-    // 2) Scalable sources (referral/cpc/cpm/cpa) by cheapest effective CPA
-    const overallConv = clamp(conversionRates.toInterview * conversionRates.toOffer * conversionRates.toBackground * conversionRates.toHire, 0, 1)
+    // 2) Scalable sources (referral/cpc/cpm/cpa) by cheapest effective $/hire
     const scalable = liveSources
       .filter((s) => s.active && (s.spend_model === 'referral' || s.spend_model === 'cpc' || s.spend_model === 'cpm' || s.spend_model === 'cpa'))
-      .sort((a, b) => {
-        const cpaA = a.spend_model === 'referral' ? Math.max(0.0001, Number(a.referral_bonus_per_hire || 0)) * Math.max(0.0001, overallConv) : effectiveCPA(a)
-        const cpaB = b.spend_model === 'referral' ? Math.max(0.0001, Number(b.referral_bonus_per_hire || 0)) * Math.max(0.0001, overallConv) : effectiveCPA(b)
-        return cpaA - cpaB
-      })
+      .sort((a, b) => effectiveCPH(a) - effectiveCPH(b))
 
     for (const s of scalable) {
       if (remaining <= 0) break
-      // For referral, cap spend to fully cover expected referral hires per day = bounty * (apps_override * overallConv)
+      // For referral, cap spend to fully cover expected referral hires per day = bounty * (apps_override * conv_source)
       const cap = s.spend_model === 'referral'
-        ? Math.max(0, Number(s.referral_bonus_per_hire || 0)) * Math.max(0, Number(s.apps_override || 0)) * Math.max(0.0001, overallConv)
+        ? Math.max(0, Number(s.referral_bonus_per_hire || 0)) * Math.max(0, Number(s.apps_override || 0)) * Math.max(0.0001, funnelConvToHire(s))
         : (Number.isFinite(Number(s.daily_budget)) ? Math.max(0, Number(s.daily_budget)) : Number.POSITIVE_INFINITY)
       const take = Math.min(remaining, cap)
       if (take > 0) {

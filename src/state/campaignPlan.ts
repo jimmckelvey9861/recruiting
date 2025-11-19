@@ -170,13 +170,38 @@ export function getApplicantsPerDay(): number {
   const CTR = 0.015
   const overallConv = Math.max(0, Math.min(1, Number(state.conversionRate) || 0))
 
-  const effectiveCPA = (s: SourceSnapshot): number => {
+  const funnelConvToHire = (s: SourceSnapshot): number => {
+    const r1 = Math.max(0, Math.min(1, Number((s as any).funnel_app_to_interview ?? 5) / 100))
+    const r2 = Math.max(0, Math.min(1, Number((s as any).funnel_interview_to_offer ?? 40) / 100))
+    const r3 = Math.max(0, Math.min(1, Number((s as any).funnel_offer_to_background ?? 90) / 100))
+    const r4 = Math.max(0, Math.min(1, Number((s as any).funnel_background_to_hire ?? 90) / 100))
+    return r1 * r2 * r3 * r4
+  }
+  const effectiveCPH = (s: SourceSnapshot): number => {
+    const conv = Math.max(0.0001, funnelConvToHire(s))
     switch (s.spend_model) {
-      case 'cpa': return Math.max(0.0001, Number(s.cpa_bid || 10))
-      case 'cpc': return Math.max(0.0001, Number(s.cpc || 2)) / APPLY_CPC
-      case 'cpm': return Math.max(0.0001, Number(s.cpm || 10)) / (1000 * CTR * APPLY_DAILY)
-      case 'daily_budget': return Math.max(0.0001, Number((s as any).cpa_bid || 10))
-      default: return Number.POSITIVE_INFINITY
+      case 'referral':
+        return Math.max(0.0001, Number((s as any).referral_bonus_per_hire || 0))
+      case 'cpa': {
+        const cpa = Math.max(0.0001, Number(s.cpa_bid || 10))
+        return cpa / conv
+      }
+      case 'cpc': {
+        const cpc = Math.max(0.0001, Number(s.cpc || 2))
+        const cpa = cpc / APPLY_CPC
+        return cpa / conv
+      }
+      case 'cpm': {
+        const cpm = Math.max(0.0001, Number(s.cpm || 10))
+        const cpa = cpm / (1000 * CTR * APPLY_DAILY)
+        return cpa / conv
+      }
+      case 'daily_budget': {
+        const cpa = Math.max(0.0001, Number((s as any).cpa_bid || 10))
+        return cpa / conv
+      }
+      default:
+        return Number.POSITIVE_INFINITY
     }
   }
 
@@ -186,7 +211,7 @@ export function getApplicantsPerDay(): number {
   // 1) Threshold daily_budget sources: allocate only if fully funded
   const threshold = liveSources
     .filter((s) => s.spend_model === 'daily_budget' && (s.daily_budget || 0) > 0 && ((s as any).cpa_bid || 0) > 0)
-    .sort((a, b) => effectiveCPA(a) - effectiveCPA(b))
+    .sort((a, b) => effectiveCPH(a) - effectiveCPH(b))
   for (const s of threshold) {
     const need = Math.max(0, Number(s.daily_budget || 0))
     if (remaining >= need) {
@@ -200,19 +225,11 @@ export function getApplicantsPerDay(): number {
   // 2) Scalable sources (referral/cpc/cpm/cpa) cheapest first
   const scalable = liveSources
     .filter((s) => s.spend_model === 'referral' || s.spend_model === 'cpc' || s.spend_model === 'cpm' || s.spend_model === 'cpa')
-    .sort((a, b) => {
-      const cpaA = a.spend_model === 'referral'
-        ? Math.max(0.0001, Number(a.referral_bonus_per_hire || 0)) * Math.max(0.0001, overallConv)
-        : effectiveCPA(a)
-      const cpaB = b.spend_model === 'referral'
-        ? Math.max(0.0001, Number(b.referral_bonus_per_hire || 0)) * Math.max(0.0001, overallConv)
-        : effectiveCPA(b)
-      return cpaA - cpaB
-    })
+    .sort((a, b) => effectiveCPH(a) - effectiveCPH(b))
   for (const s of scalable) {
     if (remaining <= 0) break
     const cap = s.spend_model === 'referral'
-      ? Math.max(0, Number(s.referral_bonus_per_hire || 0)) * Math.max(0, Number(s.apps_override || 0)) * Math.max(0.0001, overallConv)
+      ? Math.max(0, Number(s.referral_bonus_per_hire || 0)) * Math.max(0, Number(s.apps_override || 0)) * Math.max(0.0001, funnelConvToHire(s))
       : (Number.isFinite(Number(s.daily_budget)) ? Math.max(0, Number(s.daily_budget)) : Number.POSITIVE_INFINITY)
     const take = Math.min(remaining, cap)
     if (take > 0) {
