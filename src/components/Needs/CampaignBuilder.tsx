@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { setPlanner, setLiveView } from '../../state/campaignPlan';
 import { getDerivedFromCriterion } from '../../state/campaignPlan';
 import { useCampaignPlanVersion, getStateSnapshot, getHiresPerDay, getMaxDailySpendCap } from '../../state/campaignPlan';
+import DailySpendSlider from '../common/DailySpendSlider';
 
 export default function CampaignBuilder() {
   const planVersion = useCampaignPlanVersion();
@@ -116,65 +117,7 @@ export default function CampaignBuilder() {
             />
           </div>
 
-          <div className="flex items-center gap-3">
-            <span className="text-gray-700 text-sm font-medium">Daily Spend Limit</span>
-            <div className="ml-auto text-sm font-semibold text-gray-900">${Math.round(dailyBudget)}</div>
-          </div>
-
-          <div>
-            <input
-              type="range"
-              min="0"
-              max={sliderMax}
-              step="10"
-              value={dailyBudget}
-              onChange={(e) => setDailyBudget(Number(e.target.value))}
-              className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-              style={{
-                background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${sliderMax ? (dailyBudget / sliderMax) * 100 : 0}%, #e5e7eb ${sliderMax ? (dailyBudget / sliderMax) * 100 : 0}%, #e5e7eb 100%)`
-              }}
-            />
-            {(() => {
-              const actualCap = getMaxDailySpendCap();
-              const atActualCap = actualCap > 0 && (dailyBudget >= actualCap || Math.abs(dailyBudget - actualCap) <= 5);
-              const showNoSources = actualCap === 0;
-              return (showNoSources || atActualCap) && (
-                <div className="mt-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
-                  {showNoSources ? (
-                    <>
-                      No active sources configured. Enable sources to increase daily spend.
-                      <button
-                        className="ml-2 underline text-amber-800"
-                        onClick={()=>{
-                          try {
-                            localStorage.setItem('passcom-recruiting-active-tab','review');
-                            window.location.reload();
-                          } catch {}
-                        }}
-                      >
-                        Open Sources
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      Maximum spend limit. To increase, enable more sources.
-                      <button
-                        className="ml-2 underline text-amber-800"
-                        onClick={()=>{
-                          try {
-                            localStorage.setItem('passcom-recruiting-active-tab','review');
-                            window.location.reload();
-                          } catch {}
-                        }}
-                      >
-                        Open Sources
-                      </button>
-                    </>
-                  )}
-                </div>
-              );
-            })()}
-          </div>
+          <DailySpendSlider />
 
           {/* Estimated hires/day from current limit */}
           <div className="flex items-center justify-between text-sm text-gray-700">

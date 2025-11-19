@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { SOURCE_COLORS } from '../../constants/sourceColors';
-import { useCampaignPlanVersion, getApplicantsPerDay as getAppsPerDay, getHiresPerDay, getStateSnapshot, getDerivedFromCriterion, setPlanner, setConversionRate, getMaxDailySpendCap } from '../../state/campaignPlan';
+import { useCampaignPlanVersion, getApplicantsPerDay as getAppsPerDay, getHiresPerDay, getStateSnapshot, getDerivedFromCriterion, setPlanner, setConversionRate } from '../../state/campaignPlan';
+import DailySpendSlider from '../common/DailySpendSlider';
 
 // ===============================
 // Campaign Manager – compact, robust single file (JSX only)
@@ -223,11 +224,7 @@ export default function CampaignManager({ selectedLocations, setSelectedLocation
     return { ratio, text: `${Math.round(spendPerDay)}/${Math.round(suggestedDaily)} $/day` };
   })();
 
-  // Compute slider cap from active sources (mirrors Review panel)
-  const sliderMax = useMemo(() => {
-    const cap = getMaxDailySpendCap();
-    return Math.max(0, cap);
-  }, [_ver]);
+  // Daily spend cap is handled internally by DailySpendSlider
 
   // Mini progress chart data (10 bars max, 45° dotted target)
   const progressChart = useMemo(() => {
@@ -524,29 +521,7 @@ export default function CampaignManager({ selectedLocations, setSelectedLocation
                 </div>
                 <div>
                   <div className="text-[11px] text-gray-500 mb-1">Daily Spend</div>
-                  <div className="flex items-center gap-3">
-                    <input type="range" min={0} max={sliderMax} step={10} value={Math.min(planner.dailySpend, sliderMax)} onChange={e=> setPlanner({ dailySpend: Number(e.target.value||0) })} className="flex-1" />
-                    <input type="number" min={0} max={sliderMax} step={10} value={Math.min(planner.dailySpend, sliderMax)} onChange={e=> setPlanner({ dailySpend: Math.max(0, Math.min(sliderMax, Number(e.target.value||0))) })} className="w-28 text-sm border rounded px-2 py-1 outline-none text-right" />
-                  </div>
-                  {Number.isFinite(sliderMax) && (planner.dailySpend >= sliderMax || Math.abs(Math.min(planner.dailySpend, sliderMax) - sliderMax) <= 5) && (
-                    <div className="mt-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
-                      Maximum spend limit. To increase, enable more sources.
-                      <button
-                        className="ml-2 underline text-amber-800"
-                        onClick={()=>{
-                          if (onOpenSources) onOpenSources();
-                          else {
-                            try {
-                              localStorage.setItem('passcom-recruiting-active-tab','review');
-                              window.location.reload();
-                            } catch {}
-                          }
-                        }}
-                      >
-                        Open Sources
-                      </button>
-                    </div>
-                  )}
+                  <DailySpendSlider showNumberInput />
                 </div>
               </div>
 

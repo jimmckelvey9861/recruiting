@@ -242,24 +242,12 @@ export default function ReviewPanel({ selectedJobs, selectedLocations }: ReviewP
               <h2 className="text-sm font-semibold mb-4 text-gray-700 uppercase tracking-wide">Sources</h2>
 
               <div className="mb-3">
-                <label className="flex justify-between text-sm font-medium text-slate-700 mb-1">
-                  <span>Daily Spend Limit</span>
-                  <span className="text-slate-900">${Math.round(dailyLimit)}</span>
-                </label>
-                <input
-                  type="range"
-                  min={0}
-                  max={sliderMax}
-                  step={10}
-                  value={dailyLimit}
-                  onChange={(e) => setPlanner({ dailySpend: Number(e.target.value) })}
-                  className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"
-                />
-                {atMaxLimit && (
-                  <div className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
-                    Maximum spend limit. To increase, add more sources.
-                  </div>
-                )}
+                {/* Unified daily spend slider */}
+                {(() => {
+                  // Lazy import to avoid circular deps at runtime
+                  const DailySpendSlider = require('../common/DailySpendSlider').default;
+                  return <DailySpendSlider label="Daily Spend Limit" />;
+                })()}
               </div>
 
               {/* End Goal control removed per request; managed via Data/Needs tabs */}
