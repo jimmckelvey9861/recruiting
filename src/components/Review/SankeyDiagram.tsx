@@ -75,13 +75,16 @@ export default function SankeyDiagram({ sources, stages, flowData, options = {} 
 
   const { colDims, stacks, conversionRates } = useMemo(() => {
     const maxStage = Math.max(1, ...stages.map((s) => s.total))
-    const scaleY = (value: number) => (value / maxStage) * (innerHeight * 0.82)
+    // Fill more of the available vertical span; slightly shy of full height for breathing room
+    const scaleY = (value: number) => (value / maxStage) * (innerHeight * 0.98)
+    // Bias placement toward the top to reclaim unused headroom
+    const TOP_BIAS = 0.02
     const colX = (index: number) => 40 + index * columnGap
 
     const columnDimensions: ColumnDimensions[] = stages.map((stage, index) => {
       const scaledHeight = scaleY(stage.total)
       const heightValue = Math.max(28, Number.isFinite(scaledHeight) ? scaledHeight : 0)
-      const y = paddingTop + (innerHeight - heightValue) / 2
+      const y = paddingTop + (innerHeight - heightValue) * TOP_BIAS
       const x = colX(index)
       return { x, y, h: heightValue, w: columnWidth, label: stage.label, total: stage.total }
     })
