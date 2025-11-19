@@ -49,7 +49,7 @@ interface SankeyDiagramProps {
 export default function SankeyDiagram({ sources, stages, flowData, options = {} }: SankeyDiagramProps) {
   const {
     width = 1000,
-    height = 420,
+    height = 840,
     columnWidth = 120,
     columnGap = 160,
     paddingTop = 20,
