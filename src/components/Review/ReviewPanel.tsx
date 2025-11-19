@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import SankeyDiagram, { SankeySource, SankeyStage } from './SankeyDiagram'
 import { setConversionRate, setPlanner, getMaxDailySpendCap } from '../../state/campaignPlan'
 import { getStateSnapshot, useCampaignPlanVersion } from '../../state/campaignPlan'
+import DailySpendSlider from '../common/DailySpendSlider'
 
 interface ReviewPanelProps {
   selectedJobs: string[]
@@ -243,11 +244,7 @@ export default function ReviewPanel({ selectedJobs, selectedLocations }: ReviewP
 
               <div className="mb-3">
                 {/* Unified daily spend slider */}
-                {(() => {
-                  // Lazy import to avoid circular deps at runtime
-                  const DailySpendSlider = require('../common/DailySpendSlider').default;
-                  return <DailySpendSlider label="Daily Spend Limit" />;
-                })()}
+                <DailySpendSlider label="Daily Spend Limit" />
               </div>
 
               {/* End Goal control removed per request; managed via Data/Needs tabs */}
