@@ -87,7 +87,8 @@ export default function CampaignBuilder() {
   // Compute slider cap based on active sources (mirrors Review panel allocator cap)
   const sliderMax = useMemo(() => {
     const cap = getMaxDailySpendCap();
-    return Math.max(0, cap || 1000);
+    // On Plan tab, use the true cap without provisional fallback so initial state reflects actual sources
+    return Math.max(0, cap);
   }, [planVersion]);
 
   // Clamp dailyBudget when cap changes
