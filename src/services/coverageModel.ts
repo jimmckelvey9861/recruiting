@@ -1,4 +1,4 @@
-import { getStateSnapshot, getHiresPerDay, isActiveOn } from '../state/campaignPlan';
+import { getStateSnapshot, getHiresPerDay, isScheduledOn } from '../state/campaignPlan';
 import { genWeek } from '../components/Campaign/CoverageHeatmap';
 
 // Shared constants used across views
@@ -43,8 +43,8 @@ export function computeCoveragePercentage(job: string, weeks: number, opts?: { w
           // daily attrition
           accumulated *= (1 - DAILY_QUIT_RATE);
           // add hires when campaign active and after onboarding delay
-          const current = new Date(plannerStart); current.setDate(plannerStart.getDate() + i);
-          if (i >= ONBOARDING_DELAY_DAYS && isActiveOn(current)) {
+          const current = new Date(plannerStart); current.setDate(plannerStart.getDate() + i - ONBOARDING_DELAY_DAYS);
+          if (i >= ONBOARDING_DELAY_DAYS && isScheduledOn(current)) {
             accumulated += hiresPerDay;
           }
         }

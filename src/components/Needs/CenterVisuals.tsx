@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { genWeek } from "../Campaign/CoverageHeatmap";
 import { useOverrideVersion } from '../../state/dataOverrides'
-import { useCampaignPlanVersion, getStateSnapshot, getHiresPerDay, setLiveView, isActiveOn } from '../../state/campaignPlan'
+import { useCampaignPlanVersion, getStateSnapshot, getHiresPerDay, setLiveView, isScheduledOn } from '../../state/campaignPlan'
 
 const addDays = (date: Date, delta: number) => {
   const d = new Date(date);
@@ -41,36 +41,20 @@ function buildLineSeries(job: string, weeks: number) {
       const supplyTotal = slots.reduce((sum, slot) => sum + slot.supply, 0);
 
       const date = addDays(start, dayOffset);
-      const sinceStartDays = state.planner.startDate
-        ? Math.floor((date.getTime() - new Date(state.planner.startDate).setHours(0,0,0,0)) / (1000*60*60*24))
-        : Infinity;
+      // compute for parity with previous logic (not used after lagged scheduling)
+      // const sinceStartDays = ...
       
       let newHireTotal = 0;
       // Compute campaign-driven hires accumulation regardless of liveView
       const hasSpend = Math.max(0, Number(state.planner.dailySpend || 0)) > 0;
-      const beforeEnd = (() => {
-        const { endType, endValue, dailySpend, startDate } = state.planner;
-        if (!startDate || !hasSpend) return false;
-        if (endType === 'date' && endValue != null) {
-          const end = new Date(startDate);
-          end.setDate(end.getDate() + Math.round(Number(endValue)));
-          return date <= end;
-        } else if (endType === 'hires' && endValue != null) {
-          const hpd = getHiresPerDay();
-          const days = Math.round(Number(endValue)) / Math.max(0.001, hpd);
-          return sinceStartDays < days;
-        } else if (endType === 'budget' && endValue != null) {
-          const days = Math.round(Number(endValue)) / Math.max(0.001, Number(dailySpend || 0));
-          return sinceStartDays < days;
-        }
-        return true;
-      })();
       
       // Apply attrition daily
       accumulatedEmployees *= (1 - dailyQuitRate);
       
-      // Add new hires if campaign is active and after onboarding
-      const scheduled = hasSpend && beforeEnd && sinceStartDays >= onboardingDelayDays;
+      // Add new hires based on lagged schedule:
+      // hires today reflect spend that occurred onboardingDelayDays ago
+      const lagDate = addDays(date, -onboardingDelayDays);
+      const scheduled = hasSpend && isScheduledOn(lagDate);
       if (scheduled) {
         const hiresPerDay = getHiresPerDay();
         accumulatedEmployees += hiresPerDay;
@@ -136,9 +120,9 @@ function buildHeatGrid(job: string, weekOffset: number, withCampaign: boolean) {
             for (let i = 0; i <= daysSinceStart; i++) {
               // daily attrition
               accumulated *= (1 - dailyQuitRate);
-              // add hires when campaign active and after onboarding delay
-              const current = new Date(plannerStart); current.setDate(plannerStart.getDate() + i);
-              if (i >= onboardingDelayDays && isActiveOn(current)) {
+              // add hires when campaign schedule (lagged by onboarding)
+              const current = new Date(plannerStart); current.setDate(plannerStart.getDate() + i - onboardingDelayDays);
+              if (i >= onboardingDelayDays && isScheduledOn(current)) {
                 accumulated += hiresPerDay;
               }
             }
@@ -268,8 +252,8 @@ export default function CenterVisuals({ job, rangeIdx, onRangeChange, zones }: {
         const daysSinceStart = Math.floor((date.getTime() - plannerStart.getTime()) / (1000*60*60*24));
         for (let i = 0; i <= daysSinceStart; i++) {
           accumulated *= (1 - dailyQuitRate);
-          const current = new Date(plannerStart); current.setDate(plannerStart.getDate() + i);
-          if (i >= onboardingDelayDays && isActiveOn(current)) {
+          const current = new Date(plannerStart); current.setDate(plannerStart.getDate() + i - onboardingDelayDays);
+          if (i >= onboardingDelayDays && isScheduledOn(current)) {
             accumulated += hiresPerDay;
           }
         }

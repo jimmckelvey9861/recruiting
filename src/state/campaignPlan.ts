@@ -144,8 +144,10 @@ export function isScheduledOn(date: Date): boolean {
       if (!planner.endValue) return true
       const hpd = getHiresPerDay()
       if (hpd <= 0) return false
+      // Extend the scheduled window by onboarding lag to allow hires to materialize
+      const ONBOARDING_DELAY_DAYS = 3
       const activeDays = Math.ceil(planner.endValue / hpd)
-      return daysBetween(planner.startDate, date) < activeDays
+      return daysBetween(planner.startDate, date) < (activeDays + ONBOARDING_DELAY_DAYS)
     }
     case 'budget': {
       if (!planner.endValue) return true
