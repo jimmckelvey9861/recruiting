@@ -549,7 +549,8 @@ function WeekHeatmap({
               const cell = grid[r][c];
               const bg = cell ? colorFromZones(cell.coveragePct, zones) : '#e5e7eb';
               const label = cell ? (cell.delta > 0 ? `+${cell.delta}` : String(cell.delta)) : '';
-              const txt = cell && cell.delta < 0 ? '#000000' : '#ffffff';
+              // Ensure neutral (0) is readable on light background: use black
+              const txt = cell ? (cell.delta <= 0 ? '#000000' : '#ffffff') : '#ffffff';
               return (
                 <div
                   key={`${r}-${c}`}
