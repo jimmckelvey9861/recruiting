@@ -391,6 +391,19 @@ export default function AdSourcesPanel() {
                     <span>
                       CPA: <b>{money0(cpaValue)}</b>
                     </span>
+                    {(() => {
+                      const r1 = (Number(source.funnel_app_to_interview ?? 5) / 100);
+                      const r2 = (Number(source.funnel_interview_to_offer ?? 40) / 100);
+                      const r3 = (Number(source.funnel_offer_to_background ?? 90) / 100);
+                      const r4 = (Number(source.funnel_background_to_hire ?? 90) / 100);
+                      const total = Math.max(0, r1 * r2 * r3 * r4);
+                      const cph = total > 0 && cpaValue != null ? (cpaValue as number) / total : null;
+                      return (
+                        <span>
+                          CPH: <b>{money0(cph as any)}</b>
+                        </span>
+                      );
+                    })()}
                     <span>
                       Spend/day: <b>{money0(spendUsed)}</b>
                     </span>
@@ -799,7 +812,7 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
               <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 select-none">%</span>
             </div>
           </FieldBox>
-          <FieldBox label="Applications → Hire (derived)" className="col-span-12">
+          <FieldBox label="Applications → Hire" className="col-span-12 sm:col-span-6 md:col-span-4 lg:col-span-3">
             {(() => {
               const r1 = clampPct(s.funnel_app_to_interview ?? 5, 5) / 100;
               const r2 = clampPct(s.funnel_interview_to_offer ?? 40, 40) / 100;
@@ -809,6 +822,21 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
               return (
                 <div className="py-1 px-2 text-sm text-right text-blue-600 bg-slate-100 rounded-md">
                   {(total * 100).toFixed(2)}%
+                </div>
+              );
+            })()}
+          </FieldBox>
+          <FieldBox label="Cost per Hire" className="col-span-12 sm:col-span-6 md:col-span-4 lg:col-span-3">
+            {(() => {
+              const r1 = clampPct(s.funnel_app_to_interview ?? 5, 5) / 100;
+              const r2 = clampPct(s.funnel_interview_to_offer ?? 40, 40) / 100;
+              const r3 = clampPct(s.funnel_offer_to_background ?? 90, 90) / 100;
+              const r4 = clampPct(s.funnel_background_to_hire ?? 90, 90) / 100;
+              const total = r1 * r2 * r3 * r4;
+              const cph = total > 0 && cpaValue != null ? (cpaValue as number) / total : null;
+              return (
+                <div className="py-1 px-2 text-sm text-right text-blue-600 bg-slate-100 rounded-md">
+                  {cph == null ? '—' : `$${Math.round(cph as number).toLocaleString()}`}
                 </div>
               );
             })()}
