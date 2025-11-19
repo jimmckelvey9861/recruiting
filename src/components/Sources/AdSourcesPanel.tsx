@@ -55,6 +55,13 @@ const money0 = (n: number | null | undefined) =>
   n == null || !Number.isFinite(n)
     ? "—"
     : `$${Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+// Summary display: show cents only for amounts under $3; otherwise round to nearest dollar
+const moneySummary = (n: number | null | undefined) => {
+  if (n == null || !Number.isFinite(n as number)) return "—";
+  const v = Number(n);
+  if (Math.abs(v) >= 3) return `$${Math.round(v).toLocaleString()}`;
+  return `$${v.toFixed(2)}`;
+};
 const int0 = (n: number | null | undefined) =>
   n == null || !Number.isFinite(n)
     ? "—"
@@ -389,7 +396,7 @@ export default function AdSourcesPanel() {
                       Apps/day: <b>{int0(Math.round(appsValue))}</b>
                     </span>
                     <span>
-                      CPA: <b>{money0(cpaValue)}</b>
+                      CPA: <b>{moneySummary(cpaValue as any)}</b>
                     </span>
                     {(() => {
                       const r1 = (Number(source.funnel_app_to_interview ?? 5) / 100);
@@ -400,12 +407,12 @@ export default function AdSourcesPanel() {
                       const cph = total > 0 && cpaValue != null ? (cpaValue as number) / total : null;
                       return (
                         <span>
-                          CPH: <b>{money0(cph as any)}</b>
+                          CPH: <b>{moneySummary(cph as any)}</b>
                         </span>
                       );
                     })()}
                     <span>
-                      Spend/day: <b>{money0(spendUsed)}</b>
+                      Spend/day: <b>{moneySummary(spendUsed as any)}</b>
                     </span>
                   </div>
                 </button>
