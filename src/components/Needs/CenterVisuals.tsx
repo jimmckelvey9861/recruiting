@@ -356,36 +356,12 @@ export default function CenterVisuals({ job, rangeIdx, onRangeChange, zones }: {
               onChange={(e) => setWeekIndex(Number(e.target.value))}
               className="flex-1"
             />
-            <RangeLegend />
             <span className="text-xs text-gray-600 w-16 text-right">
               Week {heatWeeks > 0 ? safeWeekIndex + 1 : 0}/{heatWeeks}
             </span>
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function RangeLegend() {
-  const steps = [
-    { label: "+30%", color: "#2e5202" },
-    { label: "+20%", color: "#5fab02" },
-    { label: "+10%", color: "#b4ed6d" },
-    { label: "0%", color: "#f5f547" },
-    { label: "-10%", color: "#f5676c" },
-    { label: "-20%", color: "#b81a1f" },
-    { label: "-30%", color: "#7d0105" }
-  ];
-
-  return (
-    <div className="flex items-center gap-1">
-      {steps.map(step => (
-        <div key={step.label} className="flex flex-col items-center">
-          <span className="w-4 h-4 rounded-full" style={{ background: step.color }} />
-          <span className="text-[9px] text-gray-500 mt-1">{step.label}</span>
-        </div>
-      ))}
     </div>
   );
 }
