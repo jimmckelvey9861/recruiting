@@ -404,7 +404,7 @@ export default function PasscomRecruitingApp() {
       </div>
 
       {/* Tab Content */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-auto">
         {activeTab === 'needs' && (
           <div className="h-full bg-gray-50">
             <div className="h-full max-w-7xl mx-auto px-6 py-8">
