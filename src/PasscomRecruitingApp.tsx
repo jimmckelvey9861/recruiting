@@ -439,7 +439,7 @@ export default function PasscomRecruitingApp() {
                     <ZonesController zones={zones} onChange={setZones} />
                   </section>
                 </div>
-                <section className="bg-white border rounded-xl shadow-sm p-4">
+                <section className="bg-white border rounded-xl shadow-sm p-4 overflow-auto">
                   <CenterVisuals
                     job={selectedJobs[0] || AVAILABLE_JOBS[0]}
                     rangeIdx={needsRangeIdx}

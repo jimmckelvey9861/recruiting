@@ -546,7 +546,27 @@ function DailyCoverageSummary({
   }, [job, weeks, zones, withCampaign]);
 
   const dayCount = days.length;
-  const svgWidth = 730;
+  // Measure container width so the control spans exactly the heatmap's Monday..Sunday columns.
+  const hostRef = React.useRef<HTMLDivElement | null>(null);
+  const [svgWidth, setSvgWidth] = useState<number>(730);
+  useEffect(() => {
+    const measure = () => {
+      const el = hostRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      // Subtract the fixed 50px time column used by the heatmap grid
+      const next = Math.max(320, Math.floor(rect.width - 50));
+      setSvgWidth(next);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    if (hostRef.current) ro.observe(hostRef.current);
+    window.addEventListener('resize', measure);
+    return () => {
+      try { ro.disconnect(); } catch {}
+      window.removeEventListener('resize', measure);
+    };
+  }, []);
   const svgHeight = 220;
   const weekCount = Math.max(1, Math.ceil(dayCount/7));
 
@@ -571,17 +591,26 @@ function DailyCoverageSummary({
   const barWidth = slotWidth;
   const sliderRadius = 10;
 
-  // Slider position derived from current weekIndex
-  const sliderX = useMemo(() => {
-    const fraction = (Math.max(0, Math.min(weekCount-1, weekIndex)) + 0.5) / weekCount;
+  // Slider X position: keep smooth while dragging; snap to week center on external changes
+  const [sliderX, setSliderX] = useState<number>(() => {
+    const fraction = (Math.max(0, Math.min(weekCount - 1, weekIndex)) + 0.5) / Math.max(1, weekCount);
     return fraction * svgWidth;
+  });
+  useEffect(() => {
+    // When not dragging, center the handle on the selected week
+    if (!drag) {
+      const fraction = (Math.max(0, Math.min(weekCount - 1, weekIndex)) + 0.5) / Math.max(1, weekCount);
+      setSliderX(fraction * svgWidth);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weekIndex, weekCount, svgWidth]);
 
   const svgRef = React.useRef<SVGSVGElement|null>(null);
   const [drag, setDrag] = useState(false);
   const updateFromPixelX = (px: number) => {
     const clamped = Math.max(0, Math.min(svgWidth, px));
-    const fraction = clamped / svgWidth;
+    setSliderX(clamped); // follow pointer smoothly
+    const fraction = svgWidth > 0 ? (clamped / svgWidth) : 0;
     const approxDay = fraction * dayCount;
     const nextWeek = Math.max(0, Math.min(weekCount - 1, Math.floor(approxDay / 7)));
     onWeekChange(nextWeek);
@@ -611,64 +640,69 @@ function DailyCoverageSummary({
   };
 
   return (
-    <svg
-      ref={svgRef}
-      width={svgWidth}
-      height={svgHeight}
-      className="block"
-      onClick={onClickSvg}
-      onMouseMove={onMouseMove}
-      onMouseUp={endDrag}
-      onMouseLeave={endDrag}
-      style={{ cursor: 'pointer' }}
-    >
-      <rect x={0} y={zeroBandTopY} width={svgWidth} height={axisBandHeight} fill={C.band} />
-      {days.map((d, i) => {
-        const x = i * slotWidth;
-        const overUnits = d.lightOverCount + d.heavyOverCount;
-        const underUnits = d.lightUnderCount + d.heavyUnderCount;
-        const overH = overUnits * unitHeightOver;
-        const overTopY = zeroBandTopY - overH;
-        const underBaseY = zeroBandBottomY;
+    <div ref={hostRef} className="w-full">
+      {/* Offset left so chart aligns to Monday column; width equals Monday..Sunday span */}
+      <div style={{ marginLeft: 50 }}>
+        <svg
+          ref={svgRef}
+          width={svgWidth}
+          height={svgHeight}
+          className="block"
+          onClick={onClickSvg}
+          onMouseMove={onMouseMove}
+          onMouseUp={endDrag}
+          onMouseLeave={endDrag}
+          style={{ cursor: 'pointer' }}
+        >
+          <rect x={0} y={zeroBandTopY} width={svgWidth} height={axisBandHeight} fill={C.band} />
+          {days.map((d, i) => {
+            const x = i * slotWidth;
+            const overUnits = d.lightOverCount + d.heavyOverCount;
+            const underUnits = d.lightUnderCount + d.heavyUnderCount;
+            const overH = overUnits * unitHeightOver;
+            const overTopY = zeroBandTopY - overH;
+            const underBaseY = zeroBandBottomY;
 
-        const parts: JSX.Element[] = [];
-        const heavyOverH = d.heavyOverCount * unitHeightOver;
-        const lightOverH = d.lightOverCount * unitHeightOver;
-        const heavyUnderH = d.heavyUnderCount * unitHeightUnder;
-        const lightUnderH = d.lightUnderCount * unitHeightUnder;
+            const parts: JSX.Element[] = [];
+            const heavyOverH = d.heavyOverCount * unitHeightOver;
+            const lightOverH = d.lightOverCount * unitHeightOver;
+            const heavyUnderH = d.heavyUnderCount * unitHeightUnder;
+            const lightUnderH = d.lightUnderCount * unitHeightUnder;
 
-        if (overUnits > 0) {
-          let y = overTopY;
-          if (heavyOverH > 0) {
-            parts.push(<rect key={`oh-${i}`} x={x} y={y} width={barWidth} height={heavyOverH} fill={C.heavyOver} />);
-            y += heavyOverH;
-          }
-          if (lightOverH > 0) {
-            parts.push(<rect key={`ol-${i}`} x={x} y={y} width={barWidth} height={lightOverH} fill={C.lightOver} />);
-          }
-        }
+            if (overUnits > 0) {
+              let y = overTopY;
+              if (heavyOverH > 0) {
+                parts.push(<rect key={`oh-${i}`} x={x} y={y} width={barWidth} height={heavyOverH} fill={C.heavyOver} />);
+                y += heavyOverH;
+              }
+              if (lightOverH > 0) {
+                parts.push(<rect key={`ol-${i}`} x={x} y={y} width={barWidth} height={lightOverH} fill={C.lightOver} />);
+              }
+            }
 
-        if (underUnits > 0) {
-          let y = underBaseY;
-          if (lightUnderH > 0) {
-            parts.push(<rect key={`ul-${i}`} x={x} y={y} width={barWidth} height={lightUnderH} fill={C.lightUnder} />);
-            y += lightUnderH;
-          }
-          if (heavyUnderH > 0) {
-            parts.push(<rect key={`uh-${i}`} x={x} y={y} width={barWidth} height={heavyUnderH} fill={C.heavyUnder} />);
-          }
-        }
-        return <g key={i}>{parts}</g>;
-      })}
+            if (underUnits > 0) {
+              let y = underBaseY;
+              if (lightUnderH > 0) {
+                parts.push(<rect key={`ul-${i}`} x={x} y={y} width={barWidth} height={lightUnderH} fill={C.lightUnder} />);
+                y += lightUnderH;
+              }
+              if (heavyUnderH > 0) {
+                parts.push(<rect key={`uh-${i}`} x={x} y={y} width={barWidth} height={heavyUnderH} fill={C.heavyUnder} />);
+              }
+            }
+            return <g key={i}>{parts}</g>;
+          })}
 
-      {/* Slider handle */}
-      <g
-        onClick={(e)=> e.stopPropagation()}
-        onMouseDown={(e)=> { e.stopPropagation(); setDrag(true); }}
-      >
-        <circle cx={sliderX} cy={zeroBandTopY + axisBandHeight/2} r={sliderRadius} fill={C.slider} />
-      </g>
-    </svg>
+          {/* Slider handle */}
+          <g
+            onClick={(e)=> e.stopPropagation()}
+            onMouseDown={(e)=> { e.stopPropagation(); setDrag(true); }}
+          >
+            <circle cx={sliderX} cy={zeroBandTopY + axisBandHeight/2} r={sliderRadius} fill={C.slider} />
+          </g>
+        </svg>
+      </div>
+    </div>
   );
 }
 
