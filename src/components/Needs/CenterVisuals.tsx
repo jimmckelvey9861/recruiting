@@ -325,8 +325,8 @@ export default function CenterVisuals({ job, rangeIdx, onRangeChange, zones }: {
         <LinesChart series={lineSeries} height={433} yMax={yMax} />
       ) : (
         <div>
-          <WeekHeatmap grid={heatGrid} rowHeight={11} headerMeta={headerMeta} zones={zones} />
-          <div className="mt-3">
+          {/* Move the daily coverage summary control directly under the header */}
+          <div className="mb-3">
             <DailyCoverageSummary
               job={role}
               weeks={weeks}
@@ -336,6 +336,7 @@ export default function CenterVisuals({ job, rangeIdx, onRangeChange, zones }: {
               onWeekChange={(w)=> setWeekIndex(Math.max(0, Math.min(heatWeeks-1, w)))}
             />
           </div>
+          <WeekHeatmap grid={heatGrid} rowHeight={11} headerMeta={headerMeta} zones={zones} />
         </div>
       )}
     </div>
