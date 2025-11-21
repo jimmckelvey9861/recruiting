@@ -326,25 +326,15 @@ export default function CenterVisuals({ job, rangeIdx, onRangeChange, zones }: {
       ) : (
         <div>
           <WeekHeatmap grid={heatGrid} rowHeight={11} headerMeta={headerMeta} zones={zones} />
-          <div className="mt-3 flex items-center gap-3">
-            <button
-              className="text-xs px-2 py-1 border rounded w-20 text-center"
-              onClick={() => setPlaying((p) => !p)}
-              disabled={heatWeeks <= 1}
-            >
-              {playing ? "Pause" : "Play"}
-            </button>
-            <input
-              type="range"
-              min={0}
-              max={Math.max(0, heatWeeks - 1)}
-              value={safeWeekIndex}
-              onChange={(e) => setWeekIndex(Number(e.target.value))}
-              className="flex-1"
+          <div className="mt-3">
+            <DailyCoverageSummary
+              job={role}
+              weeks={weeks}
+              zones={zones}
+              withCampaign={withCampaign}
+              weekIndex={safeWeekIndex}
+              onWeekChange={(w)=> setWeekIndex(Math.max(0, Math.min(heatWeeks-1, w)))}
             />
-            <span className="text-xs text-gray-600 w-[164px] text-right">
-              Week {heatWeeks > 0 ? safeWeekIndex + 1 : 0}/{heatWeeks}
-            </span>
           </div>
         </div>
       )}
@@ -495,6 +485,188 @@ function LinesChart({
         </g>
       )}
 
+    </svg>
+  );
+}
+
+// ---- Daily Coverage Summary Control (bars + week selector) ----
+function DailyCoverageSummary({
+  job,
+  weeks,
+  zones,
+  withCampaign,
+  weekIndex,
+  onWeekChange
+}: {
+  job: string;
+  weeks: number;
+  zones: Zones;
+  withCampaign: boolean;
+  weekIndex: number;
+  onWeekChange: (w: number) => void;
+}) {
+  // Build day summaries across the selected period
+  const days = useMemo(() => {
+    const items: { date: string; lightUnderCount: number; heavyUnderCount: number; lightOverCount: number; heavyOverCount: number }[] = [];
+    const now = new Date();
+    const dayOfWeek = (now.getDay() + 6) % 7; // Monday=0
+    const startMonday = new Date(now);
+    startMonday.setDate(now.getDate() - dayOfWeek);
+    startMonday.setHours(0,0,0,0);
+
+    for (let w = 0; w < weeks; w++) {
+      const grid = buildHeatGrid(job, w, withCampaign);
+      // For each day (0..6) aggregate slot categories
+      for (let d = 0; d < 7; d++) {
+        let lightUnder = 0, heavyUnder = 0, lightOver = 0, heavyOver = 0;
+        for (let r = 0; r < grid.length; r++) {
+          const cell = grid[r][d];
+          if (!cell) continue;
+          const cov = cell.coveragePct;
+          if (cov <= zones.lowRed) heavyUnder++;
+          else if (cov < zones.lowYellow) lightUnder++;
+          else if (cov <= zones.highYellow) {
+            // balanced; ignore
+          } else if (cov <= zones.highRed) lightOver++;
+          else heavyOver++;
+        }
+        const date = new Date(startMonday);
+        date.setDate(startMonday.getDate() + w * 7 + d);
+        items.push({
+          date: date.toISOString().slice(0,10),
+          lightUnderCount: lightUnder,
+          heavyUnderCount: heavyUnder,
+          lightOverCount: lightOver,
+          heavyOverCount: heavyOver
+        });
+      }
+    }
+    return items;
+  }, [job, weeks, zones, withCampaign]);
+
+  const dayCount = days.length;
+  const svgWidth = 730;
+  const svgHeight = 220;
+  const weekCount = Math.max(1, Math.ceil(dayCount/7));
+
+  const extremes = useMemo(() => {
+    let maxOver = 0, maxUnder = 0;
+    for (const d of days) {
+      maxOver = Math.max(maxOver, d.lightOverCount + d.heavyOverCount);
+      maxUnder = Math.max(maxUnder, d.lightUnderCount + d.heavyUnderCount);
+    }
+    return { maxOver: Math.max(1, maxOver), maxUnder: Math.max(1, maxUnder) };
+  }, [days]);
+
+  const verticalPadding = 8;
+  const axisBandHeight = 12;
+  const halfAvailable = (svgHeight - axisBandHeight - 2*verticalPadding)/2 - 2;
+  const zeroBandTopY = verticalPadding + halfAvailable;
+  const zeroBandBottomY = zeroBandTopY + axisBandHeight;
+  const unitHeightOver = halfAvailable / extremes.maxOver;
+  const unitHeightUnder = halfAvailable / extremes.maxUnder;
+
+  const slotWidth = svgWidth / Math.max(1, dayCount);
+  const barWidth = slotWidth;
+  const sliderRadius = 10;
+
+  // Slider position derived from current weekIndex
+  const sliderX = useMemo(() => {
+    const fraction = (Math.max(0, Math.min(weekCount-1, weekIndex)) + 0.5) / weekCount;
+    return fraction * svgWidth;
+  }, [weekIndex, weekCount, svgWidth]);
+
+  const svgRef = React.useRef<SVGSVGElement|null>(null);
+  const [drag, setDrag] = useState(false);
+  const updateFromPixelX = (px: number) => {
+    const clamped = Math.max(0, Math.min(svgWidth, px));
+    const fraction = clamped / svgWidth;
+    const approxDay = fraction * dayCount;
+    const nextWeek = Math.max(0, Math.min(weekCount - 1, Math.floor(approxDay / 7)));
+    onWeekChange(nextWeek);
+  };
+
+  const onClickSvg = (e: React.MouseEvent<SVGSVGElement>) => {
+    const rect = svgRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    updateFromPixelX(e.clientX - rect.left);
+  };
+  const onMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (!drag) return;
+    const rect = svgRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    updateFromPixelX(e.clientX - rect.left);
+  };
+  const endDrag = () => setDrag(false);
+
+  // Colors (match diverging palette in heatmap)
+  const C = {
+    heavyUnder: "#7F0000",
+    lightUnder: "#EF8A62",
+    band: "#F7F7F7",
+    lightOver: "#67A9CF",
+    heavyOver: "#053061",
+    slider: "#007bff",
+  };
+
+  return (
+    <svg
+      ref={svgRef}
+      width={svgWidth}
+      height={svgHeight}
+      className="block"
+      onClick={onClickSvg}
+      onMouseMove={onMouseMove}
+      onMouseUp={endDrag}
+      onMouseLeave={endDrag}
+      style={{ cursor: 'pointer' }}
+    >
+      <rect x={0} y={zeroBandTopY} width={svgWidth} height={axisBandHeight} fill={C.band} />
+      {days.map((d, i) => {
+        const x = i * slotWidth;
+        const overUnits = d.lightOverCount + d.heavyOverCount;
+        const underUnits = d.lightUnderCount + d.heavyUnderCount;
+        const overH = overUnits * unitHeightOver;
+        const overTopY = zeroBandTopY - overH;
+        const underBaseY = zeroBandBottomY;
+
+        const parts: JSX.Element[] = [];
+        const heavyOverH = d.heavyOverCount * unitHeightOver;
+        const lightOverH = d.lightOverCount * unitHeightOver;
+        const heavyUnderH = d.heavyUnderCount * unitHeightUnder;
+        const lightUnderH = d.lightUnderCount * unitHeightUnder;
+
+        if (overUnits > 0) {
+          let y = overTopY;
+          if (heavyOverH > 0) {
+            parts.push(<rect key={`oh-${i}`} x={x} y={y} width={barWidth} height={heavyOverH} fill={C.heavyOver} />);
+            y += heavyOverH;
+          }
+          if (lightOverH > 0) {
+            parts.push(<rect key={`ol-${i}`} x={x} y={y} width={barWidth} height={lightOverH} fill={C.lightOver} />);
+          }
+        }
+
+        if (underUnits > 0) {
+          let y = underBaseY;
+          if (lightUnderH > 0) {
+            parts.push(<rect key={`ul-${i}`} x={x} y={y} width={barWidth} height={lightUnderH} fill={C.lightUnder} />);
+            y += lightUnderH;
+          }
+          if (heavyUnderH > 0) {
+            parts.push(<rect key={`uh-${i}`} x={x} y={y} width={barWidth} height={heavyUnderH} fill={C.heavyUnder} />);
+          }
+        }
+        return <g key={i}>{parts}</g>;
+      })}
+
+      {/* Slider handle */}
+      <g
+        onClick={(e)=> e.stopPropagation()}
+        onMouseDown={(e)=> { e.stopPropagation(); setDrag(true); }}
+      >
+        <circle cx={sliderX} cy={zeroBandTopY + axisBandHeight/2} r={sliderRadius} fill={C.slider} />
+      </g>
     </svg>
   );
 }
