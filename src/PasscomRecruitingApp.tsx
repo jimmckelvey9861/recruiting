@@ -409,7 +409,7 @@ export default function PasscomRecruitingApp() {
           <div className="h-full bg-gray-50">
             <div className="h-full max-w-7xl mx-auto px-6 py-8">
               {/* Compact Jobs Icons Bar */}
-              <section className="mb-3 -mx-6 px-6">
+              <section className="mb-2 -mx-6 px-6">
                 <JobIconsBar
                   jobs={AVAILABLE_JOBS}
                   colors={JOB_BASE_COLORS}
@@ -564,7 +564,7 @@ function JobIconsBar({
 
   return (
     <div className="w-full overflow-x-auto">
-      <div className="flex items-center gap-4 min-w-max py-2">
+      <div className="flex items-center gap-3 min-w-max py-1">
         {jobs.map((job) => {
           const coverage = covMap.get(job) ?? 0;
           const baseColor = colors[job] || '#64748B';
@@ -595,7 +595,7 @@ function JobIconsBar({
             <button
               key={job}
               onClick={() => onSelect(job)}
-              className={`relative inline-flex flex-col items-center justify-center rounded-md border px-2 py-2 ${selected ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
+              className={`relative inline-flex flex-col items-center justify-center rounded-md border px-2 py-1 ${selected ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
               style={{ width: 118 }}
               title={`${job}: ${coverage}% coverage`}
             >
@@ -634,7 +634,7 @@ function JobIconsBar({
                   {`${coverage}%`}
                 </text>
               </svg>
-              <span className="mt-1 text-[10px] text-gray-700">{job}</span>
+              <span className="mt-0 leading-none text-[12px] text-gray-700">{job}</span>
             </button>
           );
         })}

@@ -137,6 +137,8 @@ export function genWeek(
   
   const base = baseMap[role] || 5
   const attr = JOB_ATTRITION[role]
+  // Determine if there is actual spend configured; campaign effects should not apply without spend
+  const hasSpendGlobal = getExtraSupplyHalfHoursPerDay() > 0;
 
   const attrFactor = (() => {
     if (!attr) return 1
@@ -144,7 +146,7 @@ export function genWeek(
     const available = Math.max(attr.base - losses, 0)
     let factor = attr.base > 0 ? available / attr.base : 1
     // Only apply campaign bump to the targeted role (or all if overlayForRole not specified)
-    const campaignApplies = withCampaign && (!overlayForRole || overlayForRole === role)
+    const campaignApplies = withCampaign && (!overlayForRole || overlayForRole === role) && hasSpendGlobal
     if (campaignApplies) {
       factor = clamp(factor + 0.1, 0, 1.25)
     }
@@ -185,7 +187,7 @@ export function genWeek(
         })()
         // Use isScheduledOn to check if date is within campaign period (ignores liveView state)
         // Also check that there's actual spending configured
-        const hasSpend = getExtraSupplyHalfHoursPerDay() > 0
+        const hasSpend = hasSpendGlobal
         if (hasSpend && isScheduledOn(dateForSlot)) {
           // distribute extra half-hour units evenly across open slots of the day
           const openSlots = Array.from({ length: 48 }, (_, idx) => idx).filter(idx => isOpen(d, Math.floor(idx/2)))

@@ -243,12 +243,8 @@ export function getApplicantsPerDay(): number {
   // 3) Compute applicants/day from allocations + organics
   let applicants = 0
   for (const s of liveSources) {
-    // Organic contributes applicants but no spend
-    if (s.spend_model === 'organic') {
-      const organicApps = Number(s.apps_override || 0)
-      if (Number.isFinite(organicApps)) applicants += Math.max(0, Math.round(organicApps))
-      continue
-    }
+    // Organic sources are baseline and not part of campaign-driven hires
+    if (s.spend_model === 'organic') continue;
 
     const spent = alloc.get(s.id) || 0
     if (s.spend_model === 'daily_budget') {

@@ -99,6 +99,7 @@ function buildHeatGrid(job: string, weekOffset: number, withCampaign: boolean) {
   const hiresPerDay = getHiresPerDay();
   const planner = getStateSnapshot().planner;
   const plannerStart = planner.startDate ? new Date(planner.startDate) : null;
+  const hasSpend = Math.max(0, Number(planner.dailySpend || 0)) > 0;
   if (plannerStart) plannerStart.setHours(0,0,0,0);
 
   for (let slotIdx = startSlot; slotIdx < endSlot; slotIdx++) {
@@ -122,7 +123,7 @@ function buildHeatGrid(job: string, weekOffset: number, withCampaign: boolean) {
               accumulated *= (1 - dailyQuitRate);
               // add hires when campaign schedule (lagged by onboarding)
               const current = new Date(plannerStart); current.setDate(plannerStart.getDate() + i - onboardingDelayDays);
-              if (i >= onboardingDelayDays && isScheduledOn(current)) {
+              if (i >= onboardingDelayDays && hasSpend && isScheduledOn(current)) {
                 accumulated += hiresPerDay;
               }
             }
@@ -228,6 +229,7 @@ export default function CenterVisuals({ job, rangeIdx, onRangeChange, zones }: {
     const hiresPerDay = getHiresPerDay();
     const planner = getStateSnapshot().planner;
     const plannerStart = planner.startDate ? new Date(planner.startDate) : null;
+    const hasSpend = Math.max(0, Number(planner.dailySpend || 0)) > 0;
     if (plannerStart) plannerStart.setHours(0,0,0,0);
     const arr = [];
     for (let d = 0; d < 7; d++) {
@@ -239,7 +241,7 @@ export default function CenterVisuals({ job, rangeIdx, onRangeChange, zones }: {
         for (let i = 0; i <= daysSinceStart; i++) {
           accumulated *= (1 - dailyQuitRate);
           const current = new Date(plannerStart); current.setDate(plannerStart.getDate() + i - onboardingDelayDays);
-          if (i >= onboardingDelayDays && isScheduledOn(current)) {
+          if (i >= onboardingDelayDays && hasSpend && isScheduledOn(current)) {
             accumulated += hiresPerDay;
           }
         }
@@ -588,19 +590,22 @@ function DailyCoverageSummary({
   const unitHeightUnder = halfAvailable / extremes.maxUnder;
 
   const slotWidth = svgWidth / Math.max(1, dayCount);
-  const barWidth = slotWidth;
+  // Add a 1px gap between columns by shrinking each bar by 1px
+  const barWidth = Math.max(0, slotWidth - 1);
   const sliderRadius = 10;
 
   // Slider X position: keep smooth while dragging; snap to week center on external changes
   const [sliderX, setSliderX] = useState<number>(() => {
     const fraction = (Math.max(0, Math.min(weekCount - 1, weekIndex)) + 0.5) / Math.max(1, weekCount);
-    return fraction * svgWidth;
+    const x0 = fraction * svgWidth;
+    return Math.min(Math.max(sliderRadius, x0), Math.max(sliderRadius, svgWidth - sliderRadius));
   });
   useEffect(() => {
     // When not dragging, center the handle on the selected week
     if (!drag) {
       const fraction = (Math.max(0, Math.min(weekCount - 1, weekIndex)) + 0.5) / Math.max(1, weekCount);
-      setSliderX(fraction * svgWidth);
+      const x0 = fraction * svgWidth;
+      setSliderX(Math.min(Math.max(sliderRadius, x0), Math.max(sliderRadius, svgWidth - sliderRadius)));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weekIndex, weekCount, svgWidth]);
@@ -608,7 +613,7 @@ function DailyCoverageSummary({
   const svgRef = React.useRef<SVGSVGElement|null>(null);
   const [drag, setDrag] = useState(false);
   const updateFromPixelX = (px: number) => {
-    const clamped = Math.max(0, Math.min(svgWidth, px));
+    const clamped = Math.min(Math.max(sliderRadius, px), Math.max(sliderRadius, svgWidth - sliderRadius));
     setSliderX(clamped); // follow pointer smoothly
     const fraction = svgWidth > 0 ? (clamped / svgWidth) : 0;
     const approxDay = fraction * dayCount;
@@ -654,7 +659,56 @@ function DailyCoverageSummary({
           onMouseLeave={endDrag}
           style={{ cursor: 'pointer' }}
         >
+          {/* Background so the 1px inter-column gap shows white above */}
+          <rect x={0} y={0} width={svgWidth} height={zeroBandTopY} fill="#ffffff" />
           <rect x={0} y={zeroBandTopY} width={svgWidth} height={axisBandHeight} fill={C.band} />
+          {/* Minimal X-axis legend: Month → mid of each week; longer ranges → month abbreviations */}
+          <g pointerEvents="none">
+            {(() => {
+              const labels: { x: number; text: string }[] = [];
+              if (weeks === 4) {
+                // Mid-day of each week (Thursday, index 3)
+                for (let w = 0; w < 4; w++) {
+                  const di = Math.min(dayCount - 1, w * 7 + 3);
+                  const x = (di + 0.5) * slotWidth;
+                  const iso = days[di]?.date || "";
+                  const mm = iso.slice(5, 7);
+                  const dd = iso.slice(8, 10);
+                  labels.push({ x, text: `${mm}-${dd}` });
+                }
+              } else {
+                // Quarter / Six Months / Year: show month abbreviations
+                const MONTHS = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+                let currentMonth = -1;
+                let monthStart = 0;
+                for (let i = 0; i < dayCount; i++) {
+                  const iso = days[i]?.date || "";
+                  const m = Number(iso.slice(5,7)) - 1; // 0..11
+                  if (i === 0) { currentMonth = m; monthStart = 0; }
+                  if (m !== currentMonth || i === dayCount - 1) {
+                    const endIdx = (m !== currentMonth) ? i - 1 : i;
+                    const mid = Math.floor((monthStart + endIdx) / 2);
+                    const x = (mid + 0.5) * slotWidth;
+                    labels.push({ x, text: MONTHS[currentMonth >= 0 ? currentMonth : 0] });
+                    currentMonth = m;
+                    monthStart = i;
+                  }
+                }
+              }
+              return labels.map((l, idx) => (
+                <text
+                  key={`lbl-${idx}`}
+                  x={l.x}
+                  y={zeroBandTopY + axisBandHeight - 2}
+                  fontSize="10"
+                  textAnchor="middle"
+                  fill="#64748b"
+                >
+                  {l.text}
+                </text>
+              ));
+            })()}
+          </g>
           {days.map((d, i) => {
             const x = i * slotWidth;
             const overUnits = d.lightOverCount + d.heavyOverCount;
