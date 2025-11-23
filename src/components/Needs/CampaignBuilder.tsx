@@ -105,7 +105,7 @@ export default function CampaignBuilder() {
       <div className="p-5 space-y-5">
         <h2 className="text-lg font-semibold text-gray-800">Campaign Planner</h2>
         
-        {/* Start Date + Daily Spend Limit */}
+        {/* Start Date + Daily Budget */}
         <div className="space-y-3">
           <div className="flex items-center">
             <span className="text-gray-700 text-sm font-medium">Start Date</span>

@@ -21,6 +21,8 @@ export interface SourceSnapshot {
   daily_budget?: number | null
   referral_bonus_per_hire?: number | null
   apps_override?: number | null
+  diminishing_exponent?: number | null
+  saturation_rate?: number | null
   // Optional funnel metrics (percent values 0..100 from Sources tab)
   funnel_app_to_interview?: number | null
   funnel_interview_to_offer?: number | null
@@ -89,6 +91,84 @@ export function useCampaignPlanVersion(): number {
     () => version,
     () => version,
   )
+}
+
+const APPLY_CPC = 0.12
+const APPLY_DAILY = 0.10
+const CTR = 0.015
+const DEFAULT_FUNNEL_CONV = 0.64 * 0.84 * 0.86 * 0.60
+const DEFAULT_DIMINISHING_EXPONENT = 0.85
+const DEFAULT_SATURATION_RATE = 0.18
+const clampValue = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
+const getBeta = (s: SourceSnapshot) => {
+  const candidate = Number((s as any).diminishing_exponent)
+  if (!Number.isFinite(candidate)) return DEFAULT_DIMINISHING_EXPONENT
+  return clampValue(candidate, 0.3, 1)
+}
+const getSaturationRate = (s: SourceSnapshot) => {
+  const candidate = Number((s as any).saturation_rate)
+  if (!Number.isFinite(candidate)) return DEFAULT_SATURATION_RATE
+  return clampValue(candidate, 0.01, 1)
+}
+const getReferenceSpend = (s: SourceSnapshot) => {
+  const candidate = Number(s.daily_budget)
+  if (Number.isFinite(candidate) && candidate > 0) return Math.max(1, candidate)
+  return 100
+}
+const linearAppsAtSpend = (s: SourceSnapshot, spend: number, conv: number): number => {
+  if (spend <= 0) return 0
+  switch (s.spend_model) {
+    case 'cpa':
+    case 'daily_budget': {
+      const bid = Math.max(0.0001, Number(s.cpa_bid || 10))
+      return spend / bid
+    }
+    case 'cpc': {
+      const cpc = Math.max(0.0001, Number(s.cpc || 2))
+      const clicks = spend / cpc
+      return clicks * APPLY_CPC
+    }
+    case 'cpm': {
+      const cpm = Math.max(0.0001, Number(s.cpm || 10))
+      const impressions = (spend / cpm) * 1000
+      const clicks = impressions * CTR
+      return clicks * APPLY_DAILY
+    }
+    case 'referral': {
+      const bounty = Math.max(0.0001, Number(s.referral_bonus_per_hire || 0))
+      const maxApps = Math.max(0, Number(s.apps_override || 0))
+      if (bounty <= 0 || conv <= 0) return 0
+      const linear = spend / (bounty * conv)
+      return Math.min(maxApps, linear)
+    }
+    default:
+      return 0
+  }
+}
+const spendToApps = (s: SourceSnapshot, spend: number, conv: number): number => {
+  spend = Math.max(0, spend)
+  if (spend <= 0) return 0
+  if (s.spend_model === 'referral') {
+    const maxApps = Math.max(0, Number(s.apps_override || 0))
+    if (maxApps <= 0) return 0
+    const bounty = Math.max(0.0001, Number(s.referral_bonus_per_hire || 0))
+    if (bounty <= 0 || conv <= 0) return 0
+    const scaled = spend / (bounty * conv)
+    const k = getSaturationRate(s)
+    return maxApps * (1 - Math.exp(-k * scaled))
+  }
+  const beta = getBeta(s)
+  const Sref = getReferenceSpend(s)
+  const Lref = linearAppsAtSpend(s, Sref, conv)
+  if (Lref <= 0) return 0
+  const r = Lref / Math.pow(Sref, beta)
+  return r * Math.pow(spend, beta)
+}
+const marginalAppsPerDollar = (s: SourceSnapshot, spend: number, conv: number): number => {
+  const delta = 1
+  const a1 = spendToApps(s, spend, conv)
+  const a2 = spendToApps(s, spend + delta, conv)
+  return Math.max(0, a2 - a1) / delta
 }
 
 // helpers
@@ -165,22 +245,22 @@ export function getApplicantsPerDay(): number {
   const dailyLimit = Math.max(0, Number(planner.dailySpend || 0))
   const liveSources = sources.filter(s => s.active)
   if (liveSources.length === 0) return 0
-
-  // Heuristics aligned with Review allocator
-  const APPLY_CPC = 0.12
-  const APPLY_DAILY = 0.10
-  const CTR = 0.015
   const overallConv = Math.max(0, Math.min(1, Number(state.conversionRate) || 0))
 
   const funnelConvToHire = (s: SourceSnapshot): number => {
-    const r1 = Math.max(0, Math.min(1, Number((s as any).funnel_app_to_interview ?? 5) / 100))
-    const r2 = Math.max(0, Math.min(1, Number((s as any).funnel_interview_to_offer ?? 40) / 100))
-    const r3 = Math.max(0, Math.min(1, Number((s as any).funnel_offer_to_background ?? 90) / 100))
-    const r4 = Math.max(0, Math.min(1, Number((s as any).funnel_background_to_hire ?? 90) / 100))
+    const r1 = clampValue(Number((s as any).funnel_app_to_interview ?? 5) / 100, 0, 1)
+    const r2 = clampValue(Number((s as any).funnel_interview_to_offer ?? 40) / 100, 0, 1)
+    const r3 = clampValue(Number((s as any).funnel_offer_to_background ?? 90) / 100, 0, 1)
+    const r4 = clampValue(Number((s as any).funnel_background_to_hire ?? 90) / 100, 0, 1)
     return r1 * r2 * r3 * r4
   }
+  const fallbackConv = overallConv > 0 ? overallConv : DEFAULT_FUNNEL_CONV
+  const perSourceConv = (s: SourceSnapshot) => {
+    const conv = funnelConvToHire(s)
+    return conv > 0 ? conv : Math.max(0.0001, fallbackConv)
+  }
   const effectiveCPH = (s: SourceSnapshot): number => {
-    const conv = Math.max(0.0001, funnelConvToHire(s))
+    const conv = Math.max(0.0001, perSourceConv(s))
     switch (s.spend_model) {
       case 'referral':
         return Math.max(0.0001, Number((s as any).referral_bonus_per_hire || 0))
@@ -224,51 +304,59 @@ export function getApplicantsPerDay(): number {
     }
   }
 
-  // 2) Scalable sources (referral/cpc/cpm/cpa) cheapest first
-  const scalable = liveSources
+  // 2) Scalable sources with diminishing returns
+  type Scalable = { s: SourceSnapshot; conv: number; cap: number; spent: number }
+  const scalable: Scalable[] = liveSources
     .filter((s) => s.spend_model === 'referral' || s.spend_model === 'cpc' || s.spend_model === 'cpm' || s.spend_model === 'cpa')
-    .sort((a, b) => effectiveCPH(a) - effectiveCPH(b))
-  for (const s of scalable) {
-    if (remaining <= 0) break
-    const cap = s.spend_model === 'referral'
-      ? Math.max(0, Number(s.referral_bonus_per_hire || 0)) * Math.max(0, Number(s.apps_override || 0)) * Math.max(0.0001, funnelConvToHire(s))
-      : (Number.isFinite(Number(s.daily_budget)) ? Math.max(0, Number(s.daily_budget)) : Number.POSITIVE_INFINITY)
-    const take = Math.min(remaining, cap)
-    if (take > 0) {
-      alloc.set(s.id, (alloc.get(s.id) || 0) + take)
-      remaining -= take
-    }
-  }
+    .map((s) => {
+      const conv = perSourceConv(s)
+      const cap =
+        s.spend_model === 'referral'
+          ? Math.max(0, Number(s.referral_bonus_per_hire || 0)) * Math.max(0, Number(s.apps_override || 0)) * conv
+          : (Number.isFinite(Number(s.daily_budget)) ? Math.max(0, Number(s.daily_budget)) : Number.POSITIVE_INFINITY)
+      return { s, conv, cap, spent: 0 }
+    })
 
-  // 3) Compute applicants/day from allocations + organics
+  const step = 10
+  let guard = 0
+  while (remaining > 0 && guard < 5000) {
+    guard++
+    let bestIdx = -1
+    let bestScore = 0
+    for (let i = 0; i < scalable.length; i++) {
+      const it = scalable[i]
+      if (it.spent >= it.cap) continue
+      const margApps = marginalAppsPerDollar(it.s, it.spent, it.conv)
+      const score = margApps * it.conv
+      if (score > bestScore) {
+        bestScore = score
+        bestIdx = i
+      }
+    }
+    if (bestIdx < 0 || bestScore <= 0) break
+    const it = scalable[bestIdx]
+    const room = it.cap - it.spent
+    const take = Math.min(remaining, Math.max(1, Math.min(step, room)))
+    it.spent += take
+    remaining -= take
+  }
+  scalable.forEach((it) => {
+    if (it.spent > 0) {
+      alloc.set(it.s.id, (alloc.get(it.s.id) || 0) + it.spent)
+    }
+  })
+
+  // 3) Compute applicants/day from allocations (exclude organic)
   let applicants = 0
   for (const s of liveSources) {
-    // Organic sources are baseline and not part of campaign-driven hires
-    if (s.spend_model === 'organic') continue;
-
+    if (s.spend_model === 'organic') continue
+    const conv = perSourceConv(s)
     const spent = alloc.get(s.id) || 0
     if (s.spend_model === 'daily_budget') {
       const need = Math.max(0, Number(s.daily_budget || 0))
-      const cpa = Math.max(0.0001, Number((s as any).cpa_bid || 10))
-      if (spent >= need) applicants += Math.round(spent / cpa)
-    } else if (s.spend_model === 'referral' && spent > 0) {
-      const bounty = Math.max(0.0001, Number(s.referral_bonus_per_hire || 0))
-      const conv = Math.max(0.0001, overallConv)
-      const maxApps = Math.max(0, Number(s.apps_override || 0))
-      const appsFromSpend = spent / (bounty * conv)
-      applicants += Math.round(Math.min(maxApps, appsFromSpend))
-    } else if (s.spend_model === 'cpa' && spent > 0) {
-      const bid = Math.max(0.0001, Number(s.cpa_bid || 10))
-      applicants += Math.round(spent / bid)
-    } else if (s.spend_model === 'cpc' && spent > 0) {
-      const cpc = Math.max(0.0001, Number(s.cpc || 2))
-      const clicks = spent / cpc
-      applicants += Math.round(clicks * APPLY_CPC)
-    } else if (s.spend_model === 'cpm' && spent > 0) {
-      const cpm = Math.max(0.0001, Number(s.cpm || 10))
-      const impressions = (spent / cpm) * 1000
-      const clicks = impressions * CTR
-      applicants += Math.round(clicks * APPLY_DAILY)
+      if (spent >= need) applicants += Math.round(spendToApps(s, spent, conv))
+    } else if (spent > 0) {
+      applicants += Math.round(spendToApps(s, spent, conv))
     }
   }
 
@@ -326,28 +414,35 @@ export function getDerivedFromCriterion(opts: {
     hires = Hpd * days;
   } else if (opts.endType === 'hires') {
     const H = clampPos(Number(opts.endValue||0));
+    // No capacity to hire: short-circuit, avoid runaway days/endDate
+    if (Hpd <= 0) {
+      return { days: 0, budget: 0, hires: H, endDate: null };
+    }
     days = clampPos(H / Math.max(Hpd, 1e-6));
     budget = S * days;
     hires = H;
   } else { // 'budget'
     const B = clampPos(Number(opts.endValue||0));
+    // No budget/day capacity: short-circuit
+    if (S <= 0) {
+      return { days: 0, budget: B, hires: 0, endDate: null };
+    }
     days = clampPos(B / Math.max(S, 1e-6));
     budget = B;
     hires = Hpd * days;
   }
 
-  const endDate = toISO(addDays(start, Math.round(days)));
+  const endDate = days > 0 ? toISO(addDays(start, Math.round(days))) : null;
   return { days, budget, hires, endDate };
 }
 
-// ---- Shared cap calculator for Daily Spend Limit sliders across tabs ----
+// ---- Shared cap calculator for Daily Budget sliders across tabs ----
 export function getMaxDailySpendCap(): number {
   const stateSnap = getStateSnapshot();
   const sources = stateSnap.sources || [];
   // Use a consistent conversion for referral caps (align with Review panel defaults)
   const DEFAULT_CONV_FOR_CAP = 0.64 * 0.84 * 0.86 * 0.60; // ~0.277
   let cap = 0;
-  let hasInfinite = false;
   for (const s of sources) {
     if (!s || !s.active) continue;
     if (s.spend_model === 'organic') continue;
@@ -358,14 +453,12 @@ export function getMaxDailySpendCap(): number {
     } else if (s.spend_model === 'daily_budget') {
       cap += Math.max(0, Number(s.daily_budget || 0));
     } else {
-      // scalable; if a per-source daily_budget exists, treat as cap; otherwise unbounded
+      // scalable; if a per-source daily_budget exists, treat as cap; otherwise do not increase max
       if (Number.isFinite(Number(s.daily_budget)) && Number(s.daily_budget) > 0) {
         cap += Math.max(0, Number(s.daily_budget));
-      } else {
-        hasInfinite = true;
       }
     }
   }
-  const raw = hasInfinite ? 1000 : Math.round(cap);
+  const raw = Math.round(cap);
   return Math.max(0, raw);
 }

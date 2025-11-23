@@ -46,7 +46,7 @@ export default function AdvertisementManager({ selectedJobs, jobForms, setJobFor
       <div className="max-w-6xl mx-auto space-y-6">
         <CompanyInformationSection />
         {activeJobForm && (
-          <div className="bg-white rounded-xl border shadow-sm">
+          <div className="bg-white rounded-xl border shadow-sm ml-[240px]">
             <div className="p-6">
               <JobFormSections
                 jobRole={activeJobForm.role}

@@ -44,10 +44,13 @@ export default function CompanyInformationSection() {
   const [newTag, setNewTag] = useState("");
   const [images, setImages] = useState<(string | null)[]>([null, null, null, null]);
   const [dragOver, setDragOver] = useState<number | null>(null);
+  const [editingImageIdx, setEditingImageIdx] = useState<number | null>(null);
   const [companyLogo, setCompanyLogo] = useState<string | null>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [welcomeVideo, setWelcomeVideo] = useState<string | null>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
+  const [showVideoEditor, setShowVideoEditor] = useState(false);
+  const [videoTrim, setVideoTrim] = useState<{ start: number; end: number } | null>(null);
   const [showLogoEditor, setShowLogoEditor] = useState(false);
   const [logoZoom, setLogoZoom] = useState(1);
   const [logoPan, setLogoPan] = useState({ x: 0, y: 0 });
@@ -131,8 +134,25 @@ export default function CompanyInformationSection() {
   return (
     <>
       <div className="flex gap-6">
-        {/* Mobile Preview */}
-        <MobilePreview />
+        {/* Left rail: Mobile Preview + Previous Postings scroll together */}
+        <div className="flex-shrink-0">
+          <MobilePreview />
+          {/* Previous Postings (compact) */}
+          <div className="mt-4 bg-white border rounded-xl p-3 shadow-sm w-[210px]">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-xs font-semibold text-gray-700">Previous Postings</h3>
+              <button
+                type="button"
+                className="text-[11px] text-blue-600 hover:underline"
+                onClick={() => window.dispatchEvent(new CustomEvent('passcom-save-posting'))}
+                title="Save current fields as a reusable posting"
+              >
+                Save
+              </button>
+            </div>
+            <PostingList />
+          </div>
+        </div>
         
         {/* Form Content */}
         <div className="flex-1">
@@ -220,7 +240,7 @@ export default function CompanyInformationSection() {
                 )}
               </div>
               {welcomeVideo ? (
-                <div className="border rounded-lg overflow-hidden bg-black" style={{ width: '192px', height: '96px' }}>
+                <div className="border rounded-lg overflow-hidden bg-black cursor-pointer" style={{ width: '192px', height: '96px' }} onClick={() => setShowVideoEditor(true)} title="Click to edit">
                   <video
                     src={welcomeVideo}
                     controls
@@ -270,7 +290,13 @@ export default function CompanyInformationSection() {
                   }`}
               >
                 {img ? (
-                  <img src={img} alt={`Upload ${i + 1}`} className="w-full h-full object-cover" />
+                  <img
+                    src={img}
+                    alt={`Upload ${i + 1}`}
+                    className="w-full h-full object-cover cursor-pointer"
+                    onClick={() => setEditingImageIdx(i)}
+                    title="Click to edit"
+                  />
                 ) : (
                   <div className="text-center text-gray-400 p-2">
                     <div className="text-2xl mb-1">📷</div>
@@ -322,7 +348,206 @@ export default function CompanyInformationSection() {
           </div>
         </div>
       )}
+      {/* Image Crop Editor */}
+      {editingImageIdx != null && images[editingImageIdx] && (
+        <ImageEditorModal
+          src={images[editingImageIdx] as string}
+          onCancel={()=> setEditingImageIdx(null)}
+          onApply={(dataUrl)=> {
+            setImages(prev => {
+              const next = [...prev];
+              next[editingImageIdx!] = dataUrl;
+              return next;
+            });
+            setEditingImageIdx(null);
+          }}
+        />
+      )}
+      {/* Video Trim Editor */}
+      {showVideoEditor && welcomeVideo && (
+        <VideoEditorModal
+          src={welcomeVideo}
+          onCancel={()=> setShowVideoEditor(false)}
+          onApply={({ start, end }) => {
+            setVideoTrim({ start, end });
+            setShowVideoEditor(false);
+          }}
+        />
+      )}
     </>
   );
 }
 
+function PostingList() {
+  const [items, setItems] = React.useState<{ postingName: string }[]>([]);
+  const reload = React.useCallback(() => {
+    try {
+      const raw = localStorage.getItem('passcom-postings');
+      const list = raw ? JSON.parse(raw) : [];
+      setItems(list);
+    } catch {
+      setItems([]);
+    }
+  }, []);
+  React.useEffect(() => {
+    reload();
+    const onUpd = () => reload();
+    window.addEventListener('passcom-postings-updated', onUpd);
+    window.addEventListener('storage', onUpd as any);
+    return () => {
+      window.removeEventListener('passcom-postings-updated', onUpd);
+      window.removeEventListener('storage', onUpd as any);
+    };
+  }, [reload]);
+  const loadPosting = (name: string) => {
+    try {
+      const raw = localStorage.getItem('passcom-postings');
+      const list = raw ? JSON.parse(raw) : [];
+      const found = list.find((p: any) => p.postingName === name);
+      if (found) {
+        window.dispatchEvent(new CustomEvent('passcom-load-posting', { detail: found }));
+      }
+    } catch {}
+  };
+  const removePosting = (name: string) => {
+    try {
+      const raw = localStorage.getItem('passcom-postings');
+      const list = raw ? JSON.parse(raw) : [];
+      const next = list.filter((p: any) => p.postingName !== name);
+      localStorage.setItem('passcom-postings', JSON.stringify(next));
+      window.dispatchEvent(new CustomEvent('passcom-postings-updated'));
+    } catch {}
+  };
+  if (!items.length) {
+    return <div className="text-[11px] text-gray-500">No saved postings</div>;
+  }
+  return (
+    <div className="space-y-2 max-h-[220px] overflow-auto">
+      {items.map((it) => (
+        <div key={it.postingName} className="flex items-center gap-2 justify-between border rounded px-2 py-1">
+          <div className="text-[11px] text-gray-700 truncate max-w-[120px]" title={it.postingName}>{it.postingName}</div>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              className="text-[11px] text-blue-600 hover:underline"
+              onClick={() => loadPosting(it.postingName)}
+            >
+              Use
+            </button>
+            <button
+              type="button"
+              className="text-[11px] text-gray-500 hover:underline"
+              onClick={() => removePosting(it.postingName)}
+              title="Remove"
+            >
+              Del
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ------- Simple Image Editor (pan/zoom + square crop) -------
+function ImageEditorModal({ src, onCancel, onApply }: { src: string; onCancel: ()=>void; onApply: (dataUrl: string)=>void }) {
+  const [zoom, setZoom] = React.useState(1);
+  const [pan, setPan] = React.useState({ x: 0, y: 0 });
+  const [drag, setDrag] = React.useState(false);
+  const startRef = React.useRef({ x: 0, y: 0 });
+  const onMouseDown = (e: React.MouseEvent) => {
+    setDrag(true);
+    startRef.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
+  };
+  const onMouseMove = (e: React.MouseEvent) => {
+    if (!drag) return;
+    setPan({ x: e.clientX - startRef.current.x, y: e.clientY - startRef.current.y });
+  };
+  const onMouseUp = () => setDrag(false);
+  const apply = async () => {
+    const img = new Image();
+    img.src = src;
+    await new Promise(res => { img.onload = res; });
+    const size = 300;
+    const canvas = document.createElement('canvas');
+    canvas.width = size; canvas.height = size;
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0,0,size,size);
+    const iw = img.width * zoom;
+    const ih = img.height * zoom;
+    const cx = size/2 + pan.x;
+    const cy = size/2 + pan.y;
+    const dx = cx - iw/2;
+    const dy = cy - ih/2;
+    ctx.drawImage(img, dx, dy, iw, ih);
+    onApply(canvas.toDataURL('image/jpeg', 0.9));
+  };
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-4 w-[420px]">
+        <h3 className="text-sm font-semibold mb-2">Crop Image</h3>
+        <div
+          className="relative border rounded overflow-hidden bg-gray-100 mx-auto"
+          style={{ width: 300, height: 300, cursor: drag ? 'grabbing' : 'grab' }}
+          onMouseDown={onMouseDown}
+          onMouseMove={onMouseMove}
+          onMouseUp={onMouseUp}
+          onMouseLeave={onMouseUp}
+        >
+          <img
+            src={src}
+            alt="edit"
+            style={{
+              position: 'absolute',
+              left: '50%',
+              top: '50%',
+              transform: `translate(-50%, -50%) translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+              transformOrigin: 'center',
+              userSelect: 'none',
+              pointerEvents: 'none'
+            }}
+          />
+        </div>
+        <div className="flex items-center gap-3 mt-3">
+          <span className="text-xs text-gray-600 w-12">Zoom</span>
+          <input type="range" min={0.5} max={3} step={0.05} value={zoom} onChange={(e)=> setZoom(Number(e.target.value))} className="flex-1"/>
+          <span className="text-xs text-gray-600 w-10 text-right">{Math.round(zoom*100)}%</span>
+        </div>
+        <div className="mt-3 flex justify-end gap-2">
+          <button className="px-3 py-1 border rounded text-sm" onClick={onCancel}>Cancel</button>
+          <button className="px-3 py-1 bg-blue-600 text-white rounded text-sm" onClick={apply}>Save Crop</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ------- Simple Video Trim Modal -------
+function VideoEditorModal({ src, onCancel, onApply }: { src: string; onCancel: ()=>void; onApply: (r:{start:number,end:number})=>void }) {
+  const videoRef = React.useRef<HTMLVideoElement|null>(null);
+  const [start, setStart] = React.useState(0);
+  const [end, setEnd] = React.useState(0);
+  const onLoaded = () => {
+    const d = videoRef.current?.duration || 0;
+    setEnd(Math.floor(d));
+  };
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-4 w-[520px]">
+        <h3 className="text-sm font-semibold mb-2">Edit Video</h3>
+        <video ref={videoRef} src={src} controls onLoadedMetadata={onLoaded} className="w-full bg-black rounded" />
+        <div className="mt-3 grid grid-cols-2 gap-3 items-center">
+          <label className="text-xs text-gray-600">Start (s)</label>
+          <input className="border rounded px-2 h-8" type="number" value={start} min={0} max={Math.max(0,end-1)} onChange={(e)=> setStart(Number(e.target.value))}/>
+          <label className="text-xs text-gray-600">End (s)</label>
+          <input className="border rounded px-2 h-8" type="number" value={end} min={start+1} onChange={(e)=> setEnd(Number(e.target.value))}/>
+        </div>
+        <div className="mt-3 flex justify-end gap-2">
+          <button className="px-3 py-1 border rounded text-sm" onClick={onCancel}>Cancel</button>
+          <button className="px-3 py-1 bg-blue-600 text-white rounded text-sm" onClick={()=> onApply({ start, end })}>Save</button>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useMemo, useState, useEffect, useRef } from "react"
 import { getOverride, useOverrideVersion } from "../../state/dataOverrides"
 import { useCampaignPlanVersion, getExtraSupplyHalfHoursPerDay, isScheduledOn } from "../../state/campaignPlan"
 
@@ -29,6 +29,7 @@ const COLORS = {
 
 export const DISPLAY_START_HOUR = 7
 export const DISPLAY_END_HOUR = 23
+type Slot = { demand: number; supply: number; closed: boolean }
 
 // Utility clamp
 function clamp(value: number, min: number, max: number) {
@@ -51,6 +52,35 @@ function rgbToHex(r: number, g: number, b: number): string {
     const hex = Math.round(Math.max(0, Math.min(255, x))).toString(16)
     return hex.length === 1 ? "0" + hex : hex
   }).join("")
+}
+
+// Precompute role palette for 7 divisions (-3..+3) to avoid repeated math in large grids
+function paletteForRole(role: string): string[] {
+  const baseColor = JOB_BASE_COLORS[role] || "#3498DB"
+  const rgb = hexToRgb(baseColor)
+  // indices: 0..6 map to -3..+3; index 3 is neutral
+  const colors: string[] = new Array(7)
+  // Neutral
+  colors[3] = baseColor
+  // Oversupply (+1..+3): blend towards white at 33%, 66%, 100%
+  const toWhite = (t: number) => rgbToHex(
+    rgb.r + (255 - rgb.r) * t,
+    rgb.g + (255 - rgb.g) * t,
+    rgb.b + (255 - rgb.b) * t,
+  )
+  colors[4] = toWhite(1/3)
+  colors[5] = toWhite(2/3)
+  colors[6] = toWhite(1)
+  // Undersupply (-1..-3): blend towards black at 33%, 66%, 100%
+  const toBlack = (t: number) => rgbToHex(
+    rgb.r * (1 - t),
+    rgb.g * (1 - t),
+    rgb.b * (1 - t),
+  )
+  colors[2] = toBlack(1/3)
+  colors[1] = toBlack(2/3)
+  colors[0] = toBlack(1)
+  return colors
 }
 
 // Calculate color based on supply/demand delta
@@ -233,6 +263,23 @@ export function genWeek(
   return weekData
 }
 
+// Lightweight memoization for week matrices across views
+const __weekCache = new Map<string, { data: any, key: string }>()
+function getWeekCached(
+  role: string,
+  weekOffset: number,
+  withCampaign: boolean,
+  overlayForRole: string | undefined,
+  cacheKey: string
+) {
+  const k = `${cacheKey}|${role}|${weekOffset}|${withCampaign?'1':'0'}|${overlayForRole||'-'}`
+  const hit = __weekCache.get(k)
+  if (hit && hit.key === k) return hit.data
+  const data = genWeek(role, weekOffset, withCampaign, overlayForRole)
+  __weekCache.set(k, { data, key: k })
+  return data
+}
+
 function mondayOf(offsetWeeks = 0) {
   const now = new Date()
   const day = (now.getDay() + 6) % 7
@@ -275,9 +322,10 @@ export default function CoverageHeatmap({ selectedJobs }: CoverageHeatmapProps) 
 
   // Generate week matrix for the selected job
   const selectedJob = selectedJobs.length > 0 ? selectedJobs[0] : null;
+  const cacheKey = `${overrideVersion}-${planVersion}`
   const weekMatrix = useMemo(() =>
-    selectedJob ? genWeek(selectedJob, weekOffset, showWithCampaign, selectedJob) : [],
-    [selectedJob, weekOffset, showWithCampaign, overrideVersion, planVersion]
+    selectedJob ? getWeekCached(selectedJob, weekOffset, showWithCampaign, selectedJob, cacheKey) : [],
+    [selectedJob, weekOffset, showWithCampaign, cacheKey]
   )
   
   const weekStart = useMemo(() => mondayOf(weekOffset), [weekOffset])
@@ -396,6 +444,7 @@ export default function CoverageHeatmap({ selectedJobs }: CoverageHeatmapProps) 
             year={currentYear}
             month={currentMonth}
             withCampaign={showWithCampaign}
+            cacheKey={cacheKey}
             onDayClick={(dateObj: Date)=>goToWeekContaining(dateObj)}
           />
         )}
@@ -404,6 +453,7 @@ export default function CoverageHeatmap({ selectedJobs }: CoverageHeatmapProps) 
             jobRole={selectedJob}
             year={currentYear}
             withCampaign={showWithCampaign}
+            cacheKey={cacheKey}
             onMonthClick={(monthIdx: number)=>goToMonth(currentYear, monthIdx)}
             onDayClick={(dateObj: Date)=>goToWeekContaining(dateObj)}
           />
@@ -502,10 +552,11 @@ function getDivision(demand: number, supply: number): number {
 }
 
 function MonthGrid(
-  { jobRole, year, month, withCampaign, onDayClick }:
-  { jobRole: string, year: number, month: number, withCampaign: boolean, onDayClick?: (d: Date)=>void }
+  { jobRole, year, month, withCampaign, cacheKey, onDayClick }:
+  { jobRole: string, year: number, month: number, withCampaign: boolean, cacheKey: string, onDayClick?: (d: Date)=>void }
 ) {
   const cellHeight = 64
+  const divColors = useMemo(() => paletteForRole(jobRole), [jobRole])
 
   const first = new Date(year, month, 1)
   
@@ -517,10 +568,10 @@ function MonthGrid(
   const weeksFromNow = Math.round(monthsFromNow * 4.33) // ~4.33 weeks per month
   
   // Generate data for this specific month and calculate distribution
-  const monthMatrix = genWeek(jobRole, weeksFromNow, withCampaign, jobRole)
-  const divisionsByWeekday = monthMatrix.map(daySlots => {
-    const counts = Array(7).fill(0) // 7 divisions (-3 to +3)
-    for (const { demand, supply, closed } of daySlots) {
+  const monthMatrix = getWeekCached(jobRole, weeksFromNow, withCampaign, jobRole, cacheKey) as Slot[][]
+  const divisionsByWeekday = monthMatrix.map((daySlots: Slot[]) => {
+    const counts = Array(7).fill(0) as number[] // 7 divisions (-3 to +3)
+    for (const { demand, supply, closed } of daySlots as Slot[]) {
       if (!closed) {
         const div = getDivision(demand, supply)
         if (div >= -3 && div <= 3) {
@@ -544,11 +595,11 @@ function MonthGrid(
     
     // Build data for this day
     const counts = divisionsByWeekday[weekday]
-    const total = counts.reduce((a, b) => a + b, 0)
+    const total = counts.reduce((a: number, b: number) => a + b, 0)
     
     if (total === 0) return { label: String(dayNum), type: 'closed' as const, dateObj: dt }
     
-    const percentages = counts.map(c => total > 0 ? (c / total) * 100 : 0)
+    const percentages = counts.map((c: number) => total > 0 ? (c / total) * 100 : 0)
     return { label: String(dayNum), type: 'divisions' as const, percentages, dateObj: dt }
   })
 
@@ -564,12 +615,9 @@ function MonthGrid(
           {c.type === 'closed' && <div className="flex-1 rounded" style={{ background: COLORS.closed }} />}
           {c.type === 'divisions' && (
             <div className="flex-1 rounded overflow-hidden flex">
-              {c.percentages.map((pct, divIdx) => {
+              {c.percentages.map((pct: number, divIdx: number) => {
                 if (pct <= 0) return null
-                const mockDemand = 10
-                const mockSupply = divIdx === 0 ? 6.5 : divIdx === 1 ? 7.5 : divIdx === 2 ? 8.5 : divIdx === 3 ? 10 : divIdx === 4 ? 11.5 : divIdx === 5 ? 12.5 : 14
-                const color = cellColor(mockDemand, mockSupply, jobRole)
-                return <div key={divIdx} style={{ width: `${pct}%`, background: color }} />
+                return <div key={divIdx} style={{ width: `${pct}%`, background: divColors[divIdx] }} />
               })}
             </div>
           )}
@@ -580,96 +628,153 @@ function MonthGrid(
 }
 
 function YearGridDays(
-  { jobRole, year, withCampaign, onMonthClick, onDayClick }:
-  { jobRole: string, year?: number, withCampaign: boolean, onMonthClick?: (m: number)=>void, onDayClick?: (d: Date)=>void }
+  { jobRole, year, withCampaign, cacheKey, onMonthClick, onDayClick }:
+  { jobRole: string, year?: number, withCampaign: boolean, cacheKey: string, onMonthClick?: (m: number)=>void, onDayClick?: (d: Date)=>void }
 ) {
   const cellHeight = 10
   const monthHeight = 154
+  const divColors = useMemo(() => paletteForRole(jobRole), [jobRole])
 
   const yr = year || new Date().getFullYear()
-  const now = new Date()
-  const currentYear = now.getFullYear()
-  const currentMonth = now.getMonth()
 
   return (
     <div className="grid gap-3 p-3" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
       {Array.from({ length: 12 }, (_, m) => {
-        const first = new Date(yr, m, 1)
-        const lastDay = new Date(yr, m + 1, 0).getDate()
-        const firstWeekdayJS = first.getDay()
-        const firstWeekdayMon0 = (firstWeekdayJS + 6) % 7
-
-        // Calculate week offset for this month relative to current month
-        const monthsFromNow = (yr - currentYear) * 12 + (m - currentMonth)
-        const weeksFromNow = Math.round(monthsFromNow * 4.33) // ~4.33 weeks per month
-        
-        // Generate data for this specific month's offset
-        const monthMatrix = genWeek(jobRole, weeksFromNow, withCampaign, jobRole)
-        const divisionsByWeekday = monthMatrix.map(daySlots => {
-          const counts = Array(7).fill(0) // 7 divisions (-3 to +3)
-          for (const { demand, supply, closed } of daySlots) {
-            if (!closed) {
-              const div = getDivision(demand, supply)
-              if (div >= -3 && div <= 3) {
-                counts[div + 3]++ // Map -3 to index 0, 0 to index 3, +3 to index 6
-              }
-            }
-          }
-          return counts
-        })
-
-        const cells = Array.from({ length: 42 }, (_, idx) => {
-          const dayNum = idx - firstWeekdayMon0 + 1
-          if (dayNum < 1 || dayNum > lastDay) return { type: 'empty' as const, dateObj: null }
-          const dt = new Date(yr, m, dayNum)
-          const jsDay = dt.getDay()
-          const weekday = (jsDay + 6) % 7
-          
-          // Build data for this day
-          const counts = divisionsByWeekday[weekday]
-          const total = counts.reduce((a, b) => a + b, 0)
-          
-          if (total === 0) return { type: 'closed' as const, dateObj: dt }
-          
-          const percentages = counts.map(c => total > 0 ? (c / total) * 100 : 0)
-          return { type: 'divisions' as const, percentages, dateObj: dt }
-        })
-
         return (
-          <div key={m} className="border rounded p-2 flex flex-col" style={{ height: `${monthHeight}px` }}>
-            <div className="text-xs font-medium text-gray-700 mb-1 cursor-pointer" onClick={() => onMonthClick && onMonthClick(m)}>
-              {first.toLocaleString(undefined, { month: 'short' })}
-            </div>
-            <div className="grid gap-[2px]" style={{ gridTemplateColumns: 'repeat(7, 1fr)' }}>
-              {DAYS.map((d, idx) => (
-                <div key={`h-${m}-${idx}`} className="text-[9px] text-gray-400 text-center">{d[0]}</div>
-              ))}
-              {cells.map((c, idx) => (
-                <div 
-                  key={idx} 
-                  style={{ height: `${cellHeight + 6}px` }}
-                  className={c.dateObj ? "cursor-pointer" : ""}
-                  onClick={() => c.dateObj && onDayClick && onDayClick(c.dateObj)}
-                >
-                  {c.type === 'empty' && <div className="w-full rounded bg-gray-100" style={{ height: `${cellHeight}px` }} />}
-                  {c.type === 'closed' && <div className="w-full rounded" style={{ height: `${cellHeight}px`, background: COLORS.closed }} />}
-                  {c.type === 'divisions' && (
-                    <div className="w-full rounded overflow-hidden flex" style={{ height: `${cellHeight}px` }}>
-                      {c.percentages.map((pct, divIdx) => {
-                        if (pct <= 0) return null
-                        const mockDemand = 10
-                        const mockSupply = divIdx === 0 ? 6.5 : divIdx === 1 ? 7.5 : divIdx === 2 ? 8.5 : divIdx === 3 ? 10 : divIdx === 4 ? 11.5 : divIdx === 5 ? 12.5 : 14
-                        const color = cellColor(mockDemand, mockSupply, jobRole)
-                        return <div key={divIdx} style={{ width: `${pct}%`, background: color }} />
-                      })}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
+          <MonthMiniCard
+            key={m}
+            year={yr}
+            monthIndex={m}
+            jobRole={jobRole}
+            withCampaign={withCampaign}
+            cacheKey={cacheKey}
+            cellHeight={cellHeight}
+            monthHeight={monthHeight}
+            divColors={divColors}
+            onMonthClick={onMonthClick}
+            onDayClick={onDayClick}
+          />
         )
       })}
+    </div>
+  )
+}
+
+function MonthMiniCard({
+  year,
+  monthIndex,
+  jobRole,
+  withCampaign,
+  cacheKey,
+  cellHeight,
+  monthHeight,
+  divColors,
+  onMonthClick,
+  onDayClick,
+}: {
+  year: number
+  monthIndex: number
+  jobRole: string
+  withCampaign: boolean
+  cacheKey: string
+  cellHeight: number
+  monthHeight: number
+  divColors: string[]
+  onMonthClick?: (m: number)=>void
+  onDayClick?: (d: Date)=>void
+}) {
+  const ref = useRef<HTMLDivElement | null>(null)
+  const [visible, setVisible] = useState(false)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) setVisible(true)
+        }
+      },
+      { root: el.parentElement?.parentElement || null, rootMargin: '200px 0px', threshold: 0 }
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [])
+
+  const first = useMemo(() => new Date(year, monthIndex, 1), [year, monthIndex])
+
+  // Compute heavy month data only once visible
+  const cells = useMemo(() => {
+    if (!visible) return null as null | Array<{ type: 'empty'|'closed'|'divisions'; dateObj: Date|null; percentages?: number[] }>
+    const lastDay = new Date(year, monthIndex + 1, 0).getDate()
+    const firstWeekdayJS = first.getDay()
+    const firstWeekdayMon0 = (firstWeekdayJS + 6) % 7
+    const now = new Date()
+    const currentYear = now.getFullYear()
+    const currentMonth = now.getMonth()
+    const monthsFromNow = (year - currentYear) * 12 + (monthIndex - currentMonth)
+    const weeksFromNow = Math.round(monthsFromNow * 4.33)
+    const monthMatrix = getWeekCached(jobRole, weeksFromNow, withCampaign, jobRole, cacheKey) as Slot[][]
+    const divisionsByWeekday = monthMatrix.map((daySlots: Slot[]) => {
+      const counts = Array(7).fill(0) as number[]
+      for (const { demand, supply, closed } of daySlots as Slot[]) {
+        if (!closed) {
+          const div = getDivision(demand, supply)
+          if (div >= -3 && div <= 3) counts[div + 3]++
+        }
+      }
+      return counts
+    })
+    return Array.from({ length: 42 }, (_, idx) => {
+      const dayNum = idx - firstWeekdayMon0 + 1
+      if (dayNum < 1 || dayNum > lastDay) return { type: 'empty' as const, dateObj: null }
+      const dt = new Date(year, monthIndex, dayNum)
+      const jsDay = dt.getDay()
+      const weekday = (jsDay + 6) % 7
+      const counts = divisionsByWeekday[weekday]
+      const total = counts.reduce((a: number, b: number) => a + b, 0)
+      if (total === 0) return { type: 'closed' as const, dateObj: dt }
+      const percentages = counts.map((c: number) => total > 0 ? (c / total) * 100 : 0)
+      return { type: 'divisions' as const, dateObj: dt, percentages }
+    })
+  }, [visible, year, monthIndex, first, jobRole, withCampaign, cacheKey])
+
+  return (
+    <div ref={ref} className="border rounded p-2 flex flex-col" style={{ height: `${monthHeight}px` }}>
+      <div className="text-xs font-medium text-gray-700 mb-1 cursor-pointer" onClick={() => onMonthClick && onMonthClick(monthIndex)}>
+        {first.toLocaleString(undefined, { month: 'short' })}
+      </div>
+      <div className="grid gap-[2px]" style={{ gridTemplateColumns: 'repeat(7, 1fr)' }}>
+        {DAYS.map((d, idx) => (
+          <div key={`h-${monthIndex}-${idx}`} className="text-[9px] text-gray-400 text-center">{d[0]}</div>
+        ))}
+        {cells ? cells.map((c, idx) => (
+          <div
+            key={idx}
+            style={{ height: `${cellHeight + 6}px` }}
+            className={c.dateObj ? "cursor-pointer" : ""}
+            onClick={() => c.dateObj && onDayClick && onDayClick(c.dateObj)}
+          >
+            {c.type === 'empty' && <div className="w-full rounded bg-gray-100" style={{ height: `${cellHeight}px` }} />}
+            {c.type === 'closed' && <div className="w-full rounded" style={{ height: `${cellHeight}px`, background: COLORS.closed }} />}
+            {c.type === 'divisions' && (
+              <div className="w-full rounded overflow-hidden flex" style={{ height: `${cellHeight}px` }}>
+                {c.percentages!.map((pct: number, divIdx: number) => {
+                  if (pct <= 0) return null
+                  return <div key={divIdx} style={{ width: `${pct}%`, background: divColors[divIdx] }} />
+                })}
+              </div>
+            )}
+          </div>
+        )) : (
+          // Placeholder while offscreen
+          Array.from({ length: 42 }).map((_, idx) => (
+            <div key={idx} style={{ height: `${cellHeight + 6}px` }}>
+              <div className="w-full rounded bg-gray-100" style={{ height: `${cellHeight}px` }} />
+            </div>
+          ))
+        )}
+      </div>
     </div>
   )
 }

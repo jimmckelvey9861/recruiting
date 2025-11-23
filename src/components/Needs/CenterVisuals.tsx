@@ -11,7 +11,21 @@ const addDays = (date: Date, delta: number) => {
 const formatISO = (date: Date) => date.toISOString().slice(0, 10);
 
 export const RANGE_LABELS = ["Month", "Quarter", "Six Months", "Year"];
-export const RANGE_WEEKS = [4, 13, 26, 52];
+// Calendar-aligned period computation: start = today 00:00 local; end = +N months; weeks = ceil(days/7)
+const MONTHS_BY_RANGE = [1, 3, 6, 12];
+export function getRangeDayCount(rangeIdx: number): number {
+  const months = MONTHS_BY_RANGE[Math.max(0, Math.min(MONTHS_BY_RANGE.length - 1, rangeIdx))] || 1;
+  const start = new Date();
+  start.setHours(0,0,0,0);
+  const end = new Date(start);
+  end.setMonth(end.getMonth() + months);
+  // days strictly between start (inclusive) and end (exclusive)
+  const ms = end.getTime() - start.getTime();
+  return Math.max(1, Math.ceil(ms / (1000 * 60 * 60 * 24)));
+}
+export function getRangeWeeks(rangeIdx: number): number {
+  return Math.ceil(getRangeDayCount(rangeIdx) / 7);
+}
 const DISPLAY_START_HOUR = 7;
 const DISPLAY_END_HOUR = 23;
 const range = (n: number) => Array.from({ length: n }, (_, i) => i);
@@ -195,7 +209,8 @@ type Zones = { lowRed: number; lowYellow: number; highYellow: number; highRed: n
 export default function CenterVisuals({ job, rangeIdx, onRangeChange, zones }: { job: string; rangeIdx: number; onRangeChange: (idx: number) => void; zones: Zones }) {
   const role = job || "Server";
   const [view, setView] = useState<"lines" | "heatmap">("lines");
-  const weeks = RANGE_WEEKS[rangeIdx];
+  const weeks = getRangeWeeks(rangeIdx);
+  const periodDays = getRangeDayCount(rangeIdx);
   const overrideVersion = useOverrideVersion();
   const planVersion = useCampaignPlanVersion();
 
@@ -335,6 +350,7 @@ export default function CenterVisuals({ job, rangeIdx, onRangeChange, zones }: {
               zones={zones}
               withCampaign={withCampaign}
               weekIndex={safeWeekIndex}
+              periodDays={periodDays}
               onWeekChange={(w)=> setWeekIndex(Math.max(0, Math.min(heatWeeks-1, w)))}
             />
           </div>
@@ -499,6 +515,7 @@ function DailyCoverageSummary({
   zones,
   withCampaign,
   weekIndex,
+  periodDays,
   onWeekChange
 }: {
   job: string;
@@ -506,8 +523,11 @@ function DailyCoverageSummary({
   zones: Zones;
   withCampaign: boolean;
   weekIndex: number;
+  periodDays: number;
   onWeekChange: (w: number) => void;
 }) {
+  // Recompute summaries when campaign plan changes (e.g., daily spend slider moves)
+  const planVersion = useCampaignPlanVersion();
   // Build day summaries across the selected period
   const days = useMemo(() => {
     const items: { date: string; lightUnderCount: number; heavyUnderCount: number; lightOverCount: number; heavyOverCount: number }[] = [];
@@ -521,6 +541,7 @@ function DailyCoverageSummary({
       const grid = buildHeatGrid(job, w, withCampaign);
       // For each day (0..6) aggregate slot categories
       for (let d = 0; d < 7; d++) {
+        if (items.length >= Math.max(1, periodDays)) break;
         let lightUnder = 0, heavyUnder = 0, lightOver = 0, heavyOver = 0;
         for (let r = 0; r < grid.length; r++) {
           const cell = grid[r][d];
@@ -544,8 +565,9 @@ function DailyCoverageSummary({
         });
       }
     }
-    return items;
-  }, [job, weeks, zones, withCampaign]);
+    // Cap to exact calendar-aligned day count
+    return items.slice(0, Math.max(1, periodDays));
+  }, [job, weeks, zones, withCampaign, planVersion, periodDays]);
 
   const dayCount = days.length;
   // Measure container width so the control spans exactly the heatmap's Monday..Sunday columns.
@@ -612,13 +634,31 @@ function DailyCoverageSummary({
 
   const svgRef = React.useRef<SVGSVGElement|null>(null);
   const [drag, setDrag] = useState(false);
+  // Throttle outward updates while dragging to improve performance
+  const rafId = React.useRef<number | null>(null);
+  const pendingWeek = React.useRef<number | null>(null);
+  const scheduleFlush = () => {
+    if (rafId.current != null) return;
+    rafId.current = requestAnimationFrame(() => {
+      rafId.current = null;
+      if (pendingWeek.current != null) {
+        onWeekChange(pendingWeek.current);
+        pendingWeek.current = null;
+      }
+    });
+  };
   const updateFromPixelX = (px: number) => {
     const clamped = Math.min(Math.max(sliderRadius, px), Math.max(sliderRadius, svgWidth - sliderRadius));
     setSliderX(clamped); // follow pointer smoothly
     const fraction = svgWidth > 0 ? (clamped / svgWidth) : 0;
     const approxDay = fraction * dayCount;
     const nextWeek = Math.max(0, Math.min(weekCount - 1, Math.floor(approxDay / 7)));
-    onWeekChange(nextWeek);
+    if (drag) {
+      pendingWeek.current = nextWeek;
+      scheduleFlush();
+    } else {
+      onWeekChange(nextWeek);
+    }
   };
 
   const onClickSvg = (e: React.MouseEvent<SVGSVGElement>) => {
@@ -659,9 +699,24 @@ function DailyCoverageSummary({
           onMouseLeave={endDrag}
           style={{ cursor: 'pointer' }}
         >
+          <defs>
+            <filter id="knobShadow" x="-50%" y="-50%" width="200%" height="200%">
+              <feDropShadow dx="0" dy="1" stdDeviation="1.5" floodColor="#000000" floodOpacity="0.25" />
+            </filter>
+          </defs>
           {/* Background so the 1px inter-column gap shows white above */}
           <rect x={0} y={0} width={svgWidth} height={zeroBandTopY} fill="#ffffff" />
-          <rect x={0} y={zeroBandTopY} width={svgWidth} height={axisBandHeight} fill={C.band} />
+          <rect
+            x={0}
+            y={zeroBandTopY}
+            width={svgWidth}
+            height={axisBandHeight}
+            rx={axisBandHeight/2}
+            ry={axisBandHeight/2}
+            fill={C.band}
+            stroke="#d1d5db"
+            strokeWidth={1}
+          />
           {/* Minimal X-axis legend: Month → mid of each week; longer ranges → month abbreviations */}
           <g pointerEvents="none">
             {(() => {
@@ -749,10 +804,36 @@ function DailyCoverageSummary({
 
           {/* Slider handle */}
           <g
+            role="slider"
+            aria-label="Week"
+            aria-valuemin={0}
+            aria-valuemax={Math.max(0, weekCount - 1)}
+            aria-valuenow={Math.max(0, Math.min(weekCount - 1, weekIndex))}
+            tabIndex={0}
             onClick={(e)=> e.stopPropagation()}
             onMouseDown={(e)=> { e.stopPropagation(); setDrag(true); }}
+            onKeyDown={(e) => {
+              let next = weekIndex;
+              if (e.key === 'ArrowLeft') next = Math.max(0, weekIndex - 1);
+              else if (e.key === 'ArrowRight') next = Math.min(weekCount - 1, weekIndex + 1);
+              else if (e.key === 'Home') next = 0;
+              else if (e.key === 'End') next = Math.max(0, weekCount - 1);
+              else if (e.key === 'PageUp') next = Math.max(0, weekIndex - 4);
+              else if (e.key === 'PageDown') next = Math.min(weekCount - 1, weekIndex + 4);
+              else return;
+              e.preventDefault();
+              onWeekChange(next);
+            }}
           >
-            <circle cx={sliderX} cy={zeroBandTopY + axisBandHeight/2} r={sliderRadius} fill={C.slider} />
+            <circle
+              cx={sliderX}
+              cy={zeroBandTopY + axisBandHeight/2}
+              r={sliderRadius}
+              fill={C.slider}
+              stroke="#ffffff"
+              strokeWidth={3}
+              filter="url(#knobShadow)"
+            />
           </g>
         </svg>
       </div>

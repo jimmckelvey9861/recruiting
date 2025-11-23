@@ -1,5 +1,5 @@
 import { useMemo, useState, ChangeEvent, useEffect } from "react";
-import { setSourcesSnapshot } from '../../state/campaignPlan';
+import { setSourcesSnapshot, useCampaignPlanVersion } from '../../state/campaignPlan';
 import { getStateSnapshot } from '../../state/campaignPlan';
 
 type SpendModel =
@@ -48,6 +48,8 @@ type AdSource = {
   funnel_interview_to_offer?: number | null;
   funnel_offer_to_background?: number | null;
   funnel_background_to_hire?: number | null;
+  diminishing_exponent?: number | null;
+  saturation_rate?: number | null;
 };
 
 const nonNeg = (n: unknown, def = 0) => (Number.isFinite(Number(n)) ? Math.max(0, Number(n)) : def);
@@ -179,6 +181,7 @@ function seed(): AdSource[] {
       daily_budget: 350,
       cpc: 1.8,
       daily_cap_apps: 0,
+      diminishing_exponent: 0.85,
       schedule: { start: todayISO() },
       end_type: "budget",
       end_budget: 12000,
@@ -201,6 +204,7 @@ function seed(): AdSource[] {
       daily_budget: 200,
       cpm: 9,
       daily_cap_apps: 0,
+      diminishing_exponent: 0.85,
       schedule: { start: todayISO() },
       end_type: "date",
       end_date: todayISO(),
@@ -222,6 +226,7 @@ function seed(): AdSource[] {
       spend_model: "referral",
       referral_bonus_per_hire: 300,
       daily_cap_apps: 0,
+      saturation_rate: 0.18,
       schedule: { start: todayISO() },
       end_type: "hires",
       end_hires: 20,
@@ -265,6 +270,7 @@ export function getDefaultAdSources(): AdSource[] {
 }
 
 export default function AdSourcesPanel() {
+  const _planVer = useCampaignPlanVersion();
   const [sources, setSources] = useState<AdSource[]>(seed());
   const [activeId, setActiveId] = useState<string>(sources[0]?.id || "");
   const active = useMemo(() => sources.find((source) => source.id === activeId) || null, [sources, activeId]);
@@ -304,6 +310,7 @@ export default function AdSourcesPanel() {
       daily_budget: 100,
       cpc: 2,
       daily_cap_apps: 0,
+      diminishing_exponent: 0.85,
       schedule: { start: todayISO() },
       end_type: "date",
       end_date: todayISO(),
@@ -337,6 +344,8 @@ export default function AdSourcesPanel() {
     daily_budget: s.daily_budget,
     referral_bonus_per_hire: s.referral_bonus_per_hire,
     apps_override: s.apps_override ?? null,
+    diminishing_exponent: s.diminishing_exponent ?? null,
+    saturation_rate: s.saturation_rate ?? null,
     funnel_app_to_interview: s.funnel_app_to_interview ?? null,
     funnel_interview_to_offer: s.funnel_interview_to_offer ?? null,
     funnel_offer_to_background: s.funnel_offer_to_background ?? null,
@@ -475,14 +484,35 @@ function FieldBox({
   label,
   children,
   className = "",
+  info,
 }: {
   label: string;
   children: React.ReactNode;
   className?: string;
+  info?: string;
 }) {
+  const [open, setOpen] = useState(false);
   return (
     <div className={`relative bg-white border border-gray-200 rounded-lg px-3 pt-2 pb-2 ${className}`}>
-      <div className="absolute -top-2 left-2 bg-white px-1 text-[11px] text-gray-500">{label}</div>
+      <div className="absolute -top-2 left-2 flex items-center gap-1">
+        <span className="bg-white px-1 text-[11px] text-gray-500">{label}</span>
+        {info && (
+          <button
+            type="button"
+            className="w-4 h-4 rounded-full border border-slate-300 text-[10px] text-slate-600 bg-white hover:bg-slate-50"
+            onClick={() => setOpen((prev) => !prev)}
+            onBlur={() => setTimeout(() => setOpen(false), 100)}
+            aria-label={`What is ${label}?`}
+          >
+            ?
+          </button>
+        )}
+      </div>
+      {info && open && (
+        <div className="absolute z-20 top-0 right-0 mt-5 mr-2 w-64 bg-white border border-slate-200 rounded-lg shadow-xl p-3 text-xs text-slate-600">
+          <p className="leading-relaxed">{info}</p>
+        </div>
+      )}
       {children}
     </div>
   );
@@ -723,6 +753,8 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
         </div>
       </section>
 
+      {/* Model Tuning section removed; controls are now in Performance */}
+
       <section className="space-y-3">
         <h3 className="text-sm font-semibold text-slate-600 uppercase tracking-wide">Performance</h3>
         <div className="grid grid-cols-12 gap-3 items-center">
@@ -746,6 +778,43 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
               onChange={setNum("quality_percent")}
             />
           </FieldBox>
+          {["cpc", "cpm", "cpa"].includes(s.spend_model) ? (
+            <FieldBox
+              label="Decay (β)"
+              className="col-span-3"
+              info="Controls how quickly returns diminish for scalable media (CPC/CPM/CPA). 1.0 keeps returns linear; lower values flatten sooner. Recommended default: β ≈ 0.85. The system will auto‑learn and refine this over time from live results, so you don’t need to change it now unless you want to override the default."
+            >
+              <input
+                type="number"
+                min={0.4}
+                max={1}
+                step={0.01}
+                className={`${input} text-right`}
+                value={s.diminishing_exponent ?? 0.85}
+                onChange={setNum("diminishing_exponent")}
+              />
+            </FieldBox>
+          ) : s.spend_model === "referral" ? (
+            <FieldBox
+              label="Saturation Rate (k)"
+              className="col-span-3"
+              info="Controls how quickly referral yield approaches its max with spend. Higher k saturates faster; lower k spreads gains over more spend. Recommended default: k ≈ 0.18. The system will auto‑estimate this over time from campaign performance, so you don’t need to change it now unless you prefer a different starting point."
+            >
+              <input
+                type="number"
+                min={0.01}
+                max={1}
+                step={0.01}
+                className={`${input} text-right`}
+                value={s.saturation_rate ?? 0.18}
+                onChange={setNum("saturation_rate")}
+              />
+            </FieldBox>
+          ) : (
+            <div className="col-span-3" />
+          )}
+        </div>
+        <div className="grid grid-cols-12 gap-3 items-center">
           <FieldBox label="Hires/day" className="col-span-3">
             <div className="py-1 text-sm text-right text-blue-600 bg-slate-100 rounded-md px-2">
               {hiresPerDayKpi.toFixed(2)}
@@ -754,8 +823,6 @@ function Editor({ source, onChange }: { source: AdSource; onChange: (source: AdS
           <FieldBox label="Actual Spend" className="col-span-3">
             <div className="py-1 px-2 text-sm text-right text-blue-600 bg-slate-100 rounded-md">{money0(spendUsed)}</div>
           </FieldBox>
-        </div>
-        <div className="grid grid-cols-12 gap-3 items-center">
           <FieldBox label="Cost per App" className="col-span-3">
             <div className="py-1 px-2 text-sm text-right text-blue-600 bg-slate-100 rounded-md">{money0(cpaValue)}</div>
           </FieldBox>

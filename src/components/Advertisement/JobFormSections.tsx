@@ -52,6 +52,7 @@ export default function JobFormSections({ jobRole: _jobRole, onComplete }: JobFo
   const [activeSection, setActiveSection] = useState<SectionTab>('details');
   
   // Form field state
+  const [postingName, setPostingName] = useState("");
   const [title, setTitle] = useState("Line Cook");
   const [jobDescription, setJobDescription] = useState("");
   const [skills, setSkills] = useState(["Food Handler", "POS (Square)"]);
@@ -80,7 +81,8 @@ export default function JobFormSections({ jobRole: _jobRole, onComplete }: JobFo
   
   // Check section completion
   const isDetailsComplete = () => {
-    return title.trim() !== "" && jobDescription.trim() !== "";
+    // Consider details complete when posting has a name and a title
+    return (postingName.trim() !== "") && (title.trim() !== "");
   };
   
   const isCompensationComplete = () => {
@@ -98,6 +100,59 @@ export default function JobFormSections({ jobRole: _jobRole, onComplete }: JobFo
     return questions.length > 0;
   };
   
+  // Handle save/load events for postings
+  useEffect(() => {
+    const onSave = () => {
+      const posting = {
+        postingName: postingName || title || "Untitled",
+        title,
+        jobDescription,
+        skills,
+        payOption,
+        payExactAmount,
+        payRangeMin,
+        payRangeMax,
+        benefits,
+        tipEligible,
+        scheduleType,
+        scheduleDescription,
+        questions
+      };
+      try {
+        const raw = localStorage.getItem('passcom-postings');
+        const list = raw ? JSON.parse(raw) : [];
+        const idx = list.findIndex((p: any) => p.postingName === posting.postingName);
+        if (idx >= 0) list[idx] = posting; else list.push(posting);
+        localStorage.setItem('passcom-postings', JSON.stringify(list));
+        window.dispatchEvent(new CustomEvent('passcom-postings-updated'));
+      } catch {}
+    };
+    const onLoad = (e: Event) => {
+      const ce = e as CustomEvent<any>;
+      const data = ce.detail;
+      if (!data) return;
+      setPostingName(data.postingName || "");
+      setTitle(data.title || "");
+      setJobDescription(data.jobDescription || "");
+      setSkills(Array.isArray(data.skills) ? data.skills : []);
+      setPayOption(data.payOption ?? "exact");
+      setPayExactAmount(data.payExactAmount ?? "");
+      setPayRangeMin(data.payRangeMin ?? "");
+      setPayRangeMax(data.payRangeMax ?? "");
+      setBenefits(Array.isArray(data.benefits) ? data.benefits : []);
+      setTipEligible(!!data.tipEligible);
+      setScheduleType(data.scheduleType || "Full-time");
+      setScheduleDescription(data.scheduleDescription || "");
+      setQuestions(Array.isArray(data.questions) && data.questions.length ? data.questions : [{ id: 1, type: "Text", text: "", limit: "500", choices: [], newChoice: "" }]);
+    };
+    window.addEventListener('passcom-save-posting', onSave as EventListener);
+    window.addEventListener('passcom-load-posting', onLoad as EventListener);
+    return () => {
+      window.removeEventListener('passcom-save-posting', onSave as EventListener);
+      window.removeEventListener('passcom-load-posting', onLoad as EventListener);
+    };
+  }, [postingName, title, jobDescription, skills, payOption, payExactAmount, payRangeMin, payRangeMax, benefits, tipEligible, scheduleType, scheduleDescription, questions]);
+
   // Auto-complete job when all sections are complete
   useEffect(() => {
     if (onComplete && isDetailsComplete() && isCompensationComplete() && isScheduleComplete() && isQuestionsComplete()) {
@@ -161,16 +216,18 @@ export default function JobFormSections({ jobRole: _jobRole, onComplete }: JobFo
 
   const sections = [
     { id: 'details' as SectionTab, label: 'Job Details', isComplete: isDetailsComplete },
-    { id: 'compensation' as SectionTab, label: 'Compensation & Benefits', isComplete: isCompensationComplete },
-    { id: 'schedule' as SectionTab, label: 'Schedule Information', isComplete: isScheduleComplete },
-    { id: 'questions' as SectionTab, label: 'Application Questions', isComplete: isQuestionsComplete }
+    { id: 'compensation' as SectionTab, label: 'Compensation', isComplete: isCompensationComplete },
+    { id: 'schedule' as SectionTab, label: 'Schedule', isComplete: isScheduleComplete },
+    { id: 'questions' as SectionTab, label: 'Questions', isComplete: isQuestionsComplete }
   ];
+  const allComplete = isDetailsComplete() && isCompensationComplete() && isScheduleComplete() && isQuestionsComplete();
 
   return (
     <div className="space-y-4">
       {/* Section Tabs */}
       <div className="border-b">
-        <div className="flex gap-1">
+        <div className="flex gap-1 items-center justify-between">
+          <div className="flex gap-1">
           {sections.map(section => (
             <button
               key={section.id}
@@ -185,6 +242,16 @@ export default function JobFormSections({ jobRole: _jobRole, onComplete }: JobFo
               {section.isComplete() && <span className="text-green-600">✓</span>}
             </button>
           ))}
+          </div>
+          <button
+            type="button"
+            className={`px-3 py-1.5 rounded text-sm ${allComplete ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}
+            disabled={!allComplete}
+            onClick={() => window.dispatchEvent(new CustomEvent('passcom-save-posting'))}
+            title={allComplete ? 'Save this posting' : 'Complete all sections to enable'}
+          >
+            Save Posting
+          </button>
         </div>
       </div>
 
@@ -193,6 +260,13 @@ export default function JobFormSections({ jobRole: _jobRole, onComplete }: JobFo
         {activeSection === 'details' && (
           <div className="bg-white border rounded-xl p-5 shadow-sm">
             <div className="grid grid-cols-12 gap-3">
+              <Field label="Posting Name">
+                <Input 
+                  placeholder="Internal name for this posting" 
+                  value={postingName}
+                  onChange={(e) => setPostingName(e.target.value)}
+                />
+              </Field>
               <Field label="Title">
                 <Input 
                   placeholder="Line Cook" 

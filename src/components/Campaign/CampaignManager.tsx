@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { SOURCE_COLORS } from '../../constants/sourceColors';
-import { useCampaignPlanVersion, getApplicantsPerDay as getAppsPerDay, getHiresPerDay, getStateSnapshot, getDerivedFromCriterion, setPlanner, setConversionRate } from '../../state/campaignPlan';
+import { useCampaignPlanVersion, getApplicantsPerDay as getAppsPerDay, getHiresPerDay, getStateSnapshot, getDerivedFromCriterion, setPlanner, setConversionRate, SourceSnapshot } from '../../state/campaignPlan';
 import DailySpendSlider from '../common/DailySpendSlider';
 
 // ===============================
@@ -11,6 +11,34 @@ import DailySpendSlider from '../common/DailySpendSlider';
 const round2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
 const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
 const sum = (arr: number[]) => arr.reduce((a, b) => a + b, 0);
+const APPLY_CPC = 0.12;
+const APPLY_DAILY = 0.10;
+const CTR = 0.015;
+const DEFAULT_DIMINISHING_EXPONENT = 0.85;
+const DEFAULT_SATURATION_RATE = 0.18;
+const DEFAULT_FUNNEL_CONV = 0.64 * 0.84 * 0.86 * 0.60;
+const clampBeta = (value?: number | null) => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return DEFAULT_DIMINISHING_EXPONENT;
+  return clamp(n, 0.3, 1);
+};
+const clampSaturation = (value?: number | null) => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return DEFAULT_SATURATION_RATE;
+  return clamp(n, 0.01, 1);
+};
+const getReferenceSpend = (src: Partial<SourceSnapshot>) => {
+  const candidate = Number(src.daily_budget);
+  if (Number.isFinite(candidate) && candidate > 0) return Math.max(1, candidate);
+  return 100;
+};
+const funnelConvToHire = (src: SourceSnapshot): number => {
+  const r1 = clamp(Number(src.funnel_app_to_interview ?? 5) / 100, 0, 1);
+  const r2 = clamp(Number(src.funnel_interview_to_offer ?? 40) / 100, 0, 1);
+  const r3 = clamp(Number(src.funnel_offer_to_background ?? 90) / 100, 0, 1);
+  const r4 = clamp(Number(src.funnel_background_to_hire ?? 90) / 100, 0, 1);
+  return r1 * r2 * r3 * r4;
+};
 const safeISO = (d: Date | string | number) => {
   const now = new Date();
   let dt: Date;
@@ -520,8 +548,8 @@ export default function CampaignManager({ selectedLocations, setSelectedLocation
                   </div>
                 </div>
                 <div>
-                  <div className="text-[11px] text-gray-500 mb-1">Daily Spend</div>
-                  <DailySpendSlider showNumberInput />
+                  <div className="text-[11px] text-gray-500 mb-1">Daily Budget</div>
+                  <DailySpendSlider variant="campaign" />
                 </div>
               </div>
 
@@ -1326,29 +1354,67 @@ function SourceMixMini() {
     return <div className="text-sm text-gray-500"><em>Enable at least one source to see allocation.</em></div>;
   }
 
-  // Helpers aligned with campaignPlan allocator
-  const APPLY_CPC = 0.12;
-  const APPLY_DAILY = 0.10;
-  const CTR = 0.015;
-  const effectiveCPA = (src: SourceSnapshot): number => {
+  // Helpers aligned with Review allocator (diminishing returns)
+  const fallbackConv = overallConv > 0 ? overallConv : DEFAULT_FUNNEL_CONV;
+  const convOf = (src: SourceSnapshot) => {
+    const conv = funnelConvToHire(src);
+    return conv > 0 ? conv : Math.max(0.0001, fallbackConv);
+  };
+  const linearAppsAtSpend = (src: SourceSnapshot, spend: number): number => {
+    if (spend <= 0) return 0;
     switch (src.spend_model) {
-      case 'cpa': return Math.max(0.0001, Number(src.cpa_bid || 10));
-      case 'cpc': return Math.max(0.0001, Number(src.cpc || 2)) / APPLY_CPC;
-      case 'cpm': return Math.max(0.0001, Number(src.cpm || 10)) / (1000 * CTR * APPLY_DAILY);
-      case 'daily_budget': return Math.max(0.0001, Number((src as any).cpa_bid || 10));
-      case 'referral': return Math.max(0.0001, Number(src.referral_bonus_per_hire || 0)) * Math.max(0.0001, overallConv);
-      default: return Number.POSITIVE_INFINITY;
+      case 'cpa':
+      case 'daily_budget': {
+        const bid = Math.max(0.0001, Number(src.cpa_bid || 10));
+        return spend / bid;
+      }
+      case 'cpc': { const cpc = Math.max(0.0001, Number(src.cpc || 2)); const clicks = spend / cpc; return clicks * APPLY_CPC; }
+      case 'cpm': { const cpm = Math.max(0.0001, Number(src.cpm || 10)); const impressions = (spend / cpm) * 1000; const clicks = impressions * CTR; return clicks * APPLY_DAILY; }
+      case 'referral': {
+        const bounty = Math.max(0.0001, Number(src.referral_bonus_per_hire || 0));
+        const conv = convOf(src);
+        const maxApps = Math.max(0, Number(src.apps_override || 0));
+        if (bounty <= 0 || conv <= 0) return 0;
+        const linear = spend / (bounty * conv);
+        return Math.min(maxApps, linear);
+      }
+      default: return 0;
     }
   };
+  const spendToApps = (src: SourceSnapshot, spend: number): number => {
+    spend = Math.max(0, spend);
+    if (spend <= 0) return 0;
+    if (src.spend_model === 'referral') {
+      const maxApps = Math.max(0, Number(src.apps_override || 0));
+      if (maxApps <= 0) return 0;
+      const bounty = Math.max(0.0001, Number(src.referral_bonus_per_hire || 0));
+      const conv = convOf(src);
+      if (bounty <= 0 || conv <= 0) return 0;
+      const scaled = spend / (bounty * conv);
+      const k = clampSaturation(src.saturation_rate);
+      return maxApps * (1 - Math.exp(-k * scaled));
+    }
+    const beta = clampBeta(src.diminishing_exponent);
+    const Sref = getReferenceSpend(src);
+    const Lref = linearAppsAtSpend(src, Sref);
+    if (Lref <= 0) return 0;
+    const r = Lref / Math.pow(Sref, beta);
+    return r * Math.pow(spend, beta);
+  };
+  const marginalAppsPerDollar = (src: SourceSnapshot, spend: number): number => {
+    const delta = 1;
+    const a1 = spendToApps(src, spend);
+    const a2 = spendToApps(src, spend + delta);
+    return Math.max(0, a2 - a1) / delta;
+  };
 
-  // Allocate spend per the greedy rules
+  // Allocate spend with diminishing returns
   let remaining = dailyLimit;
   const spendAlloc = new Map<string, number>();
 
   // 1) Threshold daily_budget sources
   const threshold = sources
-    .filter((src) => src.spend_model === 'daily_budget' && (src.daily_budget || 0) > 0 && ((src as any).cpa_bid || 0) > 0)
-    .sort((a, b) => effectiveCPA(a) - effectiveCPA(b));
+    .filter((src) => src.spend_model === 'daily_budget' && (src.daily_budget || 0) > 0 && ((src as any).cpa_bid || 0) > 0);
   for (const src of threshold) {
     const need = Math.max(0, Number(src.daily_budget || 0));
     if (remaining >= need) {
@@ -1359,21 +1425,35 @@ function SourceMixMini() {
     }
   }
 
-  // 2) Scalable sources by cheapest CPA first
   const scalable = sources
     .filter((src) => src.spend_model === 'referral' || src.spend_model === 'cpc' || src.spend_model === 'cpm' || src.spend_model === 'cpa')
-    .sort((a, b) => effectiveCPA(a) - effectiveCPA(b));
-  for (const src of scalable) {
-    if (remaining <= 0) break;
-    const cap = src.spend_model === 'referral'
-      ? Math.max(0, Number(src.referral_bonus_per_hire || 0)) * Math.max(0, Number(src.apps_override || 0)) * Math.max(0.0001, overallConv)
-      : (Number.isFinite(Number(src.daily_budget)) ? Math.max(0, Number(src.daily_budget)) : Number.POSITIVE_INFINITY);
-    const take = Math.min(remaining, cap);
-    if (take > 0) {
-      spendAlloc.set(src.id, (spendAlloc.get(src.id) || 0) + take);
-      remaining -= take;
+    .map((src) => {
+      const conv = convOf(src);
+      const cap =
+        src.spend_model === 'referral'
+          ? Math.max(0, Number(src.referral_bonus_per_hire || 0)) * Math.max(0, Number(src.apps_override || 0)) * conv
+          : (Number.isFinite(Number(src.daily_budget)) ? Math.max(0, Number(src.daily_budget)) : Number.POSITIVE_INFINITY);
+      return { src, cap, spent: 0, conv };
+    });
+  const step = 10;
+  let guard = 0;
+  while (remaining > 0 && guard < 5000) {
+    guard++;
+    let bestIdx = -1, bestScore = 0;
+    for (let i = 0; i < scalable.length; i++) {
+      const it = scalable[i];
+      if (it.spent >= it.cap) continue;
+      const score = marginalAppsPerDollar(it.src, it.spent) * it.conv;
+      if (score > bestScore) { bestScore = score; bestIdx = i; }
     }
+    if (bestIdx < 0 || bestScore <= 0) break;
+    const it = scalable[bestIdx];
+    const room = it.cap - it.spent;
+    const take = Math.min(remaining, Math.max(1, Math.min(step, room)));
+    it.spent += take;
+    remaining -= take;
   }
+  scalable.forEach(it => spendAlloc.set(it.src.id, (spendAlloc.get(it.src.id) || 0) + it.spent));
 
   // Build rows: include organic (spend 0, apps from override)
   type Row = { id: string; name: string; color: string; spend: number; apps: number; cpa: number; };
@@ -1382,32 +1462,14 @@ function SourceMixMini() {
     const color = (src.color as string) || '#64748b';
     const spend = spendAlloc.get(src.id) || 0;
     let apps = 0;
-    let cpaEff = effectiveCPA(src);
+    let cpaEff = 0;
     if (src.spend_model === 'organic') {
       apps = Math.max(0, Math.round(Number(src.apps_override || 0)));
       cpaEff = 0;
-    } else if (src.spend_model === 'daily_budget') {
-      const need = Math.max(0, Number(src.daily_budget || 0));
-      const bid = Math.max(0.0001, Number((src as any).cpa_bid || 10));
-      apps = spend >= need ? Math.round(spend / bid) : 0;
-    } else if (src.spend_model === 'referral') {
-      const bounty = Math.max(0.0001, Number(src.referral_bonus_per_hire || 0));
-      const conv = Math.max(0.0001, overallConv);
-      const maxApps = Math.max(0, Number(src.apps_override || 0));
-      const appsFromSpend = spend > 0 ? spend / (bounty * conv) : 0;
-      apps = Math.round(Math.min(maxApps, appsFromSpend));
-    } else if (src.spend_model === 'cpa') {
-      const bid = Math.max(0.0001, Number(src.cpa_bid || 10));
-      apps = Math.round(spend / bid);
-    } else if (src.spend_model === 'cpc') {
-      const cpc = Math.max(0.0001, Number(src.cpc || 2));
-      const clicks = spend / cpc;
-      apps = Math.round(clicks * APPLY_CPC);
-    } else if (src.spend_model === 'cpm') {
-      const cpm = Math.max(0.0001, Number(src.cpm || 10));
-      const impressions = (spend / cpm) * 1000;
-      const clicks = impressions * CTR;
-      apps = Math.round(clicks * APPLY_DAILY);
+    } else {
+      apps = Math.round(spendToApps(src as any, spend));
+      const appsLinear = linearAppsAtSpend(src, Math.max(1, spend));
+      cpaEff = appsLinear > 0 ? Math.max(0.0001, Math.round((Math.max(1, spend) / appsLinear))) : 0;
     }
     rows.push({ id: src.id, name: src.name || src.id, color, spend, apps, cpa: cpaEff });
   }

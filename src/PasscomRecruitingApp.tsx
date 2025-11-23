@@ -3,7 +3,7 @@ import CampaignManager from './components/Campaign/CampaignManager';
 import AdvertisementManager from './components/Advertisement/AdvertisementManager';
 import { genWeek } from './components/Campaign/CoverageHeatmap';
 import CampaignBuilder from './components/Needs/CampaignBuilder';
-import CenterVisuals, { RANGE_WEEKS as NEEDS_RANGE_WEEKS, RANGE_LABELS as NEEDS_RANGE_LABELS } from './components/Needs/CenterVisuals';
+import CenterVisuals, { RANGE_LABELS as NEEDS_RANGE_LABELS, getRangeWeeks as NEEDS_GET_RANGE_WEEKS } from './components/Needs/CenterVisuals';
 import ReviewPanel from './components/Review/ReviewPanel';
 import DataInspector from './components/Data/DataInspector';
 import { useOverrideVersion } from './state/dataOverrides';
@@ -195,6 +195,8 @@ export default function PasscomRecruitingApp() {
             daily_budget: s.daily_budget ?? null,
             referral_bonus_per_hire: s.referral_bonus_per_hire ?? null,
             apps_override: s.apps_override ?? null,
+            diminishing_exponent: s.diminishing_exponent ?? null,
+            saturation_rate: s.saturation_rate ?? null,
             funnel_app_to_interview: s.funnel_app_to_interview ?? null,
             funnel_interview_to_offer: s.funnel_interview_to_offer ?? null,
             funnel_offer_to_background: s.funnel_offer_to_background ?? null,
@@ -218,6 +220,8 @@ export default function PasscomRecruitingApp() {
         daily_budget: s.daily_budget ?? null,
         referral_bonus_per_hire: s.referral_bonus_per_hire ?? null,
         apps_override: s.apps_override ?? null,
+        diminishing_exponent: s.diminishing_exponent ?? null,
+        saturation_rate: s.saturation_rate ?? null,
         funnel_app_to_interview: s.funnel_app_to_interview ?? null,
         funnel_interview_to_offer: s.funnel_interview_to_offer ?? null,
         funnel_offer_to_background: s.funnel_offer_to_background ?? null,
@@ -251,7 +255,7 @@ export default function PasscomRecruitingApp() {
   // Calculate coverage for all jobs
   // Campaign overlay only affects the currently selected job when liveView is enabled
   const jobCoverageData = useMemo(() => {
-    const weeks = NEEDS_RANGE_WEEKS[needsRangeIdx] ?? NEEDS_RANGE_WEEKS[1];
+    const weeks = NEEDS_GET_RANGE_WEEKS(needsRangeIdx);
     const state = getStateSnapshot();
     const liveViewEnabled = !!state.liveView;
     
@@ -505,7 +509,7 @@ export default function PasscomRecruitingApp() {
                 </div>
                 <DataOverview
                   job={dataInspectorJob}
-                  weeks={NEEDS_RANGE_WEEKS[dataRangeIdx] ?? NEEDS_RANGE_WEEKS[1]}
+                    weeks={NEEDS_GET_RANGE_WEEKS(dataRangeIdx)}
                   height={420}
                 />
               </section>
