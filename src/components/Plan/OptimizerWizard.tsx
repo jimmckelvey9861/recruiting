@@ -42,6 +42,22 @@ export default function OptimizerWizard({
       const v = currentHires || 0;
       setTargetHires(Math.max(0.07, v * 1.2));
     }
+    // Seed adaptive bounds from Zones controller (white band) when dialog opens
+    try {
+      const raw = localStorage.getItem('passcom-plan-zones');
+      if (raw) {
+        const z = JSON.parse(raw);
+        const low = Number(z?.lowYellow);
+        const high = Number(z?.highYellow);
+        if (Number.isFinite(low) && Number.isFinite(high)) {
+          setAdaptive((prev:any) => ({
+            ...prev,
+            targetLower: Math.max(0, Math.min(2, low / 100)),
+            targetUpper: Math.max(0, Math.min(3, high / 100)),
+          }));
+        }
+      }
+    } catch {}
   }, [open, planVersion]);
 
   async function run() {
