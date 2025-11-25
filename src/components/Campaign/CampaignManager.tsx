@@ -209,6 +209,25 @@ export default function CampaignManager({ selectedLocations, setSelectedLocation
   const strategy = (planner as any).strategy || 'static';
   const pulseParams = (planner as any).pulseParams || { periodDays: 14, onDays: 5, dailySpendOn: Math.max(0, planner.dailySpend || 0), phaseOffsetDays: 0, rampDays: 0 };
   const adaptiveParams = (planner as any).adaptiveParams || { targetLower: 0.95, targetUpper: 1.05, lookaheadDays: 3, minOnDays: 3, minOffDays: 3, maxSpendPerDay: Math.max(0, planner.dailySpend || 0), maxDailySpendChange: 100 };
+  // Keep Adaptive bounds in sync with Zones (white range) when viewing Campaign tab
+  useEffect(() => {
+    if (strategy !== 'adaptive') return;
+    try {
+      const raw = localStorage.getItem('passcom-plan-zones');
+      if (!raw) return;
+      const z = JSON.parse(raw);
+      const low = Number(z?.lowYellow);
+      const high = Number(z?.highYellow);
+      if (!Number.isFinite(low) || !Number.isFinite(high)) return;
+      const lower = Math.max(0, Math.min(2, low / 100));
+      const upper = Math.max(lower, Math.min(3, high / 100));
+      const curL = Number(adaptiveParams?.targetLower ?? 0);
+      const curU = Number(adaptiveParams?.targetUpper ?? 0);
+      if (Math.abs(curL - lower) > 1e-6 || Math.abs(curU - upper) > 1e-6) {
+        setPlanner({ adaptiveParams: { ...adaptiveParams, targetLower: lower, targetUpper: upper } });
+      }
+    } catch {}
+  }, [strategy]);
   const derived = getDerivedFromCriterion({
     startISO: planner.startDate,
     endType: planner.endType,
