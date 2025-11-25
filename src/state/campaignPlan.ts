@@ -56,6 +56,18 @@ interface PlanState {
   liveView: boolean
 }
 
+function zonesFromLocalStorage(): { lowYellow: number; highYellow: number } | null {
+  try {
+    const raw = localStorage.getItem('passcom-plan-zones')
+    if (!raw) return null
+    const z = JSON.parse(raw)
+    if (z && typeof z === 'object' && Number.isFinite(Number(z.lowYellow)) && Number.isFinite(Number(z.highYellow))) {
+      return { lowYellow: Number(z.lowYellow), highYellow: Number(z.highYellow) }
+    }
+  } catch {}
+  return null
+}
+
 let state: PlanState = {
   planner: {
     startDate: null,
@@ -65,7 +77,12 @@ let state: PlanState = {
     strategy: 'static',
     autoRenew: false,
     pulseParams: { periodDays: 14, onDays: 5, dailySpendOn: 100, phaseOffsetDays: 0, rampDays: 0 },
-    adaptiveParams: { targetLower: 0.95, targetUpper: 1.05, lookaheadDays: 3, minOnDays: 3, minOffDays: 3, maxSpendPerDay: 1000, maxDailySpendChange: 100, reoptimizeEveryDays: 7 }
+    adaptiveParams: (() => {
+      const z = zonesFromLocalStorage()
+      const lower = z ? Math.max(0, Math.min(2, z.lowYellow / 100)) : 0.95
+      const upper = z ? Math.max(lower, Math.min(3, z.highYellow / 100)) : 1.05
+      return { targetLower: lower, targetUpper: upper, lookaheadDays: 3, minOnDays: 3, minOffDays: 3, maxSpendPerDay: 1000, maxDailySpendChange: 100, reoptimizeEveryDays: 7 }
+    })()
   },
   conversionRate: 0.2,
   sources: [],
@@ -78,6 +95,22 @@ try {
     const pl = JSON.parse(savedPlanner)
     if (pl && typeof pl === 'object') {
       state.planner = { ...state.planner, ...pl }
+    }
+  }
+  // If no adaptive params persisted, seed from current zones control
+  if (!state.planner.adaptiveParams) {
+    const z = zonesFromLocalStorage()
+    if (z) {
+      state.planner.adaptiveParams = {
+        targetLower: Math.max(0, Math.min(2, z.lowYellow / 100)),
+        targetUpper: Math.max(0, Math.min(3, z.highYellow / 100)),
+        lookaheadDays: 3,
+        minOnDays: 3,
+        minOffDays: 3,
+        maxSpendPerDay: 1000,
+        maxDailySpendChange: 100,
+        reoptimizeEveryDays: 7,
+      }
     }
   }
   const savedLive = localStorage.getItem('passcom-liveview')
