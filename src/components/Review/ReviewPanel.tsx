@@ -3,6 +3,7 @@ import SankeyDiagram, { SankeySource, SankeyStage } from './SankeyDiagram'
 import { setConversionRate, setPlanner, getMaxDailySpendCap } from '../../state/campaignPlan'
 import { getStateSnapshot, useCampaignPlanVersion } from '../../state/campaignPlan'
 import DailySpendSlider from '../common/DailySpendSlider'
+import SourceApplicantsStack from './SourceApplicantsStack'
 
 interface ReviewPanelProps {
   selectedJobs: string[]
@@ -120,7 +121,10 @@ export default function ReviewPanel({ selectedJobs, selectedLocations }: ReviewP
         return cpa / conv
       }
       case 'daily_budget': {
-        const cpa = Math.max(0.0001, Number(s.cpa_bid || 10))
+        // Use explicit CPA bid when provided, otherwise derive from CPC using APPLY_DAILY
+        const cpa = (Number(s.cpa_bid) && Number(s.cpa_bid) > 0)
+          ? Math.max(0.0001, Number(s.cpa_bid))
+          : Math.max(0.0001, Number(s.cpc || 2)) / APPLY_DAILY
         return cpa / conv
       }
       default:
@@ -133,8 +137,13 @@ export default function ReviewPanel({ selectedJobs, selectedLocations }: ReviewP
     if (spend <= 0) return 0;
     switch (s.spend_model) {
       case 'cpa':
+        return spend / Math.max(0.0001, Number(s.cpa_bid || 10));
       case 'daily_budget': {
-        const bid = Math.max(0.0001, Number(s.cpa_bid || 10));
+        // Effective bid is CPA bid if provided, else CPC/APPLY_DAILY
+        const effectiveBid = (Number(s.cpa_bid) && Number(s.cpa_bid) > 0)
+          ? Math.max(0.0001, Number(s.cpa_bid))
+          : Math.max(0.0001, Number(s.cpc || 2)) / APPLY_DAILY;
+        const bid = effectiveBid;
         return spend / bid;
       }
       case 'cpc': {
@@ -190,13 +199,20 @@ export default function ReviewPanel({ selectedJobs, selectedLocations }: ReviewP
     return Math.max(0, a2 - a1) / delta;
   }
 
-  const { stages, flowData, totals, alloc, sankeySources, appsPerDay, hiresPerDay, perSourceConvProducts } = useMemo(() => {
+  const { stages, flowData, totals, alloc, sankeySources, perSourceAppsRow, appsPerDay, hiresPerDay, perSourceConvProducts, appsPerDayContinuous, hiresPerDayContinuous } = useMemo(() => {
     const alloc = new Map<string, number>();
     let remaining = Math.max(0, dailyLimit);
 
     // 1) Thresholded daily_budget sources (all-or-nothing)
     const threshold = liveSources
-      .filter((s) => s.active && s.spend_model === 'daily_budget' && (s.daily_budget || 0) > 0 && (s.cpa_bid || 0) > 0)
+      .filter((s) => {
+        if (!s.active || s.spend_model !== 'daily_budget') return false;
+        const budget = Number(s.daily_budget || 0);
+        if (budget <= 0) return false;
+        const hasCpaBid = Number(s.cpa_bid || 0) > 0;
+        const hasCpc = Number(s.cpc || 0) > 0;
+        return hasCpaBid || hasCpc;
+      })
       .sort((a, b) => effectiveCPH(a) - effectiveCPH(b));
     for (const s of threshold) {
       const need = Math.max(0, Number(s.daily_budget || 0));
@@ -221,7 +237,7 @@ export default function ReviewPanel({ selectedJobs, selectedLocations }: ReviewP
         return { s, cap, spent: 0, conv };
       });
 
-    const step = 10; // allocate in $10 increments
+    const step = 1; // allocate in $1 increments
     let guard = 0;
     while (remaining > 0 && guard < 5000) {
       guard++;
@@ -248,6 +264,19 @@ export default function ReviewPanel({ selectedJobs, selectedLocations }: ReviewP
       alloc.set(it.s.id, (alloc.get(it.s.id) || 0) + it.spent);
     });
 
+    // Last-mile fill: if scalable sources saturated but budget remains,
+    // try to fully fund threshold (daily_budget) sources that were skipped initially.
+    if (remaining > 0) {
+      for (const s of threshold) {
+        const need = Math.max(0, Number(s.daily_budget || 0));
+        const already = alloc.get(s.id) || 0;
+        if (already < need && remaining >= need) {
+          alloc.set(s.id, need);
+          remaining -= need;
+        }
+      }
+    }
+
     // 3) Build Sankey first column = applicants/day per source from allocations + organics
     const firstRow = liveSources.map((s) => {
       if (!s.active) return 0
@@ -256,16 +285,16 @@ export default function ReviewPanel({ selectedJobs, selectedLocations }: ReviewP
       // Organic contributes applicants but no spend
       if (s.spend_model === 'organic') {
         const organicApps = Number(s.apps_override || 0)
-        if (Number.isFinite(organicApps)) apps += Math.max(0, Math.round(organicApps))
+        if (Number.isFinite(organicApps)) apps += Math.max(0, organicApps)
       }
 
       const spent = alloc.get(s.id) || 0
       if (s.spend_model === 'daily_budget') {
         const need = Math.max(0, Number(s.daily_budget || 0))
         const cpa = Math.max(0.0001, Number(s.cpa_bid || 10))
-        if (spent >= need) apps += Math.round(spendToApps(s, spent))
+        if (spent >= need) apps += spendToApps(s, spent)
       } else if (spent > 0) {
-        apps += Math.round(spendToApps(s, spent))
+        apps += spendToApps(s, spent)
       }
 
       return clamp(apps, 0, 999999)
@@ -291,21 +320,30 @@ export default function ReviewPanel({ selectedJobs, selectedLocations }: ReviewP
     const appsPerDay = totals[0]
     const hiresPerDay = totals[totals.length - 1]
     const perSourceConvProducts = r1.map((_, i) => r1[i] * r2[i] * r3[i] * r4[i])
+    // Continuous (non-rounded) values for summary
+    const appsPerDayContinuous = firstRow.reduce((sum, v) => sum + v, 0)
+    const hiresPerDayContinuous = firstRow.reduce((sum, v, i) => sum + (v * perSourceConvProducts[i]), 0)
 
-    return { stages, flowData, totals, alloc, sankeySources, appsPerDay, hiresPerDay, perSourceConvProducts }
+    return { stages, flowData, totals, alloc, sankeySources, perSourceAppsRow: firstRow, appsPerDay, hiresPerDay, perSourceConvProducts, appsPerDayContinuous, hiresPerDayContinuous }
   }, [liveSources, conversionRates, dailyLimit])
 
   // Publish overall conversion to shared store.
   // With per-source funnel metrics, derive a weighted overall conversion based on current mix.
   useEffect(() => {
-    const overall = appsPerDay > 0 ? (hiresPerDay / Math.max(1, appsPerDay)) : (
+    const overall = appsPerDayContinuous > 0 ? (hiresPerDayContinuous / Math.max(1, appsPerDayContinuous)) : (
       DEFAULT_CONVERSION_RATES.toInterview *
       DEFAULT_CONVERSION_RATES.toOffer *
       DEFAULT_CONVERSION_RATES.toBackground *
       DEFAULT_CONVERSION_RATES.toHire
     )
     setConversionRate(clamp(overall, 0, 1))
-  }, [appsPerDay, hiresPerDay])
+  }, [appsPerDayContinuous, hiresPerDayContinuous])
+
+  const allocatedSpendDisplay = useMemo(() => {
+    let s = 0
+    alloc.forEach((v) => { s += v })
+    return s
+  }, [alloc])
 
   const locationsLabel = selectedLocations.length ? selectedLocations.join(', ') : 'All Locations'
   const jobsLabel = selectedJobs.length ? selectedJobs.join(', ') : 'All Jobs'
@@ -349,15 +387,21 @@ export default function ReviewPanel({ selectedJobs, selectedLocations }: ReviewP
               {/* Stats driven by allocation */}
               <div className="mt-4 grid grid-cols-3 gap-2 text-sm">
                 <div className="text-slate-600 whitespace-nowrap">Apps/day</div>
-                <div className="col-span-2 text-right font-semibold whitespace-nowrap">{appsPerDay.toLocaleString()}</div>
+                <div className="col-span-2 text-right font-semibold whitespace-nowrap">
+                  {appsPerDayContinuous.toLocaleString(undefined, { maximumFractionDigits: 3 })}
+                </div>
                 <div className="text-slate-600 whitespace-nowrap">Hires/day</div>
-                <div className="col-span-2 text-right font-semibold whitespace-nowrap">{hiresPerDay.toLocaleString()}</div>
+                <div className="col-span-2 text-right font-semibold whitespace-nowrap">
+                  {hiresPerDayContinuous.toLocaleString(undefined, { maximumFractionDigits: 3 })}
+                </div>
                 <div className="text-slate-600 whitespace-nowrap">$/Hire</div>
                 <div className="col-span-2 text-right font-semibold whitespace-nowrap">
-                  {hiresPerDay > 0 ? `$${Math.round(dailyLimit / hiresPerDay).toLocaleString()}` : '—'}
+                  {hiresPerDayContinuous > 0 ? `$${Math.round(allocatedSpendDisplay / hiresPerDayContinuous).toLocaleString()}` : '—'}
                 </div>
                 <div className="text-slate-600 whitespace-nowrap">$/App</div>
-                <div className="col-span-2 text-right font-semibold whitespace-nowrap">{appsPerDay > 0 ? `$${Math.round(dailyLimit / appsPerDay)}` : '—'}</div>
+                <div className="col-span-2 text-right font-semibold whitespace-nowrap">
+                  {appsPerDayContinuous > 0 ? `$${Math.round(allocatedSpendDisplay / appsPerDayContinuous).toLocaleString()}` : '—'}
+                </div>
               </div>
             </div>
 
@@ -371,6 +415,13 @@ export default function ReviewPanel({ selectedJobs, selectedLocations }: ReviewP
                   options={{ showConversionRates: true, showRejectBar: false }}
                 />
               </div>
+              <SourceApplicantsStack items={sankeySources.map((s, i) => ({
+                key: s.key,
+                label: s.label,
+                color: s.color,
+                apps: perSourceAppsRow[i] || 0,
+                spend: alloc.get(s.key) || 0
+              }))} />
             </div>
           </div>
         </div>

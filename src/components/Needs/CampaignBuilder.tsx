@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { setPlanner, setLiveView } from '../../state/campaignPlan';
 import { getDerivedFromCriterion } from '../../state/campaignPlan';
-import { useCampaignPlanVersion, getStateSnapshot, getHiresPerDay, getMaxDailySpendCap } from '../../state/campaignPlan';
+import { useCampaignPlanVersion, getStateSnapshot, getHiresPerDay, getApplicantsPerDay, getMaxDailySpendCap } from '../../state/campaignPlan';
 import DailySpendSlider from '../common/DailySpendSlider';
+import OptimizerWizard from '../Plan/OptimizerWizard';
 
 export default function CampaignBuilder() {
   const planVersion = useCampaignPlanVersion();
@@ -26,6 +27,7 @@ export default function CampaignBuilder() {
   const [endDate, setEndDate] = useState(initEndDate);
   const [totalBudget, setTotalBudget] = useState(initBudget);
   const [liveView, setLive] = useState(snapshot.liveView);
+  const [optOpen, setOptOpen] = useState(false);
 
   // Compute days from start to end for 'date' end criterion
   const daysFromStart = useMemo(() => {
@@ -103,7 +105,17 @@ export default function CampaignBuilder() {
   return (
     <div className="h-full overflow-auto bg-white max-w-[350px]">
       <div className="p-5 space-y-5">
-        <h2 className="text-lg font-semibold text-gray-800">Campaign Planner</h2>
+        <div className="flex items-center">
+          <h2 className="text-lg font-semibold text-gray-800">Campaign Planner</h2>
+          <div className="ml-auto">
+            <button
+              className="px-2.5 py-1.5 text-sm bg-blue-600 text-white rounded shadow hover:bg-blue-700"
+              onClick={() => setOptOpen(true)}
+            >
+              Optimize
+            </button>
+          </div>
+        </div>
         
         {/* Start Date + Daily Budget */}
         <div className="space-y-3">
@@ -119,14 +131,30 @@ export default function CampaignBuilder() {
 
           <DailySpendSlider />
 
-          {/* Estimated hires/day from current limit */}
+          {/* Applications/day */}
           <div className="flex items-center justify-between text-sm text-gray-700">
-            <span>Estimated Hires/day</span>
+            <span>Applications/day</span>
             <span className="font-semibold">
               {(() => {
-                const v = getHiresPerDay();
-                if (v >= 3) return Math.round(v);
-                return v.toFixed(1);
+                const a = getApplicantsPerDay();
+                return a >= 3 ? Math.round(a) : a.toFixed(1);
+              })()}
+            </span>
+          </div>
+
+          {/* Hires per day or week (dynamic label) */}
+          <div className="flex items-center justify-between text-sm text-gray-700">
+            <span>
+              {(() => {
+                const h = getHiresPerDay();
+                return h < 1 ? 'Hires/week' : 'Hires/day';
+              })()}
+            </span>
+            <span className="font-semibold">
+              {(() => {
+                const h = getHiresPerDay();
+                const val = h < 1 ? (h * 7) : h;
+                return val >= 3 ? Math.round(val) : val.toFixed(1);
               })()}
             </span>
           </div>
@@ -247,6 +275,7 @@ export default function CampaignBuilder() {
           }
         `}</style>
       </div>
+      <OptimizerWizard open={optOpen} onClose={() => setOptOpen(false)} />
     </div>
   );
 }

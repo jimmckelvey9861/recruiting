@@ -55,7 +55,7 @@ export default function DailySpendSlider({
   const onClickSvg = (e: React.MouseEvent<SVGSVGElement>) => {
     const rect = (e.currentTarget as SVGSVGElement).getBoundingClientRect();
     const x = Math.min(Math.max(0, e.clientX - rect.left), svgWidth);
-    const v = sliderMax > 0 ? Math.round((x / svgWidth) * sliderMax / 10) * 10 : 0;
+    const v = sliderMax > 0 ? Math.round((x / svgWidth) * sliderMax) : 0;
     setPlanner({ dailySpend: v });
   };
   const [drag, setDrag] = useState(false);
@@ -63,7 +63,7 @@ export default function DailySpendSlider({
     if (!drag) return;
     const rect = (e.currentTarget as SVGSVGElement).getBoundingClientRect();
     const x = Math.min(Math.max(0, e.clientX - rect.left), svgWidth);
-    const v = sliderMax > 0 ? Math.round((x / svgWidth) * sliderMax / 10) * 10 : 0;
+    const v = sliderMax > 0 ? Math.round((x / svgWidth) * sliderMax) : 0;
     setPlanner({ dailySpend: v });
   };
   const endDrag = () => setDrag(false);
@@ -128,8 +128,8 @@ export default function DailySpendSlider({
               onMouseDown={(e)=> { e.stopPropagation(); setDrag(true); }}
               onClick={(e)=> e.stopPropagation()}
               onKeyDown={(e) => {
-                const step = 10;
-                const big = 50;
+                const step = 1;
+                const big = Math.max(10, Math.round(sliderMax / 20));
                 let next = rawValue;
                 if (e.key === 'ArrowLeft') next = Math.max(0, rawValue - step);
                 else if (e.key === 'ArrowRight') next = Math.min(sliderMax, rawValue + step);

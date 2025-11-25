@@ -206,6 +206,9 @@ export default function CampaignManager({ selectedLocations, setSelectedLocation
   const spendPerDay = Math.max(0, Number(getStateSnapshot().planner.dailySpend || 0));
   const costPerHire = hiresPerDay > 0 ? spendPerDay / hiresPerDay : 0;
   const planner = getStateSnapshot().planner;
+  const strategy = (planner as any).strategy || 'static';
+  const pulseParams = (planner as any).pulseParams || { periodDays: 14, onDays: 5, dailySpendOn: Math.max(0, planner.dailySpend || 0), phaseOffsetDays: 0, rampDays: 0 };
+  const adaptiveParams = (planner as any).adaptiveParams || { targetLower: 0.95, targetUpper: 1.05, lookaheadDays: 3, minOnDays: 3, minOffDays: 3, maxSpendPerDay: Math.max(0, planner.dailySpend || 0), maxDailySpendChange: 100 };
   const derived = getDerivedFromCriterion({
     startISO: planner.startDate,
     endType: planner.endType,
@@ -550,6 +553,102 @@ export default function CampaignManager({ selectedLocations, setSelectedLocation
                 <div>
                   <div className="text-[11px] text-gray-500 mb-1">Daily Budget</div>
                   <DailySpendSlider variant="campaign" />
+                </div>
+                {/* End Goal: Auto-renew toggle */}
+                <div className="mt-2 text-xs">
+                  <label className="inline-flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={!!(planner as any).autoRenew}
+                      onChange={(e)=> setPlanner({ autoRenew: e.target.checked })}
+                    />
+                    <span className="text-gray-700">Auto‑renew campaign when end goal is reached</span>
+                  </label>
+                </div>
+                {/* Strategy controls below Daily Budget */}
+                <div className="pt-2">
+                  <div className="text-[11px] text-gray-500 mb-1">Recruiting Strategy</div>
+                  <div className="flex items-center gap-2 text-xs">
+                    {(['static','pulsed','adaptive'] as const).map((opt) => (
+                      <label key={opt} className="inline-flex items-center gap-1">
+                        <input type="radio" checked={strategy===opt} onChange={()=> setPlanner({ strategy: opt })} />
+                        <span>{opt.charAt(0).toUpperCase()+opt.slice(1)}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {strategy === 'pulsed' && (
+                    <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                      <label className="flex items-center justify-between gap-2">
+                        <span className="text-gray-600">Period (days)</span>
+                        <input type="number" className="w-20 border rounded px-1 py-0.5 text-right"
+                          value={pulseParams.periodDays}
+                          onChange={(e)=> setPlanner({ pulseParams: { ...pulseParams, periodDays: Math.max(1, Number(e.target.value||0)) } })} />
+                      </label>
+                      <label className="flex items-center justify-between gap-2">
+                        <span className="text-gray-600">On days</span>
+                        <input type="number" className="w-20 border rounded px-1 py-0.5 text-right"
+                          value={pulseParams.onDays}
+                          onChange={(e)=> setPlanner({ pulseParams: { ...pulseParams, onDays: Math.max(0, Number(e.target.value||0)) } })} />
+                      </label>
+                      <label className="flex items-center justify-between gap-2">
+                        <span className="text-gray-600">Spend (on-days)</span>
+                        <input type="number" className="w-24 border rounded px-1 py-0.5 text-right"
+                          value={pulseParams.dailySpendOn}
+                          onChange={(e)=> setPlanner({ pulseParams: { ...pulseParams, dailySpendOn: Math.max(0, Number(e.target.value||0)) } })} />
+                      </label>
+                      <label className="flex items-center justify-between gap-2">
+                        <span className="text-gray-600">Phase offset</span>
+                        <input type="number" className="w-20 border rounded px-1 py-0.5 text-right"
+                          value={pulseParams.phaseOffsetDays}
+                          onChange={(e)=> setPlanner({ pulseParams: { ...pulseParams, phaseOffsetDays: Math.max(0, Number(e.target.value||0)) } })} />
+                      </label>
+                    </div>
+                  )}
+                  {strategy === 'adaptive' && (
+                    <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                      <label className="flex items-center justify-between gap-2">
+                        <span className="text-gray-600">Lower bound (%)</span>
+                        <input type="number" className="w-20 border rounded px-1 py-0.5 text-right"
+                          value={Math.round((adaptiveParams.targetLower||0)*100)}
+                          onChange={(e)=> setPlanner({ adaptiveParams: { ...adaptiveParams, targetLower: Math.max(0, Math.min(200, Number(e.target.value||0)))/100 } })} />
+                      </label>
+                      <label className="flex items-center justify-between gap-2">
+                        <span className="text-gray-600">Upper bound (%)</span>
+                        <input type="number" className="w-20 border rounded px-1 py-0.5 text-right"
+                          value={Math.round((adaptiveParams.targetUpper||0)*100)}
+                          onChange={(e)=> setPlanner({ adaptiveParams: { ...adaptiveParams, targetUpper: Math.max(0, Math.min(300, Number(e.target.value||0)))/100 } })} />
+                      </label>
+                      <label className="flex items-center justify-between gap-2">
+                        <span className="text-gray-600">Lookahead (days)</span>
+                        <input type="number" className="w-20 border rounded px-1 py-0.5 text-right"
+                          value={adaptiveParams.lookaheadDays}
+                          onChange={(e)=> setPlanner({ adaptiveParams: { ...adaptiveParams, lookaheadDays: Math.max(0, Number(e.target.value||0)) } })} />
+                      </label>
+                      <label className="flex items-center justify-between gap-2">
+                        <span className="text-gray-600">Min on/off (days)</span>
+                        <div className="flex items-center gap-2">
+                          <input type="number" className="w-20 border rounded px-1 py-0.5 text-right"
+                            value={adaptiveParams.minOnDays}
+                            onChange={(e)=> setPlanner({ adaptiveParams: { ...adaptiveParams, minOnDays: Math.max(0, Number(e.target.value||0)) } })} />
+                          <input type="number" className="w-20 border rounded px-1 py-0.5 text-right"
+                            value={adaptiveParams.minOffDays}
+                            onChange={(e)=> setPlanner({ adaptiveParams: { ...adaptiveParams, minOffDays: Math.max(0, Number(e.target.value||0)) } })} />
+                        </div>
+                      </label>
+                      <label className="flex items-center justify-between gap-2">
+                        <span className="text-gray-600">Max $/day</span>
+                        <input type="number" className="w-24 border rounded px-1 py-0.5 text-right"
+                          value={adaptiveParams.maxSpendPerDay}
+                          onChange={(e)=> setPlanner({ adaptiveParams: { ...adaptiveParams, maxSpendPerDay: Math.max(0, Number(e.target.value||0)) } })} />
+                      </label>
+                      <label className="flex items-center justify-between gap-2">
+                        <span className="text-gray-600">Max Δ/day</span>
+                        <input type="number" className="w-24 border rounded px-1 py-0.5 text-right"
+                          value={adaptiveParams.maxDailySpendChange}
+                          onChange={(e)=> setPlanner({ adaptiveParams: { ...adaptiveParams, maxDailySpendChange: Math.max(0, Number(e.target.value||0)) } })} />
+                      </label>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1347,6 +1446,9 @@ function SourceMixMini() {
   const s = getStateSnapshot();
   const planner = s.planner;
   const dailyLimit = Math.max(0, Number(planner.dailySpend || 0));
+  const strategy = (planner as any).strategy || 'static';
+  const pulse = (planner as any).pulseParams || { periodDays: 14, onDays: 5, dailySpendOn: Math.max(0, planner.dailySpend || 0), phaseOffsetDays: 0, rampDays: 0 };
+  const adaptive = (planner as any).adaptiveParams || { targetLower: 0.95, targetUpper: 1.05, lookaheadDays: 3, minOnDays: 3, minOffDays: 3, maxSpendPerDay: Math.max(0, planner.dailySpend || 0), maxDailySpendChange: 100 };
   const overallConv = Math.max(0, Math.min(1, Number(s.conversionRate) || 0));
   const sources = (s.sources || []).filter(src => src.active);
 
@@ -1364,9 +1466,13 @@ function SourceMixMini() {
     if (spend <= 0) return 0;
     switch (src.spend_model) {
       case 'cpa':
+        return spend / Math.max(0.0001, Number((src as any).cpa_bid || 10));
       case 'daily_budget': {
-        const bid = Math.max(0.0001, Number(src.cpa_bid || 10));
-        return spend / bid;
+        // If CPA bid is not provided, derive effective CPA from CPC using APPLY_DAILY
+        const effectiveBid = (Number((src as any).cpa_bid) && Number((src as any).cpa_bid) > 0)
+          ? Math.max(0.0001, Number((src as any).cpa_bid))
+          : Math.max(0.0001, Number((src as any).cpc || 2)) / APPLY_DAILY;
+        return spend / effectiveBid;
       }
       case 'cpc': { const cpc = Math.max(0.0001, Number(src.cpc || 2)); const clicks = spend / cpc; return clicks * APPLY_CPC; }
       case 'cpm': { const cpm = Math.max(0.0001, Number(src.cpm || 10)); const impressions = (spend / cpm) * 1000; const clicks = impressions * CTR; return clicks * APPLY_DAILY; }
@@ -1414,7 +1520,14 @@ function SourceMixMini() {
 
   // 1) Threshold daily_budget sources
   const threshold = sources
-    .filter((src) => src.spend_model === 'daily_budget' && (src.daily_budget || 0) > 0 && ((src as any).cpa_bid || 0) > 0);
+    .filter((src) => {
+      if (src.spend_model !== 'daily_budget') return false;
+      const budget = Number(src.daily_budget || 0);
+      if (budget <= 0) return false;
+      const hasCpaBid = Number((src as any).cpa_bid || 0) > 0;
+      const hasCpc = Number((src as any).cpc || 0) > 0;
+      return hasCpaBid || hasCpc;
+    });
   for (const src of threshold) {
     const need = Math.max(0, Number(src.daily_budget || 0));
     if (remaining >= need) {

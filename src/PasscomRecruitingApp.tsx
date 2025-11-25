@@ -182,28 +182,38 @@ export default function PasscomRecruitingApp() {
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed) && parsed.length) {
-          // Map to SourceSnapshot shape
-          const snapshot = parsed.map((s: any) => ({
-            id: s.id,
-            name: s.name,
-            active: !!s.active,
-            spend_model: s.spend_model,
-            color: s.color,
-            cpa_bid: s.cpa_bid ?? null,
-            cpc: s.cpc ?? null,
-            cpm: s.cpm ?? null,
-            daily_budget: s.daily_budget ?? null,
-            referral_bonus_per_hire: s.referral_bonus_per_hire ?? null,
-            apps_override: s.apps_override ?? null,
-            diminishing_exponent: s.diminishing_exponent ?? null,
-            saturation_rate: s.saturation_rate ?? null,
-            funnel_app_to_interview: s.funnel_app_to_interview ?? null,
-            funnel_interview_to_offer: s.funnel_interview_to_offer ?? null,
-            funnel_offer_to_background: s.funnel_offer_to_background ?? null,
-            funnel_background_to_hire: s.funnel_background_to_hire ?? null,
-          }));
-          setSourcesSnapshot(snapshot);
-          return;
+          // If local storage contains only default sources, keep them; otherwise reset to defaults
+          const allowedNames = new Set([
+            'Indeed Sponsored',
+            'Facebook Ads',
+            'Employee Referrals',
+            'Word of Mouth',
+          ]);
+          const hasNonDefault = parsed.some((s: any) => !allowedNames.has(String(s?.name || '')));
+          if (!hasNonDefault) {
+            // Map to SourceSnapshot shape
+            const snapshot = parsed.map((s: any) => ({
+              id: s.id,
+              name: s.name,
+              active: !!s.active,
+              spend_model: s.spend_model,
+              color: s.color,
+              cpa_bid: s.cpa_bid ?? null,
+              cpc: s.cpc ?? null,
+              cpm: s.cpm ?? null,
+              daily_budget: s.daily_budget ?? null,
+              referral_bonus_per_hire: s.referral_bonus_per_hire ?? null,
+              apps_override: s.apps_override ?? null,
+              diminishing_exponent: s.diminishing_exponent ?? null,
+              saturation_rate: s.saturation_rate ?? null,
+              funnel_app_to_interview: s.funnel_app_to_interview ?? null,
+              funnel_interview_to_offer: s.funnel_interview_to_offer ?? null,
+              funnel_offer_to_background: s.funnel_offer_to_background ?? null,
+              funnel_background_to_hire: s.funnel_background_to_hire ?? null,
+            }));
+            setSourcesSnapshot(snapshot);
+            return;
+          }
         }
       }
       // No previous session: seed defaults and turn all on

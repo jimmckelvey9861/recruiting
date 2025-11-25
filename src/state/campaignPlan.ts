@@ -7,6 +7,25 @@ export interface PlannerInputs {
   endType: EndType
   endValue: number | null // hires or budget amount; for date we normalize to days
   dailySpend: number // target spend per day
+  strategy?: 'static' | 'pulsed' | 'adaptive'
+  autoRenew?: boolean
+  pulseParams?: {
+    periodDays: number
+    onDays: number
+    dailySpendOn: number
+    phaseOffsetDays: number
+    rampDays?: number
+  } | null
+  adaptiveParams?: {
+    targetLower: number // fraction 0..1
+    targetUpper: number // fraction 0..1
+    lookaheadDays: number
+    minOnDays: number
+    minOffDays: number
+    maxSpendPerDay: number
+    maxDailySpendChange: number
+    reoptimizeEveryDays?: number
+  } | null
 }
 
 export interface SourceSnapshot {
@@ -38,7 +57,16 @@ interface PlanState {
 }
 
 let state: PlanState = {
-  planner: { startDate: null, endType: 'budget', endValue: null, dailySpend: 0 },
+  planner: {
+    startDate: null,
+    endType: 'budget',
+    endValue: null,
+    dailySpend: 0,
+    strategy: 'static',
+    autoRenew: false,
+    pulseParams: { periodDays: 14, onDays: 5, dailySpendOn: 100, phaseOffsetDays: 0, rampDays: 0 },
+    adaptiveParams: { targetLower: 0.95, targetUpper: 1.05, lookaheadDays: 3, minOnDays: 3, minOffDays: 3, maxSpendPerDay: 1000, maxDailySpendChange: 100, reoptimizeEveryDays: 7 }
+  },
   conversionRate: 0.2,
   sources: [],
   liveView: true,
@@ -93,6 +121,28 @@ export function useCampaignPlanVersion(): number {
   )
 }
 
+// Compute effective daily spend for a specific date based on strategy parameters.
+export function getEffectiveDailySpend(date: Date = new Date()): number {
+  const p = state.planner
+  const base = Math.max(0, Number(p.dailySpend || 0))
+  const strategy = p.strategy || 'static'
+  if (strategy === 'pulsed') {
+    const params = p.pulseParams || { periodDays: 14, onDays: 5, dailySpendOn: base || 0, phaseOffsetDays: 0 }
+    const startISO = p.startDate
+    if (!startISO) return params.dailySpendOn || base
+    const start = new Date(startISO)
+    start.setHours(0,0,0,0)
+    const d0 = new Date(date)
+    d0.setHours(0,0,0,0)
+    const daysSinceStart = Math.max(0, Math.floor((d0.getTime() - start.getTime()) / (1000*60*60*24)))
+    const phase = (daysSinceStart - (params.phaseOffsetDays || 0)) % Math.max(1, params.periodDays || 1)
+    const on = phase >= 0 && phase < Math.max(0, params.onDays || 0)
+    return on ? Math.max(0, Number(params.dailySpendOn || base)) : 0
+  }
+  // adaptive currently uses base spend; controller can adjust daily via UI or scheduled job
+  return base
+}
+
 const APPLY_CPC = 0.12
 const APPLY_DAILY = 0.10
 const CTR = 0.015
@@ -119,8 +169,13 @@ const linearAppsAtSpend = (s: SourceSnapshot, spend: number, conv: number): numb
   if (spend <= 0) return 0
   switch (s.spend_model) {
     case 'cpa':
+      return spend / Math.max(0.0001, Number(s.cpa_bid || 10))
     case 'daily_budget': {
-      const bid = Math.max(0.0001, Number(s.cpa_bid || 10))
+      // For daily_budget, use explicit CPA bid when present; otherwise derive CPA from CPC using APPLY_DAILY
+      const effectiveBid = (Number((s as any).cpa_bid) && Number((s as any).cpa_bid) > 0)
+        ? Math.max(0.0001, Number((s as any).cpa_bid))
+        : Math.max(0.0001, Number((s as any).cpc || 2)) / APPLY_DAILY
+      const bid = effectiveBid
       return spend / bid
     }
     case 'cpc': {
@@ -187,6 +242,11 @@ export function isActiveOn(date: Date): boolean {
   const { planner } = state
   if (!planner.startDate) return false
   if (daysBetween(planner.startDate, date) < 0) return false
+  // Auto-renew means the campaign remains active indefinitely after start
+  if (planner.autoRenew) {
+    const dailySpend = Math.max(0, planner.dailySpend)
+    return dailySpend > 0
+  }
 
   switch (planner.endType) {
     case 'date': {
@@ -215,6 +275,11 @@ export function isScheduledOn(date: Date): boolean {
   const { planner } = state
   if (!planner.startDate) return false
   if (daysBetween(planner.startDate, date) < 0) return false
+  // Auto-renew: scheduled forever after start (subject to daily spend > 0)
+  if (planner.autoRenew) {
+    const dailySpend = Math.max(0, planner.dailySpend)
+    return dailySpend > 0
+  }
   switch (planner.endType) {
     case 'date': {
       if (!planner.endValue) return true
@@ -240,11 +305,17 @@ export function isScheduledOn(date: Date): boolean {
 }
 
 // Derive blended apps/day from spend and sources
-export function getApplicantsPerDay(): number {
+// Unified allocator readout to keep Plan/Review/Campaign tabs consistent
+export function getAppsAndHiresPerDay(): {
+  apps: number;
+  hires: number;
+  alloc: Map<string, number>;
+  perSourceApps: Map<string, number>;
+} {
   const { planner, sources } = state
   const dailyLimit = Math.max(0, Number(planner.dailySpend || 0))
   const liveSources = sources.filter(s => s.active)
-  if (liveSources.length === 0) return 0
+  if (liveSources.length === 0) return { apps: 0, hires: 0, alloc: new Map(), perSourceApps: new Map() }
   const overallConv = Math.max(0, Math.min(1, Number(state.conversionRate) || 0))
 
   const funnelConvToHire = (s: SourceSnapshot): number => {
@@ -279,7 +350,10 @@ export function getApplicantsPerDay(): number {
         return cpa / conv
       }
       case 'daily_budget': {
-        const cpa = Math.max(0.0001, Number((s as any).cpa_bid || 10))
+      // Use CPA bid when provided; else derive from CPC using APPLY_DAILY
+      const cpa = (Number((s as any).cpa_bid) && Number((s as any).cpa_bid) > 0)
+        ? Math.max(0.0001, Number((s as any).cpa_bid))
+        : Math.max(0.0001, Number((s as any).cpc || 2)) / APPLY_DAILY
         return cpa / conv
       }
       default:
@@ -292,7 +366,14 @@ export function getApplicantsPerDay(): number {
 
   // 1) Threshold daily_budget sources: allocate only if fully funded
   const threshold = liveSources
-    .filter((s) => s.spend_model === 'daily_budget' && (s.daily_budget || 0) > 0 && ((s as any).cpa_bid || 0) > 0)
+    .filter((s) => {
+      if (s.spend_model !== 'daily_budget') return false
+      const budget = Number(s.daily_budget || 0)
+      if (budget <= 0) return false
+      const hasCpaBid = Number((s as any).cpa_bid || 0) > 0
+      const hasCpc = Number((s as any).cpc || 0) > 0
+      return hasCpaBid || hasCpc
+    })
     .sort((a, b) => effectiveCPH(a) - effectiveCPH(b))
   for (const s of threshold) {
     const need = Math.max(0, Number(s.daily_budget || 0))
@@ -317,7 +398,7 @@ export function getApplicantsPerDay(): number {
       return { s, conv, cap, spent: 0 }
     })
 
-  const step = 10
+  const step = 1
   let guard = 0
   while (remaining > 0 && guard < 5000) {
     guard++
@@ -345,27 +426,71 @@ export function getApplicantsPerDay(): number {
       alloc.set(it.s.id, (alloc.get(it.s.id) || 0) + it.spent)
     }
   })
+  // Last-mile fill for threshold sources if budget remains
+  if (remaining > 0) {
+    const threshold = liveSources
+      .filter((s) => {
+        if (s.spend_model !== 'daily_budget') return false
+        const budget = Number(s.daily_budget || 0)
+        if (budget <= 0) return false
+        const hasCpaBid = Number((s as any).cpa_bid || 0) > 0
+        const hasCpc = Number((s as any).cpc || 0) > 0
+        return hasCpaBid || hasCpc
+      })
+      .sort((a, b) => effectiveCPH(a) - effectiveCPH(b))
+    for (const s of threshold) {
+      const need = Math.max(0, Number(s.daily_budget || 0))
+      const already = alloc.get(s.id) || 0
+      if (already < need && remaining >= need) {
+        alloc.set(s.id, need)
+        remaining -= need
+      }
+      if (remaining <= 0) break
+    }
+  }
 
   // 3) Compute applicants/day from allocations (exclude organic)
   let applicants = 0
+  const perSourceApps = new Map<string, number>()
   for (const s of liveSources) {
     if (s.spend_model === 'organic') continue
     const conv = perSourceConv(s)
     const spent = alloc.get(s.id) || 0
     if (s.spend_model === 'daily_budget') {
       const need = Math.max(0, Number(s.daily_budget || 0))
-      if (spent >= need) applicants += Math.round(spendToApps(s, spent, conv))
+      if (spent >= need) {
+        const apps = spendToApps(s, spent, conv)
+        applicants += apps
+        perSourceApps.set(s.id, apps)
+      }
     } else if (spent > 0) {
-      applicants += Math.round(spendToApps(s, spent, conv))
+      const apps = spendToApps(s, spent, conv)
+      applicants += apps
+      perSourceApps.set(s.id, apps)
     }
   }
 
-  return applicants
+  // Compute continuous hires/day using per-source funnel
+  let hires = 0
+  for (const s of liveSources) {
+    const apps = perSourceApps.get(s.id) || 0
+    if (apps <= 0) continue
+    const r1 = clampValue(Number((s as any).funnel_app_to_interview ?? 5) / 100, 0, 1)
+    const r2 = clampValue(Number((s as any).funnel_interview_to_offer ?? 40) / 100, 0, 1)
+    const r3 = clampValue(Number((s as any).funnel_offer_to_background ?? 90) / 100, 0, 1)
+    const r4 = clampValue(Number((s as any).funnel_background_to_hire ?? 90) / 100, 0, 1)
+    hires += apps * r1 * r2 * r3 * r4
+  }
+
+  return { apps: applicants, hires, alloc, perSourceApps }
+}
+
+export function getApplicantsPerDay(): number {
+  return getAppsAndHiresPerDay().apps
 }
 
 export function getHiresPerDay(): number {
-  const apps = getApplicantsPerDay()
-  return apps * state.conversionRate
+  return getAppsAndHiresPerDay().hires
 }
 
 export function getExtraSupplyHalfHoursPerDay(): number {
@@ -462,3 +587,37 @@ export function getMaxDailySpendCap(): number {
   const raw = Math.round(cap);
   return Math.max(0, raw);
 }
+
+// ---- Developer sanity probe for allocator monotonicity (manual) ----
+declare global {
+  interface Window {
+    passcomRunAllocatorSanity?: () => void
+  }
+}
+function attachAllocatorSanityProbe() {
+  if (typeof window === 'undefined') return
+  if (window.passcomRunAllocatorSanity) return
+  window.passcomRunAllocatorSanity = () => {
+    try {
+      const original = getStateSnapshot().planner.dailySpend
+      const spends = [50, 100, 200, 400, 800]
+      const rows: Array<{ spend: number; apps: number; hires: number }> = []
+      for (const s of spends) {
+        setPlanner({ dailySpend: s })
+        const apps = getApplicantsPerDay()
+        const hires = getHiresPerDay()
+        rows.push({ spend: s, apps, hires })
+      }
+      setPlanner({ dailySpend: original })
+      // eslint-disable-next-line no-console
+      console.table(rows)
+      // eslint-disable-next-line no-console
+      console.info('Allocator sanity: expect apps/hires to be non-decreasing with spend (sublinear at higher spends).')
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('Sanity probe failed:', err)
+    }
+  }
+}
+attachAllocatorSanityProbe()
+

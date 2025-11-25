@@ -327,6 +327,40 @@ export default function CoverageHeatmap({ selectedJobs }: CoverageHeatmapProps) 
     selectedJob ? getWeekCached(selectedJob, weekOffset, showWithCampaign, selectedJob, cacheKey) : [],
     [selectedJob, weekOffset, showWithCampaign, cacheKey]
   )
+  // Prewarm cache for Year view months in idle chunks to improve toggle responsiveness
+  function scheduleIdle(fn: () => void) {
+    const anyWin: any = typeof window !== 'undefined' ? window : null
+    if (anyWin && typeof anyWin.requestIdleCallback === 'function') {
+      anyWin.requestIdleCallback(fn)
+    } else {
+      setTimeout(fn, 0)
+    }
+  }
+  useEffect(() => {
+    if (!selectedJob) return
+    let cancelled = false
+    const now = new Date()
+    const nowYear = now.getFullYear()
+    const nowMonth = now.getMonth()
+    const months = Array.from({ length: 12 }, (_, m) => m)
+    let idx = 0
+    const pump = () => {
+      if (cancelled) return
+      // process a small chunk per idle tick
+      for (let i = 0; i < 4 && idx < months.length; i++, idx++) {
+        const m = months[idx]
+        const monthsFromNow = (currentYear - nowYear) * 12 + (m - nowMonth)
+        const weeksFromNow = Math.round(monthsFromNow * 4.33)
+        // Prewarm for both before/after to make the toggle snappy
+        getWeekCached(selectedJob, weeksFromNow, false, selectedJob, cacheKey)
+        getWeekCached(selectedJob, weeksFromNow, true, selectedJob, cacheKey)
+      }
+      if (idx < months.length) scheduleIdle(pump)
+    }
+    // Only prewarm when Year view is likely to be used (or always, it is cheap in idle)
+    scheduleIdle(pump)
+    return () => { cancelled = true }
+  }, [selectedJob, currentYear, cacheKey])
   
   const weekStart = useMemo(() => mondayOf(weekOffset), [weekOffset])
   const weekEnd = useMemo(() => addDays(weekStart, 6), [weekStart])
@@ -692,7 +726,10 @@ function MonthMiniCard({
     const io = new IntersectionObserver(
       (entries) => {
         for (const e of entries) {
-          if (e.isIntersecting) setVisible(true)
+          if (e.isIntersecting) {
+            // Defer to next frame to batch visibilities from multiple months
+            requestAnimationFrame(() => setVisible(true))
+          }
         }
       },
       { root: el.parentElement?.parentElement || null, rootMargin: '200px 0px', threshold: 0 }
